@@ -1,0 +1,21 @@
+{
+  "_fixture": "mock — hand-authored from public docs examples, not live Qloo data",
+  "success": true,
+  "results": [
+    {
+      "id": "urn:tag:cuisine:natural_wine",
+      "name": "Natural Wine",
+      "subtype": "urn:tag_type:cuisine"
+    },
+    {
+      "id": "urn:tag:beverage:orange_wine",
+      "name": "Orange Wine",
+      "subtype": "urn:tag_type:beverage"
+    },
+    {
+      "id": "urn:tag:beverage:low_intervention_wine",
+      "name": "Low-Intervention Wine",
+      "subtype": "urn:tag_type:beverage"
+    }
+  ]
+}

@@ -15,19 +15,22 @@ The highest leverage contributions, in order:
 
 ```bash
 pnpm install
-cp .env.example .env   # add your Qloo key
-pnpm dev               # extension with hot reload
+cp .env.example .env                            # add your Qloo key
+cp apps/web/.env.example apps/web/.env.local    # web app secrets (Qloo key, Anthropic key)
+pnpm dev                                        # web app (apps/web)
+pnpm dev:all                                    # web app + MCP server
+pnpm probe                                      # live Qloo contract probe (needs QLOO_API_KEY)
 ```
-
-Load `apps/extension/dist` as an unpacked extension at `chrome://extensions`.
 
 ## Before you open a PR
 
 ```bash
-pnpm test
+pnpm check                          # typecheck + tests across all packages
+pnpm --filter @focal-ai/web build   # production build of the web app
 pnpm lint
-pnpm typecheck
 ```
+
+Packages (`packages/core`, `packages/qloo`, `packages/mcp`) are consumed as TypeScript source — there is no `dist` build step, which is a deliberate simplification. `docs/tickets.md` is the work backlog.
 
 - Keep PRs focused on one thing.
 - Include a before and after for anything that changes rendering.

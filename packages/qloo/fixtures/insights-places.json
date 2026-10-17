@@ -1,0 +1,111 @@
+{
+  "_fixture": "mock — hand-authored from public docs examples, not live Qloo data",
+  "success": true,
+  "results": {
+    "entities": [
+      {
+        "entity_id": "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01",
+        "type": "urn:entity:place",
+        "subtype": "urn:place:restaurant",
+        "name": "Rintaro",
+        "disambiguation": "San Francisco, California",
+        "popularity": 0.82,
+        "tags": [
+          { "id": "urn:tag:place_type:restaurant", "name": "Restaurant" },
+          { "id": "urn:tag:cuisine:japanese", "name": "Japanese Cuisine" },
+          { "id": "urn:tag:venue_style:izakaya", "name": "Izakaya" }
+        ],
+        "query": {
+          "affinity": 0.93,
+          "explainability": {
+            "contributions": [
+              { "entity_id": "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948", "score": 0.44 }
+            ]
+          }
+        }
+      },
+      {
+        "entity_id": "9C4D7E12-5F38-4A61-B7C0-2D8F1E5A9B42",
+        "type": "urn:entity:place",
+        "subtype": "urn:place:restaurant",
+        "name": "State Bird Provisions",
+        "disambiguation": "San Francisco, California",
+        "popularity": 0.79,
+        "tags": [
+          { "id": "urn:tag:place_type:restaurant", "name": "Restaurant" },
+          { "id": "urn:tag:cuisine:californian", "name": "Californian Cuisine" },
+          { "id": "urn:tag:service:dim_sum", "name": "Dim Sum" }
+        ],
+        "query": {
+          "affinity": 0.78,
+          "explainability": {
+            "contributions": [
+              { "entity_id": "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948", "score": 0.31 },
+              { "entity_id": "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01", "score": 0.22 }
+            ]
+          }
+        }
+      },
+      {
+        "entity_id": "6E1B94D8-3A27-4C85-95F6-7B2E0A4D3C97",
+        "type": "urn:entity:place",
+        "subtype": "urn:place:restaurant",
+        "name": "Zuni Café",
+        "disambiguation": "San Francisco, California",
+        "popularity": 0.74,
+        "tags": [
+          { "id": "urn:tag:place_type:restaurant", "name": "Restaurant" },
+          { "id": "urn:tag:cuisine:californian", "name": "Californian Cuisine" },
+          { "id": "urn:tag:dish:roast_chicken", "name": "Roast Chicken" }
+        ],
+        "query": {
+          "affinity": 0.64,
+          "explainability": {
+            "contributions": [
+              { "entity_id": "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01", "score": 0.37 }
+            ]
+          }
+        }
+      },
+      {
+        "entity_id": "D5F70A63-8C49-4B1E-A2D8-9E3B6C05F124",
+        "type": "urn:entity:place",
+        "subtype": "urn:place:restaurant",
+        "name": "House of Prime Rib",
+        "disambiguation": "San Francisco, California",
+        "popularity": 0.71,
+        "tags": [
+          { "id": "urn:tag:place_type:restaurant", "name": "Restaurant" },
+          { "id": "urn:tag:venue_style:steakhouse", "name": "Steakhouse" },
+          { "id": "urn:tag:dish:prime_rib", "name": "Prime Rib" }
+        ],
+        "query": {
+          "measurements": {
+            "affinity": 0.57
+          }
+        }
+      },
+      {
+        "entity_id": "1B6E38F9-2D54-4F7A-B3E0-C8A5D9142E6B",
+        "type": "urn:entity:place",
+        "subtype": "urn:place:restaurant",
+        "name": "Che Fico",
+        "disambiguation": "San Francisco, California",
+        "popularity": 0.69,
+        "tags": [
+          { "id": "urn:tag:place_type:restaurant", "name": "Restaurant" },
+          { "id": "urn:tag:cuisine:italian", "name": "Italian Cuisine" },
+          { "id": "urn:tag:dish:pizza", "name": "Pizza" }
+        ]
+      }
+    ]
+  },
+  "query": {
+    "explainability": {
+      "contributions": [
+        { "entity_id": "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948", "score": 0.52 },
+        { "entity_id": "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01", "score": 0.27 }
+      ]
+    }
+  }
+}

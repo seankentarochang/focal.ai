@@ -1,0 +1,25 @@
+{
+  "name": "focal-ai",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @focal-ai/web dev",
+    "dev:all": "pnpm --parallel --filter @focal-ai/web --filter @focal-ai/mcp dev",
+    "build": "pnpm --filter @focal-ai/web build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "check": "pnpm -r typecheck && pnpm -r test",
+    "probe": "tsx scripts/probe-qloo.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

@@ -17,3 +17,7 @@ pnpm-debug.log*
 coverage/
 .vscode/
 .idea/
+
+.next/
+scripts/probe-output/
+*.tsbuildinfo

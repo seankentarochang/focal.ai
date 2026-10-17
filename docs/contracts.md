@@ -1,0 +1,176 @@
+# Locked interfaces (source of truth for parallel implementation)
+
+These names and shapes are frozen. Implementation agents must code against them exactly. Any change requires **editing this file first**, then the code — never the reverse. If an implementation cannot satisfy a contract, stop and raise it; do not silently deviate.
+
+Packages: `@focal-ai/qloo` (Qloo HTTP client, no React/Next deps), `@focal-ai/core` (pure taste/render engine), `@focal-ai/web` (`apps/web` — the only adapter between the two packages), `@focal-ai/mcp` (stdio MCP server: read tools + `create_render_plan`).
+
+## A. `@focal-ai/qloo` — Qloo HTTP client
+
+Only this package talks to Qloo. It owns auth, parsing, error taxonomy, timeout/retry, and the TTL cache. `raw` fields carry the unmodified upstream payload so the inspector can show request/response pairs. Nothing in this package interprets taste — that is `@focal-ai/core`'s job.
+
+```ts
+export type QlooEntityType =
+  | "urn:entity:artist" | "urn:entity:book" | "urn:entity:brand"
+  | "urn:entity:destination" | "urn:entity:movie" | "urn:entity:person"
+  | "urn:entity:place" | "urn:entity:podcast" | "urn:entity:tv_show" | "urn:entity:videogame";
+
+export interface QlooEntity {
+  entityId: string;
+  name: string;
+  subtype: string;
+  disambiguation?: string;
+  popularity?: number;
+  tagIds: string[];
+  tagNames: string[];
+  properties?: Record<string, unknown>;
+  raw: unknown;
+}
+
+export interface SearchParams { query: string; types?: QlooEntityType[]; location?: string; take?: number; page?: number; }
+export interface SearchResult { entities: QlooEntity[]; durationMs: number; raw: unknown; }
+
+export interface InsightsParams {
+  resultType: QlooEntityType;
+  signalEntityIds: string[];
+  resultEntityIds?: string[];
+  locationQuery?: string;
+  explainability?: boolean;
+  take?: number;
+}
+export interface ScoreContribution { entityId: string; score: number; }
+export interface ScoredEntity {
+  entity: QlooEntity;
+  affinity?: number;
+  affinityFoundAt?: string;
+  rankIndex: number;
+  contributions?: ScoreContribution[];
+  explainabilityRaw?: unknown;
+}
+export interface InsightsResult { entities: ScoredEntity[]; aggregateExplainability?: unknown; durationMs: number; raw: unknown; }
+export interface TagSearchResult { tags: { id: string; name: string; subtype?: string }[]; raw: unknown; }
+export type DataSource = "live" | "mock";
+
+export interface QlooClient {
+  search(params: SearchParams): Promise<SearchResult>;
+  insights(params: InsightsParams): Promise<InsightsResult>;
+  searchTags(params: { query: string; take?: number }): Promise<TagSearchResult>;
+  getEntities(entityIds: string[]): Promise<{ entities: QlooEntity[]; raw: unknown }>;
+}
+
+export declare function createQlooClient(opts: {
+  apiKey?: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+  mock?: boolean;
+  timeoutMs?: number;
+  cacheTtlMs?: number;
+}): QlooClient;
+
+export type QlooErrorCode = "AUTH" | "RATE_LIMIT" | "BAD_REQUEST" | "NOT_FOUND" | "UPSTREAM" | "TIMEOUT" | "PARSE";
+export declare class QlooError extends Error {
+  code: QlooErrorCode;
+  status?: number;
+  retryAfterMs?: number;
+}
+```
+
+Defaults and behavior (all overridable via `createQlooClient` opts):
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `baseUrl` | `process.env.QLOO_API_BASE ?? "https://hackathon.api.qloo.com"` | Auth header `X-Api-Key`; hackathon keys work ONLY against this host. 401 confirmed without key. |
+| `mock` | `process.env.QLOO_MOCK === "1"` | Mock fixtures must be loudly labeled (`_fixture: "mock"`), derived from public Qloo doc examples, never presented as live data. |
+| `timeoutMs` | `8000` | On timeout: exactly 1 retry, then `QlooError` code `TIMEOUT`. |
+| `cacheTtlMs` | `600000` (10 min) | In-process TTL cache keyed by full request URL (key excluded). |
+
+Endpoints used — and only these: `GET /search`, `GET /v2/insights`, `GET /v2/tags?filter.query=...`, `GET /v2/entities`. `/recs` and `/recommendations` are unsupported legacy; never call them.
+
+Insights parameter mapping: `resultType` → `filter.type` (required, e.g. `urn:entity:place` / `brand` / `destination` / `artist` / `movie`); `signalEntityIds` → `signal.interests.entities` (comma-separated taste seed IDs, cross-domain explicitly supported); `resultEntityIds` → `filter.results.entities` (comma-separated candidate IDs to score/rank — this is the scoring primitive); `locationQuery` → `filter.location.query` (city); `explainability` → `feature.explainability=true`; `take` max 50, default 20; `page` for pagination.
+
+Affinity extraction must be defensive: try `entity.query.affinity`, then `entity.query.measurements.affinity`, and record which path succeeded in `affinityFoundAt`. Unknown shapes must never throw — return the entity with `affinity: undefined`. The exact path/scale is verified in ticket T-01 and recorded in [qloo-contract.md](./qloo-contract.md).
+
+Error taxonomy: `AUTH` (401/403), `RATE_LIMIT` (429, populate `retryAfterMs` from `Retry-After` when present), `BAD_REQUEST` (400/422), `NOT_FOUND` (404), `UPSTREAM` (5xx), `TIMEOUT`, `PARSE` (shape mismatch on a 2xx).
+
+## B. `@focal-ai/core` — pure engine
+
+Standalone and framework-free: it imports **nothing** from `@focal-ai/qloo` (web and MCP adapt between the two). All functions are pure/deterministic except `resolveCandidates`, which takes an injected `CoreSearchFn` — the seam where `apps/web` wraps `QlooClient.search`.
+
+```ts
+export interface CoreEntity { entityId: string; name: string; subtype: string; disambiguation?: string; popularity?: number; tagIds?: string[]; tagNames?: string[]; }
+export type CoreSearchFn = (args: { query: string; types?: string[]; location?: string }) => Promise<CoreEntity[]>;
+
+export interface TasteSeed { entityId: string; name: string; subtype: string; disambiguation?: string; polarity: "like" | "dislike"; weight: number; source: "typed" | "searched" | "agent"; addedAt: string; }
+export interface ProfileRule { kind: "exclude" | "collapse" | "boost"; match: { tagId?: string; brandId?: string; flag?: "sponsored" }; weight?: number; }
+export interface TasteProfile { version: 1; updatedAt: string; seeds: TasteSeed[]; rules: ProfileRule[]; }
+export declare const PROFILE_STORAGE_KEY = "focal.profile.v1";
+export declare function createEmptyProfile(): TasteProfile;
+export declare function addSeed(p: TasteProfile, seed: TasteSeed): TasteProfile;
+export declare function removeSeed(p: TasteProfile, entityId: string): TasteProfile;
+export declare function serializeProfile(p: TasteProfile): string;
+export declare function deserializeProfile(json: string): TasteProfile;
+
+export interface PageCandidate { clientId: string; name: string; locationText?: string; url?: string; originalIndex: number; sponsored?: boolean; }
+export type ResolutionStatus = "resolved" | "ambiguous" | "unresolved";
+export interface ResolvedCandidate extends PageCandidate { status: ResolutionStatus; entity?: CoreEntity; }
+export declare function resolveCandidates(candidates: PageCandidate[], search: CoreSearchFn, expectedType: string, defaults?: { location?: string }): Promise<ResolvedCandidate[]>;
+
+export interface CandidateScore { entityId: string; affinity?: number; rankIndex: number; contributions?: { entityId: string; score: number }[]; tagNames?: string[]; }
+export interface RankedCandidate extends ResolvedCandidate {
+  position: number;
+  affinity?: number;
+  affinityPct?: number;
+  scoreMeta?: { contributions?: { entityId: string; score: number }[]; tagNames?: string[] };
+  reason?: { text: string; contributions?: { name: string; score: number }[]; tags?: string[] };
+  ruleEffects?: { kind: ProfileRule["kind"]; label: string }[];
+}
+export declare function rankCandidates(args: { candidates: ResolvedCandidate[]; scores: CandidateScore[]; profile: TasteProfile }): RankedCandidate[];
+
+export type RenderOp =
+  | { op: "reorder"; containerId: string; order: string[] }
+  | { op: "collapse"; containerId: string; clientIds: string[]; label: string }
+  | { op: "annotate"; containerId: string; clientId: string; text: string }
+  | { op: "emphasize"; containerId: string; clientId: string; level: "high" }
+  | { op: "hide"; containerId: string; clientIds: string[]; label: string };
+export interface RenderPlan { id: string; pageId: string; createdAt: string; ops: RenderOp[]; summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number }; }
+export declare function planRender(args: { pageId: string; ranked: RankedCandidate[]; options?: { annotate?: boolean; emphasizeThreshold?: number; collapseSponsored?: boolean; containerId?: string } }): RenderPlan;
+export declare function validatePlan(plan: RenderPlan): { ok: true } | { ok: false; errors: string[] };
+export declare function buildReason(ranked: RankedCandidate, profile: TasteProfile): RankedCandidate["reason"];
+```
+
+Invariants (each enforced by tests):
+
+- Ranker orders by affinity descending. Unresolved candidates sink to the end and keep their original relative order. Ties break on `originalIndex` (stable sort). A missing affinity never produces a favorable score.
+- Annotate text must be plain text, at most 140 characters, and must **reject** any string containing `<` (XSS guard). `validatePlan` enforces this plus op referential integrity (every `clientId`/`order` entry exists) and container-id shape.
+- `containerId` must match `/^focal:[a-z0-9-]+$/i`.
+- Explanations (`buildReason`, `contributions`, `tags`) may cite ONLY contributions/tags/entities actually present in the data handed to them. Never invent relationships, brands, or scores.
+- Profile persists in browser `localStorage` under `focal.profile.v1` (`PROFILE_STORAGE_KEY`). Server-side profile persistence is forbidden — the profile travels per request and is discarded.
+
+## C. HTTP API — `apps/web`
+
+Next.js route handlers are the only HTTP surface. The Qloo key lives in server env and never reaches the client.
+
+```text
+GET  /api/health   → { ok: true, hasQlooKey: boolean, dataSource: "live" | "mock" }
+POST /api/qloo/search  body { query: string, types?: QlooEntityType[], location?: string }
+                       → { entities: QlooEntity[], meta: { dataSource: DataSource, durationMs: number } }
+POST /api/qloo/rank    body { pageType: QlooEntityType, locationQuery?: string, candidates: PageCandidate[], profile: TasteProfile }
+                       → { ranked: RankedCandidate[], plan: RenderPlan, meta: { dataSource: DataSource, durationMs: number, unresolved: number, qlooRequest: { path: string, params: Record<string, string> } } }
+POST /api/agent        (P1, contract TBD in ticket T-19)
+```
+
+Data-flow rules (non-negotiable):
+
+- Only these leave the browser: entity name strings, city strings, Qloo entity IDs, and the taste profile. The server never receives page HTML, DOM dumps, or form values.
+- The profile travels with each request (`/api/qloo/rank`, `/api/agent`) and is never persisted server-side — no database, no profile contents in logs.
+- `dataSource: "mock"` is reachable ONLY when `QLOO_MOCK=1`, and the UI must badge mock data loudly anywhere it appears.
+- `meta.qlooRequest` records the upstream path + query params (key excluded) so the inspector can show exactly what was asked of Qloo.
+- Invalid bodies are rejected with zod (400) before any upstream call.
+
+## D. Mock vs live honesty + affinity conventions
+
+- Affinity is `0..1` as returned by Qloo. Display it as `round(affinity*1000)/10` percent and always label it "Qloo affinity".
+- `popularity` is a `0..1` percentile. It is NEVER summed with, substituted for, or blended into affinity.
+- Missing affinity → the candidate is treated as unresolved for ranking purposes, never silently given a favorable score.
+- No fabricated scores or relationships anywhere — in code, fixtures, tests, copy, or demo data.
+- Mock fixtures are env-gated (`QLOO_MOCK=1`), carry `_fixture: "mock"`, derive from public Qloo documentation examples (for example the Balthazar place id `FCE8B172-4795-43E4-B222-3B550DC05FD9` from Qloo's public recipe), and are labeled in every UI surface that can render them.
+- LLM (Anthropic) features are OPTIONAL. Without `ANTHROPIC_API_KEY`, agent/narration features run degraded (deterministic explanations from real data) or are disabled with an honest message; nothing else may break.
