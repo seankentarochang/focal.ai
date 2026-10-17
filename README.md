@@ -18,6 +18,9 @@ focal.ai rewrites the DOM of any page before it reaches your eyes, so every site
 
 </div>
 
+> [!NOTE]
+> **focal.ai is pre-release.** The extension and MCP server are in active development and are not installable from this repo yet. The quickstart below documents the intended interface, not a shipped one. Star the repo to catch the first build, or open an issue if you want to help get there.
+
 ---
 
 ## The internet was built for the average user. The average user does not exist.
@@ -269,9 +272,9 @@ This product only works if you trust it with your taste, so the defaults are bui
 
 ## Roadmap
 
-- [x] DOM extraction and mutation engine
-- [x] Qloo entity resolution and affinity scoring
-- [x] MCP server over stdio
+- [ ] DOM extraction and mutation engine (in progress)
+- [ ] Qloo entity resolution and affinity scoring (in progress)
+- [ ] MCP server over stdio (in progress)
 - [ ] Chrome Web Store release
 - [ ] Hosted MCP endpoint with OAuth for ChatGPT and other remote clients
 - [ ] Natural language policy compiler in the extension UI
