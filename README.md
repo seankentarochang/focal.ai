@@ -11,7 +11,7 @@ focal.ai rewrites the DOM of any page before it reaches your eyes, so every site
 [![License: MIT](https://img.shields.io/badge/License-MIT-6E56CF.svg?style=flat-square)](LICENSE)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange?style=flat-square)](#roadmap)
 [![Powered by Qloo](https://img.shields.io/badge/taste%20graph-Qloo-black?style=flat-square)](https://qloo.com)
-[![MCP](https://img.shields.io/badge/MCP-compatible-00A3A3?style=flat-square)](https://modelcontextprotocol.io)
+[![MCP](https://img.shields.io/badge/MCP-planned-00A3A3?style=flat-square)](https://modelcontextprotocol.io)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](#contributing)
 
 [Quickstart](#quickstart) · [How it works](#how-it-works) · [MCP server](#mcp-server) · [Render policies](#render-policies) · [Privacy](#privacy) · [Roadmap](#roadmap)
@@ -19,7 +19,7 @@ focal.ai rewrites the DOM of any page before it reaches your eyes, so every site
 </div>
 
 > [!NOTE]
-> **focal.ai is pre-release.** The extension and MCP server are in active development and are not installable from this repo yet. The quickstart below documents the intended interface, not a shipped one. Star the repo to catch the first build, or open an issue if you want to help get there.
+> **focal.ai is pre-release.** The hosted Studio (taste profile plus re-ranked demo pages) is implemented and runnable locally today: mock mode works with zero keys. The browser extension and MCP server are still in development. See [`docs/development.md`](docs/development.md) for run instructions and [`docs/status.md`](docs/status.md) for live status.
 
 ---
 
@@ -29,7 +29,7 @@ Every page you load is the same page everyone else loads. The restaurant list is
 
 focal.ai moves personalization out of the server and into the last hundred milliseconds before paint.
 
-It sits between the network and the screen. It reads the structure of the page, resolves the real world entities inside it against [Qloo's](https://qloo.com) cross domain taste graph, scores every node against your personal taste vector, and then rewrites the DOM. Reorder. Emphasize. Collapse. Annotate. Hide.
+The planned extension sits between the network and the screen: it reads the structure of the page, resolves the real world entities inside it against [Qloo's](https://qloo.com) cross domain taste graph, scores every node against your personal taste vector, and then rewrites the DOM. Reorder. Emphasize. Collapse. Annotate. Hide.
 
 Same site. Same data. Your ordering.
 
@@ -92,27 +92,23 @@ Everything above the Qloo call runs locally. Pages you have blocklisted never le
 
 ## Quickstart
 
-### Install the extension
+### Run the Studio locally
 
 ```bash
 git clone https://github.com/tsangh5/focal.ai.git
 cd focal.ai
 pnpm install
-pnpm build
+QLOO_MOCK=1 pnpm dev
 ```
 
-Then load it:
+Open [http://localhost:3000](http://localhost:3000) and seed "Rintaro" or "Fugazi", then press **Focus** and switch between Original / Focal / Diff. Mock mode needs zero keys.
 
-1. Open `chrome://extensions`
-2. Turn on **Developer mode**
-3. Click **Load unpacked** and select `apps/extension/dist`
-
-Firefox and Arc builds come out of the same `pnpm build`.
+**Go live:** get a Qloo hackathon key, put `QLOO_API_KEY` in `apps/web/.env.local`, drop `QLOO_MOCK`, then run `pnpm probe` to verify the live contract.
 
 ### Add your keys
 
 ```bash
-cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
 ```
 
 ```env
@@ -121,27 +117,29 @@ FOCAL_MODEL_PROVIDER=anthropic
 ANTHROPIC_API_KEY=your_anthropic_key
 ```
 
-Grab a Qloo key from the [Qloo developer portal](https://docs.qloo.com). The model key powers entity extraction and the natural language reasons shown next to each result.
+Grab a Qloo key from the [Qloo developer portal](https://docs.qloo.com). The model key is optional and currently unused: LLM-powered features are planned, and without a key focal.ai runs in its deterministic degraded mode by design.
 
 ### Seed your taste graph
 
-Open the extension and paste anything. A Letterboxd export, a Spotify top artists list, five restaurants you love, or a sentence.
+Open the Studio and search for anything Qloo knows: a movie, an artist, a restaurant, a brand. Free-text paste of a whole list (a Letterboxd export, a Spotify top artists list, or a sentence) is planned:
 
 ```
 I like A24 movies, Japanese city pop, natural wine bars,
 brutalist architecture, and I will not eat at a chain.
 ```
 
-That is the cold start solved. Browse normally and the graph sharpens on its own.
+That is the cold start solved. The more you seed, the sharper the graph gets.
 
 ---
 
 ## MCP server
 
-focal.ai ships a [Model Context Protocol](https://modelcontextprotocol.io) server, so the assistants you already talk to can read and write your taste graph. Tell ChatGPT about a restaurant you loved last night, and the next product grid you open is already resorted.
+focal.ai will ship a [Model Context Protocol](https://modelcontextprotocol.io) server, so the assistants you already talk to can read and write your taste graph. Tell ChatGPT about a restaurant you loved last night, and the next product grid you open is already resorted.
+
+> The MCP server is not shipped yet: `packages/mcp` is a stub today that exits with a pointer to its ticket (T-20). This section documents the planned interface; it is on the [roadmap](#roadmap).
 
 ```bash
-pnpm --filter @focal/mcp start
+pnpm --filter @focal-ai/mcp start
 ```
 
 ### Claude Desktop
@@ -171,7 +169,7 @@ claude mcp add focal -e FOCAL_API_KEY=your_focal_key -- npx -y @focal-ai/mcp
 ### ChatGPT and other HTTP clients
 
 ```bash
-pnpm --filter @focal/mcp start -- --transport http --port 8787
+pnpm --filter @focal-ai/mcp start -- --transport http --port 8787
 ```
 
 Then point your client at `https://your-host/mcp`. OAuth and a hosted endpoint are on the [roadmap](#roadmap).
@@ -298,7 +296,7 @@ focal.ai is early and the surface area is wide. Good first contributions:
 
 ```bash
 pnpm install
-pnpm dev          # extension with hot reload
+pnpm dev          # Studio (apps/web) with hot reload
 pnpm test
 pnpm lint
 ```

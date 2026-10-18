@@ -1,8 +1,10 @@
 # Implementation tickets — focal.ai
 
+**Last status update:** 2026-10-18 (commit `8d18351`) — see `docs/status.md` for the full log.
+
 **Deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). **Submit a day early** — target Oct 29.
 
-**Current state:** repo is docs-only plus an in-progress scaffold. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
+**Current state:** the Studio app, engine packages, and API routes are implemented and verified in mock mode (139 tests: core 72, qloo 46, web 21); live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
 
 **Wave model:** one wave = one parallel agent batch. Wave A foundation → B engine → C web app → D agent & MCP → E ship. Within a wave, tickets that don't share files run in parallel. Keep file ownership disjoint (see `Owns:` globs); if two open tickets touch the same path, the dependency is missing — fix the ticket order, not the file.
 
@@ -15,7 +17,7 @@
 ## Wave A — foundation
 
 ### T-01 · Probe & freeze Qloo contract
-Status: [ ] · **P0** · ~3 agent-hours · Deps: Qloo key — **BLOCKED: QLOO KEY** (request submitted, not received) · Owns: `scripts/probe-qloo.ts`, `docs/qloo-contract.md`, `packages/qloo/src/parsers/**`
+Status: [ ] — **Blocked (needs Qloo key)** · **P0** · ~3 agent-hours · Deps: Qloo key — **BLOCKED: QLOO KEY** (request submitted, not received; request via https://forms.gle/zz12orkLHTAneLGz6) · Owns: `scripts/probe-qloo.ts`, `docs/qloo-contract.md`, `packages/qloo/src/parsers/**`
 
 **Description:** Run `scripts/probe-qloo.ts` against `https://hackathon.api.qloo.com` with a real key and transcribe exact (redacted) outcomes into `docs/qloo-contract.md`: affinity field exact path + scale, explainability JSON shape, `filter.results.entities` limits, tag shapes, latency, 429 behavior. Update `@focal-ai/qloo` parsers and, if any mapping in `docs/contracts.md` changes, edit `docs/contracts.md` FIRST.
 **Acceptance criteria:**
@@ -26,7 +28,8 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: Qloo key — **BLOCKED: QLOO KE
 **Risks:** key arrives late → all other work proceeds on mock; excerpt redaction must strip key material and request headers.
 
 ### T-02 · Repo scaffold
-Status: [ ] (in progress by scaffold agent) · **P0** · ~4 agent-hours · Deps: none · Owns: `pnpm-workspace.yaml`, `package.json`, `tsconfig.base.json`, `apps/web/**` skeleton, `packages/{qloo,core,mcp}/**` skeletons, `.github/workflows/**`, `scripts/probe-qloo.ts` stub
+Status: [x] · **P0** · ~4 agent-hours · Deps: none · Owns: `pnpm-workspace.yaml`, `package.json`, `tsconfig.base.json`, `apps/web/**` skeleton, `packages/{qloo,core,mcp}/**` skeletons, `.github/workflows/**`, `scripts/probe-qloo.ts` stub
+**Evidence:** commit `18cd0cd` — pnpm workspace, app + package skeletons, CI, dev scripts, probe stub; frozen install, typecheck, and build green.
 
 **Description:** pnpm workspace with `apps/web` (Next.js), package skeletons for `@focal-ai/qloo`, `@focal-ai/core`, `@focal-ai/mcp`, dev scripts (`dev`, `build`, `test`, `typecheck`, `lint`, `check`, `probe`), CI (typecheck + test + web build), probe script stub.
 **Acceptance criteria:**
@@ -41,7 +44,8 @@ Status: [ ] (in progress by scaffold agent) · **P0** · ~4 agent-hours · Deps:
 ## Wave B — engine
 
 ### T-03 · `@focal-ai/qloo`: search + entities
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-02 · Owns: `packages/qloo/src/{client,search,entities,errors,cache}.ts`, `packages/qloo/test/**`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-02 · Owns: `packages/qloo/src/{client,search,entities,errors,cache}.ts`, `packages/qloo/test/**`
+**Evidence:** commit `18cd0cd` — search + entities methods in `packages/qloo/src/client.ts` (with `errors.ts`, `cache.ts`, `mapping.ts`); mocked-fetch URL, error-mapping, and cache tests — qloo suite 46 tests.
 
 **Description:** Implement `GET /search` (query, types, location, take, page) and `GET /v2/entities` (batch by ID). Zod-tolerant parsing: unknown upstream fields pass through into `raw`; missing optional fields are tolerated. Map HTTP failures to the `QlooError` taxonomy, wire timeout + 1 retry and the TTL cache.
 **Acceptance criteria:**
@@ -52,7 +56,8 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-02 · Owns: `packages/qloo/sr
 **Risks:** upstream field names differ from docs → isolated in parser module, fixed by T-01 without touching call sites.
 
 ### T-04 · `@focal-ai/qloo`: insights endpoint
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-02 (parser tuning follows T-01) · Owns: `packages/qloo/src/insights.ts`, `packages/qloo/test/insights*`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-02 (parser tuning follows T-01) · Owns: `packages/qloo/src/insights.ts`, `packages/qloo/test/insights*`
+**Evidence:** commit `18cd0cd` — insights query builder + defensive affinity extraction (`query.affinity` → `query.measurements.affinity`, `affinityFoundAt` recorded) in the qloo client; parsing tests in the 46-test qloo suite.
 
 **Description:** Build `GET /v2/insights` queries: `filter.type`, `signal.interests.entities`, `filter.results.entities` (the scoring primitive), `filter.location.query`, `feature.explainability=true`, `take` (cap 50), `page`. Parse scored entities preserving upstream order; defensive affinity extraction (`entity.query.affinity` → `entity.query.measurements.affinity`, record `affinityFoundAt`); best-effort contribution parsing.
 **Acceptance criteria:**
@@ -63,7 +68,8 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-02 (parser tuning follows T-0
 **Risks:** explainability shape unverified until T-01 → contribution parsing must be optional-by-default, degradation path mandatory.
 
 ### T-05 · `@focal-ai/qloo`: tags + mock adapter
-Status: [ ] (fixture finalization after T-01) · **P0** · ~3 agent-hours · Deps: T-03, T-04 · Owns: `packages/qloo/src/{tags,mock}.ts`, `packages/qloo/fixtures/**`, `packages/qloo/test/tags*`, `packages/qloo/test/mock*`
+Status: [x] (fixture refresh pending T-01) · **P0** · ~3 agent-hours · Deps: T-03, T-04 · Owns: `packages/qloo/src/{tags,mock}.ts`, `packages/qloo/fixtures/**`, `packages/qloo/test/tags*`, `packages/qloo/test/mock*`
+**Evidence:** commit `18cd0cd` — fixture-backed mock client behind `QLOO_MOCK=1` with the `_fixture: "mock"` guard test; search coverage broadened to normalized substring matching across fixtures in `8d18351`.
 
 **Description:** `GET /v2/tags?filter.query=...` mapping to `TagSearchResult`. A full `QlooClient` mock adapter (active only when `QLOO_MOCK=1`) with fixtures derived from public Qloo documentation examples — e.g. the Balthazar place id `FCE8B172-4795-43E4-B222-3B550DC05FD9` from Qloo's public recipe. Fixtures are never presented as live data.
 **Acceptance criteria:**
@@ -74,7 +80,8 @@ Status: [ ] (fixture finalization after T-01) · **P0** · ~3 agent-hours · Dep
 **Risks:** fixtures drift from reality → they are disposable by design; T-01 refreshes or replaces them.
 
 ### T-06 · `@focal-ai/core`: profile model + codec
-Status: [ ] · **P0** · ~2 agent-hours · Deps: T-02 · Owns: `packages/core/src/profile.ts`, `packages/core/test/profile*`
+Status: [x] · **P0** · ~2 agent-hours · Deps: T-02 · Owns: `packages/core/src/profile.ts`, `packages/core/test/profile*`
+**Evidence:** commit `18cd0cd` — `packages/core/src/profile.ts` codec; round-trip and fuzz tests in the core suite (72 tests).
 
 **Description:** `TasteProfile` model, immutable `addSeed`/`removeSeed`, `serializeProfile`/`deserializeProfile` with version check, `createEmptyProfile`, `PROFILE_STORAGE_KEY = "focal.profile.v1"`.
 **Acceptance criteria:**
@@ -85,7 +92,8 @@ Status: [ ] · **P0** · ~2 agent-hours · Deps: T-02 · Owns: `packages/core/sr
 **Risks:** storage quota/corruption — handled by tolerant deserialize by design.
 
 ### T-07 · `@focal-ai/core`: resolver
-Status: [ ] · **P0** · ~3 agent-hours · Deps: T-06 · Owns: `packages/core/src/resolver.ts`, `packages/core/test/resolver*`
+Status: [x] · **P0** · ~3 agent-hours · Deps: T-06 · Owns: `packages/core/src/resolver.ts`, `packages/core/test/resolver*`
+**Evidence:** commit `18cd0cd` — `resolve.ts` deterministic city-aware resolver (never guesses on ambiguity); table-driven tests in core 72.
 
 **Description:** `resolveCandidates` with deterministic accept rules: name normalization (case, diacritics, punctuation), exact normalized match required; city/disambiguation match when provided; multiple survivors → `"ambiguous"` (never guess); no match → `"unresolved"`.
 **Acceptance criteria:**
@@ -96,7 +104,8 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: T-06 · Owns: `packages/core/sr
 **Risks:** upstream ranking nondeterminism → accept only when the candidate set is unambiguous under our rules; alternatives are handled by T-12's pinned fallbacks.
 
 ### T-08 · `@focal-ai/core`: ranker
-Status: [ ] · **P0** · ~3 agent-hours · Deps: T-06, T-07 · Owns: `packages/core/src/ranker.ts`, `packages/core/test/ranker*`
+Status: [x] · **P0** · ~3 agent-hours · Deps: T-06, T-07 · Owns: `packages/core/src/ranker.ts`, `packages/core/test/ranker*`
+**Evidence:** commit `18cd0cd` — `rank.ts` affinity ordering with unresolved-sink and stable ties on `originalIndex`; permutation tests in core 72.
 
 **Description:** `rankCandidates`: order by affinity desc; unresolved candidates sink to the end preserving original relative order; stable ties on `originalIndex`; compute `position`, `affinityPct` (`round(affinity*1000)/10`), and record `ruleEffects` (kind + human label) for matched `ProfileRule`s.
 **Acceptance criteria:**
@@ -107,7 +116,8 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: T-06, T-07 · Owns: `packages/c
 **Risks:** rule semantics are under-specified by design — pin them in code comments + tests; any change to documented invariants goes through `docs/contracts.md` first.
 
 ### T-09 · `@focal-ai/core`: plan compiler + validator + reason builder
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-08 · Owns: `packages/core/src/{plan,reason}.ts`, `packages/core/test/{plan,reason}*`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-08 · Owns: `packages/core/src/{plan,reason}.ts`, `packages/core/test/{plan,reason}*`
+**Evidence:** commit `18cd0cd` — `plan.ts` compiler + validator and grounded `evidence.ts` reason builder; golden plan snapshot in core 72.
 
 **Description:** `planRender` compiles ranked candidates + options into `RenderPlan` ops (`reorder`/`collapse`/`annotate`/`emphasize`/`hide`) with the `summary` counters. `validatePlan` enforces annotation rules (plain text, ≤140 chars, reject `<`), container-id regex `/^focal:[a-z0-9-]+$/i`, and referential integrity. `buildReason` cites ONLY contributions/tags/entities present in the data.
 **Acceptance criteria:**
@@ -122,7 +132,8 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-08 · Owns: `packages/core/sr
 ## Wave C — web app
 
 ### T-10 · Design system shell
-Status: [ ] · **P0** · ~3 agent-hours · Deps: T-02 · Owns: `apps/web/app/globals.css`, `apps/web/components/shell/**`, `apps/web/lib/tokens.*`
+Status: [x] · **P0** · ~3 agent-hours · Deps: T-02 · Owns: `apps/web/app/globals.css`, `apps/web/components/shell/**`, `apps/web/lib/tokens.*`
+**Evidence:** commit `8d18351` — `components/shell/**` (TopBar, StatusBadge, ModeSwitcher) and design tokens in `globals.css`; data-source badge fed by `/api/health`.
 
 **Description:** Dark canvas, `#6E56CF` accent, design tokens as CSS custom properties, app layout and nav across demo pages, global data-source status badge (Live vs Mock) fed by `/api/health`.
 **Acceptance criteria:**
@@ -133,7 +144,8 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: T-02 · Owns: `apps/web/app/glo
 **Risks:** badge forgotten on a new page → the e2e route list is the guard.
 
 ### T-11 · Profile composer
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-06, T-10 · Owns: `apps/web/components/profile/**`, `apps/web/lib/profile-client.ts`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-06, T-10 · Owns: `apps/web/components/profile/**`, `apps/web/lib/profile-client.ts`
+**Evidence:** commit `8d18351` — `components/profile/**` + `lib/client/store.ts`; seeds persist under `focal.profile.v1` and survive reload (runtime smoke).
 
 **Description:** Seed box with entity picker backed by `POST /api/qloo/search` showing disambiguation, polarity (like/dislike) and weight controls, chip list, export JSON, delete-all, persistence in `localStorage` under `focal.profile.v1`.
 **Acceptance criteria:**
@@ -144,7 +156,8 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-06, T-10 · Owns: `apps/web/c
 **Risks:** corrupt storage → tolerant deserialize (T-06) with a visible warning, never a crash.
 
 ### T-12 · Demo page "Tables" (SF restaurants)
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-10 · Owns: `apps/web/app/demo/tables/**`, `apps/web/lib/candidates.ts`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-10 · Owns: `apps/web/app/demo/tables/**`, `apps/web/lib/candidates.ts`
+**Evidence:** commit `8d18351` — `lib/pages/tables.ts`: 12 SF restaurants, 2 marked sponsored, alternates for unresolved slots; rendered via `ListingCard`.
 
 **Description:** 12 real San Francisco restaurants rendered as directory-style cards (include Bar Part Time, Rintaro, State Bird Provisions, Zuni Café and others in that caliber), 2 marked sponsored, client-side candidate extraction into `PageCandidate[]`, container ids `focal:...`, and 3 pinned alternates swapped in when a candidate fails to resolve.
 **Acceptance criteria:**
@@ -155,7 +168,8 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-10 · Owns: `apps/web/app/dem
 **Risks:** live entity resolution failures → alternates + T-07 ambiguity handling; never fabricate a resolution.
 
 ### T-13 · Rank route `/api/qloo/rank`
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-04, T-08, T-09 · Owns: `apps/web/app/api/qloo/rank/route.ts`, `apps/web/lib/server/**`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-04, T-08, T-09 · Owns: `apps/web/app/api/qloo/rank/route.ts`, `apps/web/lib/server/**`
+**Evidence:** commit `8d18351` — `app/api/qloo/rank/route.ts` + `lib/server/**` (zod schemas, rate limit, error mapping, adapters); web suite 21 tests including route contract and rate-limit tests.
 
 **Description:** Compose `resolveCandidates` (search via `QlooClient`) → insights scoring → `rankCandidates` → `planRender`. Zod-validate the body; per-IP rate limit; in-process TTL cache; include `meta.qlooRequest` (path + params, key excluded).
 **Acceptance criteria:**
@@ -166,7 +180,9 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-04, T-08, T-09 · Owns: `apps
 **Risks:** serverless in-process cache is best-effort → acceptable for hackathon, documented in README.
 
 ### T-14 · Render engine
-Status: [ ] · **P0** · ~5 agent-hours · Deps: T-09, T-12 · Owns: `apps/web/components/render/**`, `apps/web/lib/render/**`
+Status: [x] · **P0** · ~5 agent-hours · Deps: T-09, T-12 · Owns: `apps/web/components/render/**`, `apps/web/lib/render/**`
+**Evidence:** commit `8d18351` — `components/surface/RenderSurface.tsx` + diff strip from `plan.summary`; mock rank smoke shows Rintaro at 93% match, 1 unresolved.
+**v1 note:** the ranked presentation is implemented declaratively in React (order + annotations + diff + reset); the raw DOM-mutation engine is deferred to the extension workstream — still P0-compatible because the user-visible before/after/revert behavior is real.
 
 **Description:** Apply `RenderPlan` to the DOM deterministically; Original/Focal/Diff toggle; delta strip reading `plan.summary` (moved/collapsed/unresolved/avgMovement); revert restores the original order.
 **Acceptance criteria:**
@@ -177,7 +193,8 @@ Status: [ ] · **P0** · ~5 agent-hours · Deps: T-09, T-12 · Owns: `apps/web/c
 **Risks:** DOM move bugs → keyed reordering, stable list identity, no innerHTML writes.
 
 ### T-15 · Inspector
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-13 · Owns: `apps/web/components/inspector/**`
+Status: [x] · **P0** · ~4 agent-hours · Deps: T-13 · Owns: `apps/web/components/inspector/**`
+**Evidence:** commit `8d18351` — `components/inspector/Inspector.tsx` (plan / request / raw response / evidence tabs + privacy panel).
 
 **Description:** Tabs: plan / request / raw response / evidence, plus a privacy panel enumerating exactly what leaves the browser (entity names, city, entity IDs, profile) per `docs/contracts.md` §C.
 **Acceptance criteria:**
@@ -188,7 +205,8 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-13 · Owns: `apps/web/compone
 **Risks:** large raw payloads → truncate with explicit "show full" affordance; never silently truncate.
 
 ### T-16 · Cross-domain pages: Atlas (Lisbon hotels) + Verve (brands)
-Status: [ ] · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `apps/web/app/demo/atlas/**`, `apps/web/app/demo/verve/**`
+Status: [x] · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `apps/web/app/demo/atlas/**`, `apps/web/app/demo/verve/**`
+**Evidence:** commit `8d18351` — `lib/pages/atlas.ts` (Lisbon `locationQuery`) and `lib/pages/verve.ts` (brands) feed the same rank route via the page registry.
 
 **Description:** "Atlas": Lisbon hotels using `filter.location.query="Lisbon"`; "Verve": brands (Aesop, Muji, and similar). Cross-domain taste seeds (e.g. music/movie likes) must visibly influence hotel/brand ranking.
 **Acceptance criteria:**
@@ -199,7 +217,7 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `apps/web/a
 **Risks:** cross-domain support claim (per docs) unverified until T-01 → fallback is same-domain seeds with an honest UI note.
 
 ### T-17 · Paste-any-list input (P1)
-Status: [ ] · **P1** · ~3 agent-hours · Deps: T-07, T-13 · Owns: `apps/web/components/paste/**`
+Status: [ ] — **Pending** · **P1** · ~3 agent-hours · Deps: T-07, T-13 · Owns: `apps/web/components/paste/**`
 
 **Description:** Textarea where users paste any list; parse per line, resolve each line, show per-line status (`resolved`/`ambiguous`/`unresolved`) with a picker for ambiguous rows; feeds the same rank pipeline.
 **Acceptance criteria:**
@@ -209,7 +227,7 @@ Status: [ ] · **P1** · ~3 agent-hours · Deps: T-07, T-13 · Owns: `apps/web/c
 **Risks:** junk input → statuses stay honest; nothing is auto-picked.
 
 ### T-18 · Error/empty/rate-limit/mock states (P1)
-Status: [ ] · **P1** · ~3 agent-hours · Deps: T-13 · Owns: `apps/web/components/states/**`
+Status: [ ] — **Partial** (basic error banner + mock badge + skeleton states exist; deeper empty/rate-limit polish pending) · **P1** · ~3 agent-hours · Deps: T-13 · Owns: `apps/web/components/states/**`
 
 **Description:** First-class UI for: Qloo `QlooError` variants (friendly copy + retry), empty results, rate-limited (respect `retryAfterMs`), mock-mode banner, and fresh-profile empty states ("add seeds to personalize").
 **Acceptance criteria:**
@@ -223,7 +241,7 @@ Status: [ ] · **P1** · ~3 agent-hours · Deps: T-13 · Owns: `apps/web/compone
 ## Wave D — agent & MCP (P1)
 
 ### T-19 · Agent tool loop + timeline
-Status: [ ] · **P1** · ~8 agent-hours · Deps: T-13, T-15 · Owns: `apps/web/app/api/agent/route.ts`, `apps/web/lib/agent/**`, `apps/web/components/agent/**`
+Status: [ ] — **Pending** · **P1** · ~8 agent-hours · Deps: T-13, T-15 · Owns: `apps/web/app/api/agent/route.ts`, `apps/web/lib/agent/**`, `apps/web/components/agent/**`
 
 **Description:** `POST /api/agent` tool loop. Tools: `get_taste_profile`, `search_entities`, `score_candidates`, `discover_cross_domain`, `explain_ranking`, `create_render_plan`. Anthropic key optional: without `ANTHROPIC_API_KEY` the feature runs degraded (deterministic tool-plan runner) with an honest UI explanation. Tool timeline UI, approval cards, activity feed + revert. **Approval is REQUIRED for profile writes and page apply.** Freeze this route's contract in `docs/contracts.md` Block C before implementing.
 **Acceptance criteria:**
@@ -234,7 +252,7 @@ Status: [ ] · **P1** · ~8 agent-hours · Deps: T-13, T-15 · Owns: `apps/web/a
 **Risks:** scope explosion → hard timebox; approvals must be real, never auto-applied.
 
 ### T-20 · `@focal-ai/mcp` stdio server
-Status: [ ] · **P1** · ~4 agent-hours · Deps: T-09, T-13 · Owns: `packages/mcp/**`
+Status: [ ] — **Pending** · **P1** · ~4 agent-hours · Deps: T-09, T-13 · Owns: `packages/mcp/**`
 
 **Description:** Stdio MCP server exposing read tools (`search_entities`, `score_candidates`, `explain_ranking`) plus `create_render_plan`; local profile file at an explicit, documented user-scoped path; Claude Desktop config documented in `packages/mcp/README.md`.
 **Acceptance criteria:**
@@ -249,7 +267,7 @@ Status: [ ] · **P1** · ~4 agent-hours · Deps: T-09, T-13 · Owns: `packages/m
 ## Wave E — ship
 
 ### T-21 · Hardening
-Status: [ ] · **P0** · ~3 agent-hours · Deps: T-13, T-23 (re-run after deploy) · Owns: `apps/web/middleware.ts`, `apps/web/next.config.*`, `scripts/leak-check.*`
+Status: [ ] — **Partial** (secret hygiene + validation done; CSP/headers pending) · **P0** · ~3 agent-hours · Deps: T-13, T-23 (re-run after deploy) · Owns: `apps/web/middleware.ts`, `apps/web/next.config.*`, `scripts/leak-check.*`
 
 **Description:** Error taxonomy end-to-end; CSP headers; secret-leak grep asserting the Qloo key never appears in client bundles; rate limits on all POST routes; fresh-session rehearsal (incognito, empty profile).
 **Acceptance criteria:**
@@ -260,7 +278,7 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: T-13, T-23 (re-run after deploy
 **Risks:** CSP vs Next inline scripts → nonce/hash strategy; verify before enforce.
 
 ### T-22 · Test suite + live smoke
-Status: [ ] (live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
+Status: [ ] — **Partial** (139 unit/integration tests green: core 72, qloo 46, web 21; Playwright e2e + live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
 
 **Description:** vitest unit/integration per package as specified per ticket; Playwright e2e for the primary journey with Qloo routes mocked (CI-safe); `scripts/smoke-live.ts` hitting real endpoints, run pre-submit.
 **Acceptance criteria:**
@@ -270,7 +288,7 @@ Status: [ ] (live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Dep
 **Risks:** e2e flakiness → deterministic mocks; live smoke depends on T-01 + key.
 
 ### T-23 · Deploy (Vercel default)
-Status: [ ] · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `vercel.json`, `Dockerfile`, `scripts/smoke-prod.*`
+Status: [ ] — **Pending** (deployment account not chosen; Vercel is the default plan) · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `vercel.json`, `Dockerfile`, `scripts/smoke-prod.*`
 
 **Description:** Deploy `apps/web` to Vercel with env vars (`QLOO_API_KEY`, `QLOO_API_BASE`, `QLOO_MOCK=0` in prod, optional `ANTHROPIC_API_KEY`); wire `/api/health`; prod smoke checklist; fallback Dockerfile for fly.io/render.
 **Acceptance criteria:**
@@ -281,7 +299,7 @@ Status: [ ] · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `vercel.jso
 **Risks:** deployment target not final → Vercel is the default plan; keep the app 12-factor so the fallback is cheap. Preview deployments share secrets — restrict access.
 
 ### T-24 · Submission
-Status: [ ] · **P0** · ~4 agent-hours · Deps: T-21, T-22, T-23 · Owns: `README.md`, `docs/submission.md`
+Status: [ ] — **Pending** · **P0** · ~4 agent-hours · Deps: T-21, T-22, T-23 · Owns: `README.md`, `docs/submission.md`
 
 **Description:** README rewrite (real setup instructions, architecture, supported/unsupported disclosure: `/recs` legacy unsupported, LLM features degraded without key, mock mode labeled), Devpost text, screenshots from the prod build, license/About check.
 **Acceptance criteria:**
@@ -292,7 +310,7 @@ Status: [ ] · **P0** · ~4 agent-hours · Deps: T-21, T-22, T-23 · Owns: `READ
 **Risks:** portal quirks → submit a day early, keep a copy of all text in `docs/submission.md`.
 
 ### T-25 · MV3 extension (stretch, P2)
-Status: [ ] · **P2** · ~6 agent-hours · Deps: all P0 complete · Owns: `apps/extension/**`
+Status: [ ] — **Deferred** (stretch; starts only when every P0 is complete) · **P2** · ~6 agent-hours · Deps: all P0 complete · Owns: `apps/extension/**`
 
 **Description:** Manifest V3 extension applying the same engine on 2 pinned origins via the hosted API.
 **Acceptance criteria:**
@@ -305,9 +323,9 @@ Status: [ ] · **P2** · ~6 agent-hours · Deps: all P0 complete · Owns: `apps/
 
 ## Critical path
 
-`T-02` → `T-03`/`T-04` → `T-08`/`T-09` → `T-12`/`T-13`/`T-14` → `T-23` → `T-24`
+`T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-23` [pending] → `T-24` [pending]
 
-Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29.
+Remaining on the path: T-17–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
 
 ## Key-independent work
 
