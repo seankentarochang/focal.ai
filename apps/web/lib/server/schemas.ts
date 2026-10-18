@@ -54,5 +54,16 @@ export const rankBodySchema = z.object({
   profile: profileSchema,
 });
 
+export const agentBodySchema = z.object({
+  message: z.string().min(1).max(280),
+  pageId: z.string(),
+  pageType: z.string(),
+  locationQuery: z.string().optional(),
+  containerId: z.string().optional(),
+  candidates: z.array(candidateSchema).max(50),
+  profile: profileSchema,
+});
+
 export type SearchBody = z.infer<typeof searchBodySchema>;
 export type RankBody = z.infer<typeof rankBodySchema>;
+export type AgentBody = z.infer<typeof agentBodySchema>;

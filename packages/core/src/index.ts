@@ -12,5 +12,6 @@ export * from "./resolve";
 export * from "./rank";
 export * from "./plan";
 export * from "./evidence";
+export * from "./pipeline";
 
 export const VERSION = "0.0.1";

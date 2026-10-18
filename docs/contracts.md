@@ -174,3 +174,18 @@ Data-flow rules (non-negotiable):
 - No fabricated scores or relationships anywhere — in code, fixtures, tests, copy, or demo data.
 - Mock fixtures are env-gated (`QLOO_MOCK=1`), carry `_fixture: "mock"`, derive from public Qloo documentation examples (for example the Balthazar place id `FCE8B172-4795-43E4-B222-3B550DC05FD9` from Qloo's public recipe), and are labeled in every UI surface that can render them.
 - LLM (Anthropic) features are OPTIONAL. Without `ANTHROPIC_API_KEY`, agent/narration features run degraded (deterministic explanations from real data) or are disabled with an honest message; nothing else may break.
+
+## B-appendix. Rank pipeline (added 2026-10-18)
+
+Orchestration seam extracted from `apps/web` so every surface runs the same logic: seeds → resolve → one insights call → rank → plan. Search and insights are injected functions; `@focal-ai/core` still imports nothing from `@focal-ai/qloo`.
+
+```ts
+export interface PipelineSearchFn { (args: { query: string; types?: string[]; location?: string }): Promise<CoreEntity[]>; }
+export interface PipelineInsightsFn { (args: { resultType: string; signalEntityIds: string[]; resultEntityIds?: string[]; locationQuery?: string; explainability?: boolean; take?: number }): Promise<{ scores: CandidateScore[]; request?: { path: string; params: Record<string, string> } }>; }
+export interface RankPipelineArgs { pageId: string; pageType: string; locationQuery?: string; containerId?: string; candidates: PageCandidate[]; profile: TasteProfile; deps: { search: PipelineSearchFn; insights: PipelineInsightsFn }; planOptions?: { annotate?: boolean; emphasizeThreshold?: number; collapseSponsored?: boolean }; }
+export interface RankPipelineResult { ranked: RankedCandidate[]; plan: RenderPlan; meta: { unresolved: number; insightsCalls: number; qlooRequest?: { path: string; params: Record<string, string> } }; }
+export declare class PipelineError extends Error { code: "NO_SEEDS" | "PLAN_INVALID"; }
+export declare function runRankPipeline(args: RankPipelineArgs): Promise<RankPipelineResult>;
+```
+
+Web `/api/qloo/rank` and the MCP `score_candidates` tool both call `runRankPipeline`; adapters (search/insights injection, request building, error mapping) live at the edges.
