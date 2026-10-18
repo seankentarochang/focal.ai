@@ -1,10 +1,10 @@
 # Implementation tickets — focal.ai
 
-**Last status update:** 2026-10-18 (commit `8f7c909`) — see `docs/status.md` for the full log.
+**Last status update:** 2026-10-18 (commit `473f91d`) — see `docs/status.md` for the full log.
 
 **Deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). **Submit a day early** — target Oct 29.
 
-**Current state:** the Studio app, engine packages, and API routes are implemented and verified in mock mode (151 tests: core 72, qloo 46, web 33); live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
+**Current state:** the Studio app (including the Ask-focal agent panel), engine packages, API routes, and the MCP stdio server are implemented and verified in mock mode (209 tests: core 82, qloo 46, mcp 13, web 68); live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
 
 **Wave model:** one wave = one parallel agent batch. Wave A foundation → B engine → C web app → D agent & MCP → E ship. Within a wave, tickets that don't share files run in parallel. Keep file ownership disjoint (see `Owns:` globs); if two open tickets touch the same path, the dependency is missing — fix the ticket order, not the file.
 
@@ -242,7 +242,8 @@ Status: [ ] — **Partial** (basic error banner + mock badge + skeleton states e
 ## Wave D — agent & MCP (P1)
 
 ### T-19 · Agent tool loop + timeline
-Status: [ ] — **Pending** · **P1** · ~8 agent-hours · Deps: T-13, T-15 · Owns: `apps/web/app/api/agent/route.ts`, `apps/web/lib/agent/**`, `apps/web/components/agent/**`
+Status: [x] · **P1** · ~8 agent-hours · Deps: T-13, T-15 · Owns: `apps/web/app/api/agent/route.ts`, `apps/web/lib/agent/**`, `apps/web/components/agent/**`
+**Evidence:** commit `473f91d` — `app/api/agent/route.ts` intent router (rank / explain / discovery / policy; deterministic tool-plan runner, no LLM required), frozen response types in `lib/server/agent/types.ts`, Ask-focal panel in the right rail (`components/agent/AgentPanel.tsx`, `components/shell/RightRail.tsx`) with tool timeline + approval cards ("Apply to profile" / Dismiss); 32 new agent tests (agentIntent 24, agentRoute 8) + panel tests → web suite 68. Verifier mock smoke: rank → 2 steps (`get_taste_profile`, `score_candidates`); policy → `collapse sponsored` rule + preview plan; discovery → 5 items; `{}` → 400.
 
 **Description:** `POST /api/agent` tool loop. Tools: `get_taste_profile`, `search_entities`, `score_candidates`, `discover_cross_domain`, `explain_ranking`, `create_render_plan`. Anthropic key optional: without `ANTHROPIC_API_KEY` the feature runs degraded (deterministic tool-plan runner) with an honest UI explanation. Tool timeline UI, approval cards, activity feed + revert. **Approval is REQUIRED for profile writes and page apply.** Freeze this route's contract in `docs/contracts.md` Block C before implementing.
 **Acceptance criteria:**
@@ -253,7 +254,8 @@ Status: [ ] — **Pending** · **P1** · ~8 agent-hours · Deps: T-13, T-15 · O
 **Risks:** scope explosion → hard timebox; approvals must be real, never auto-applied.
 
 ### T-20 · `@focal-ai/mcp` stdio server
-Status: [ ] — **Pending** · **P1** · ~4 agent-hours · Deps: T-09, T-13 · Owns: `packages/mcp/**`
+Status: [x] · **P1** · ~4 agent-hours · Deps: T-09, T-13 · Owns: `packages/mcp/**`
+**Evidence:** commit `473f91d` — `packages/mcp` stdio server (`src/{index,tools,deps}.ts`) exposing 6 read-only tools (`get_taste_profile`, `search_entities`, `score_candidates`, `discover_cross_domain`, `explain_ranking`, `create_render_plan` — the last three run the shared `runRankPipeline` via the edge adapter); protocol stdio smoke + tools tests (mcp suite 13); Claude Desktop config documented in `packages/mcp/README.md`. Verifier smoke: server stays up, stdout 0 bytes, banner on stderr only.
 
 **Description:** Stdio MCP server exposing read tools (`search_entities`, `score_candidates`, `explain_ranking`) plus `create_render_plan`; local profile file at an explicit, documented user-scoped path; Claude Desktop config documented in `packages/mcp/README.md`.
 **Acceptance criteria:**
@@ -279,7 +281,7 @@ Status: [ ] — **Partial** (secret hygiene + validation done; CSP/headers pendi
 **Risks:** CSP vs Next inline scripts → nonce/hash strategy; verify before enforce.
 
 ### T-22 · Test suite + live smoke
-Status: [ ] — **Partial** (151 unit/integration tests green: core 72, qloo 46, web 33; Playwright e2e + live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
+Status: [ ] — **Partial** (209 unit/integration tests green: core 82, qloo 46, mcp 13, web 68; Playwright e2e + live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
 
 **Description:** vitest unit/integration per package as specified per ticket; Playwright e2e for the primary journey with Qloo routes mocked (CI-safe); `scripts/smoke-live.ts` hitting real endpoints, run pre-submit.
 **Acceptance criteria:**
@@ -326,7 +328,7 @@ Status: [ ] — **Deferred** (stretch; starts only when every P0 is complete) ·
 
 `T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-23` [pending] → `T-24` [pending]
 
-Remaining on the path: T-18–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
+Remaining on the path: T-18 (partial), T-21–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
 
 ## Key-independent work
 
