@@ -1,10 +1,10 @@
 # Implementation tickets — focal.ai
 
-**Last status update:** 2026-10-18 (commit `473f91d`) — see `docs/status.md` for the full log.
+**Last status update:** 2026-10-18 (commit `3d9796d`) — see `docs/status.md` for the full log.
 
 **Deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). **Submit a day early** — target Oct 29.
 
-**Current state:** the Studio app (including the Ask-focal agent panel), engine packages, API routes, and the MCP stdio server are implemented and verified in mock mode (209 tests: core 82, qloo 46, mcp 13, web 68); live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
+**Current state:** the Studio app (including the Ask-focal agent panel), engine packages, API routes, and the MCP stdio server are implemented and verified in mock mode (216 tests: core 82, qloo 53, mcp 13, web 68); security headers ship on every route and a Docker fallback + `pnpm smoke` production smoke script are ready; live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
 
 **Wave model:** one wave = one parallel agent batch. Wave A foundation → B engine → C web app → D agent & MCP → E ship. Within a wave, tickets that don't share files run in parallel. Keep file ownership disjoint (see `Owns:` globs); if two open tickets touch the same path, the dependency is missing — fix the ticket order, not the file.
 
@@ -270,7 +270,8 @@ Status: [x] · **P1** · ~4 agent-hours · Deps: T-09, T-13 · Owns: `packages/m
 ## Wave E — ship
 
 ### T-21 · Hardening
-Status: [ ] — **Partial** (secret hygiene + validation done; CSP/headers pending) · **P0** · ~3 agent-hours · Deps: T-13, T-23 (re-run after deploy) · Owns: `apps/web/middleware.ts`, `apps/web/next.config.*`, `scripts/leak-check.*`
+Status: [x] · **P0** · ~3 agent-hours · Deps: T-13, T-23 (re-run after deploy) · Owns: `apps/web/middleware.ts`, `apps/web/next.config.*`, `scripts/leak-check.*`
+**Evidence:** commit `3d9796d` — security headers on every route (`apps/web/next.config.ts`; verified live: X-Content-Type-Options nosniff, Referrer-Policy strict-origin-when-cross-origin, X-Frame-Options DENY, Permissions-Policy, CSP) + `output: "standalone"` for the Docker fallback; secret scan clean (smoke script's secret-hygiene check + verifier greps of `.next/static` — 1 benign UI-copy hit, no values); rate limits on all POST routes covered by tests; production smoke 5 passed / 0 failed. The human fresh-session rehearsal happens at deploy (T-23).
 
 **Description:** Error taxonomy end-to-end; CSP headers; secret-leak grep asserting the Qloo key never appears in client bundles; rate limits on all POST routes; fresh-session rehearsal (incognito, empty profile).
 **Acceptance criteria:**
@@ -281,7 +282,7 @@ Status: [ ] — **Partial** (secret hygiene + validation done; CSP/headers pendi
 **Risks:** CSP vs Next inline scripts → nonce/hash strategy; verify before enforce.
 
 ### T-22 · Test suite + live smoke
-Status: [ ] — **Partial** (209 unit/integration tests green: core 82, qloo 46, mcp 13, web 68; Playwright e2e + live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
+Status: [ ] — **Partial** (216 unit/integration tests green: core 82, qloo 53, mcp 13, web 68; `pnpm smoke` production smoke green on host + Docker; Playwright e2e deferred, live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
 
 **Description:** vitest unit/integration per package as specified per ticket; Playwright e2e for the primary journey with Qloo routes mocked (CI-safe); `scripts/smoke-live.ts` hitting real endpoints, run pre-submit.
 **Acceptance criteria:**
@@ -291,7 +292,8 @@ Status: [ ] — **Partial** (209 unit/integration tests green: core 82, qloo 46,
 **Risks:** e2e flakiness → deterministic mocks; live smoke depends on T-01 + key.
 
 ### T-23 · Deploy (Vercel default)
-Status: [ ] — **Pending** (deployment account not chosen; Vercel is the default plan) · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `vercel.json`, `Dockerfile`, `scripts/smoke-prod.*`
+Status: [ ] — **Partial** (Dockerfile + deployment guide + `pnpm smoke` ready and verified; Vercel deploy pending an account) · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `vercel.json`, `Dockerfile`, `scripts/smoke-prod.*`
+**Evidence:** commit `3d9796d` — `Dockerfile` + `.dockerignore` (standalone runner image; in-container smoke passed) and `docs/deployment.md`; the actual Vercel deploy + prod URL smoke still pending an account.
 
 **Description:** Deploy `apps/web` to Vercel with env vars (`QLOO_API_KEY`, `QLOO_API_BASE`, `QLOO_MOCK=0` in prod, optional `ANTHROPIC_API_KEY`); wire `/api/health`; prod smoke checklist; fallback Dockerfile for fly.io/render.
 **Acceptance criteria:**
@@ -302,7 +304,8 @@ Status: [ ] — **Pending** (deployment account not chosen; Vercel is the defaul
 **Risks:** deployment target not final → Vercel is the default plan; keep the app 12-factor so the fallback is cheap. Preview deployments share secrets — restrict access.
 
 ### T-24 · Submission
-Status: [ ] — **Pending** · **P0** · ~4 agent-hours · Deps: T-21, T-22, T-23 · Owns: `README.md`, `docs/submission.md`
+Status: [ ] — **Partial** (`docs/submission.md` + `docs/demo-script.md` drafted; hosted URLs + final README rewrite pending) · **P0** · ~4 agent-hours · Deps: T-21, T-22, T-23 · Owns: `README.md`, `docs/submission.md`
+**Evidence:** commit `3d9796d` — `docs/submission.md` (Devpost text) and `docs/demo-script.md` (rehearsal checklist) drafted; README rewrite and hosted URLs land with the T-23 deploy.
 
 **Description:** README rewrite (real setup instructions, architecture, supported/unsupported disclosure: `/recs` legacy unsupported, LLM features degraded without key, mock mode labeled), Devpost text, screenshots from the prod build, license/About check.
 **Acceptance criteria:**
@@ -326,9 +329,9 @@ Status: [ ] — **Deferred** (stretch; starts only when every P0 is complete) ·
 
 ## Critical path
 
-`T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-23` [pending] → `T-24` [pending]
+`T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-21` [done] → `T-23` [partial] → `T-24` [partial]
 
-Remaining on the path: T-18 (partial), T-21–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
+Remaining on the path: T-18 (partial), T-22–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
 
 ## Key-independent work
 
