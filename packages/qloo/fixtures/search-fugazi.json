@@ -5,7 +5,7 @@
     {
       "entity_id": "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948",
       "type": "urn:entity:artist",
-      "subtype": "urn:artist:musical_artist",
+      "subtype": "urn:entity:artist",
       "name": "Fugazi",
       "disambiguation": "Washington, D.C.",
       "popularity": 0.68,

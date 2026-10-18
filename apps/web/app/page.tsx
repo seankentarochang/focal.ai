@@ -1,57 +1,113 @@
-import { Suspense } from "react";
-import Image from "next/image";
-import { headers } from "next/headers";
-import { VERSION } from "@focal-ai/core";
+"use client";
 
-type Health = {
-  ok: boolean;
-  hasQlooKey: boolean;
-  dataSource: "live" | "mock";
-};
+import { useEffect, useState } from "react";
+import { Inspector } from "@/components/inspector/Inspector";
+import { ProfilePanel } from "@/components/profile/ProfilePanel";
+import { TopBar } from "@/components/shell/TopBar";
+import { RenderSurface } from "@/components/surface/RenderSurface";
+import { getHealth, rankPage } from "@/lib/client/api";
+import { useProfile } from "@/lib/client/store";
+import type {
+  DemoPage,
+  HealthResponse,
+  PageId,
+  RankResponse,
+  SurfaceMode,
+} from "@/lib/client/types";
+import { getPage, PAGES } from "@/lib/pages";
 
-async function fetchHealth(): Promise<Health | null> {
-  const h = await headers();
-  const host = h.get("host");
-  if (!host) return null;
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  try {
-    const res = await fetch(`${proto}://${host}/api/health`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as Health;
-  } catch {
-    return null;
-  }
-}
-
-async function HealthStatus() {
-  const health = await fetchHealth();
-  if (!health) {
-    return <p className="text-sm text-zinc-500">status: unavailable</p>;
-  }
-  return (
-    <p className="text-sm text-zinc-400">
-      Qloo key:{" "}
-      <span className="text-[#6E56CF]">
-        {health.hasQlooKey ? "configured" : "missing"}
-      </span>
-      {" · "}
-      data source: <span className="text-[#6E56CF]">{health.dataSource}</span>
-    </p>
-  );
-}
+const PAGE_LIST: DemoPage[] = [PAGES.tables, PAGES.atlas, PAGES.verve];
 
 export default function Home() {
+  return <FocalApp />;
+}
+
+function FocalApp() {
+  const [pageId, setPageId] = useState<PageId>("tables");
+  const [response, setResponse] = useState<RankResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<SurfaceMode>("original");
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+
+  const { profile, setProfile, reset } = useProfile();
+
+  const page = getPage(pageId);
+
+  useEffect(() => {
+    getHealth()
+      .then(setHealth)
+      .catch(() => setHealth(null));
+  }, []);
+
+  function handlePageChange(id: PageId) {
+    setPageId(id);
+    setResponse(null);
+    setMode("original");
+    setError(null);
+  }
+
+  const canFocus = profile.seeds.some((seed) => seed.polarity === "like") && !busy;
+
+  async function handleFocus() {
+    if (!canFocus) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const ranked = await rankPage({ page, profile });
+      setResponse(ranked);
+      setMode("focal");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ranking failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleReset() {
+    setResponse(null);
+    setMode("original");
+    setError(null);
+  }
+
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-[#0a0a0b] px-6 text-center text-zinc-100">
-      <Image src="/logo.svg" alt="focal.ai logo" width={64} height={64} priority />
-      <h1 className="text-4xl font-semibold tracking-tight">focal.ai</h1>
-      <p className="text-lg text-zinc-400">The web, rendered for you.</p>
-      <Suspense fallback={<p className="text-sm text-zinc-500">checking Qloo status…</p>}>
-        <HealthStatus />
-      </Suspense>
-      <p className="text-[10px] text-zinc-600">core v{VERSION}</p>
-    </main>
+    <div className="flex min-h-dvh flex-col">
+      <TopBar
+        pages={PAGE_LIST}
+        pageId={pageId}
+        onPageChange={handlePageChange}
+        mode={mode}
+        onModeChange={setMode}
+        hasResponse={response !== null}
+        canFocus={canFocus}
+        busy={busy}
+        onFocus={() => void handleFocus()}
+        onReset={handleReset}
+        health={health}
+        seedCount={profile.seeds.length}
+      />
+
+      <main className="mx-auto grid w-full max-w-[1400px] gap-4 px-4 py-4 lg:grid-cols-[300px_minmax(0,1fr)_340px]">
+        <ProfilePanel profile={profile} onProfileChange={setProfile} />
+
+        <div className="flex min-w-0 flex-col gap-4">
+          {error !== null ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3"
+            >
+              <p className="text-sm font-medium text-danger">{error}</p>
+              <p className="mt-1 text-xs text-muted">
+                Check that QLOO_API_KEY is set (or QLOO_MOCK=1 for local demo data).
+              </p>
+            </div>
+          ) : null}
+
+          <RenderSurface page={page} response={response} mode={mode} busy={busy} />
+        </div>
+
+        <Inspector page={page} response={response} error={error} busy={busy} />
+      </main>
+    </div>
   );
 }

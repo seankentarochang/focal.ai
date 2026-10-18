@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "focal.ai",
-  description: "The web, rendered for you.",
+  title: "focal.ai — The web, rendered for you",
+  description:
+    "A portable taste layer that re-ranks the web around what you actually like, powered by Qloo's cross-domain taste graph.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-canvas text-ink antialiased">
+        {children}
+      </body>
     </html>
   );
 }

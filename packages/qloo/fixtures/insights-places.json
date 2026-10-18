@@ -6,7 +6,7 @@
       {
         "entity_id": "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01",
         "type": "urn:entity:place",
-        "subtype": "urn:place:restaurant",
+        "subtype": "urn:entity:place",
         "name": "Rintaro",
         "disambiguation": "San Francisco, California",
         "popularity": 0.82,
@@ -27,7 +27,7 @@
       {
         "entity_id": "9C4D7E12-5F38-4A61-B7C0-2D8F1E5A9B42",
         "type": "urn:entity:place",
-        "subtype": "urn:place:restaurant",
+        "subtype": "urn:entity:place",
         "name": "State Bird Provisions",
         "disambiguation": "San Francisco, California",
         "popularity": 0.79,
@@ -49,7 +49,7 @@
       {
         "entity_id": "6E1B94D8-3A27-4C85-95F6-7B2E0A4D3C97",
         "type": "urn:entity:place",
-        "subtype": "urn:place:restaurant",
+        "subtype": "urn:entity:place",
         "name": "Zuni Café",
         "disambiguation": "San Francisco, California",
         "popularity": 0.74,
@@ -70,7 +70,7 @@
       {
         "entity_id": "D5F70A63-8C49-4B1E-A2D8-9E3B6C05F124",
         "type": "urn:entity:place",
-        "subtype": "urn:place:restaurant",
+        "subtype": "urn:entity:place",
         "name": "House of Prime Rib",
         "disambiguation": "San Francisco, California",
         "popularity": 0.71,
@@ -88,7 +88,7 @@
       {
         "entity_id": "1B6E38F9-2D54-4F7A-B3E0-C8A5D9142E6B",
         "type": "urn:entity:place",
-        "subtype": "urn:place:restaurant",
+        "subtype": "urn:entity:place",
         "name": "Che Fico",
         "disambiguation": "San Francisco, California",
         "popularity": 0.69,

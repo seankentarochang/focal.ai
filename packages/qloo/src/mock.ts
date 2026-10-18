@@ -18,13 +18,43 @@ import type {
 export const QLOO_FIXTURE_MARKER = searchRintaroFixture._fixture;
 
 const MOCK_DELAY_MS = 50;
+const DEFAULT_SEARCH_TAKE = 8;
+
+const SEARCH_FIXTURES: unknown[] = [
+  searchRintaroFixture,
+  searchFugaziFixture,
+  entitiesFixture,
+  insightsPlacesFixture,
+];
 
 function mockDelay(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
 }
 
-function emptyResultsEnvelope(): unknown {
-  return { _fixture: QLOO_FIXTURE_MARKER, success: true, results: [] as unknown[] };
+function normalizeMatchText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function selectSearchResults(query: string, take: number): unknown[] {
+  const normalizedQuery = normalizeMatchText(query);
+  if (normalizedQuery.length === 0) return [];
+  const results: unknown[] = [];
+  const seen = new Set<string>();
+  for (const fixture of SEARCH_FIXTURES) {
+    for (const value of extractResultsArray(fixture) ?? []) {
+      if (!isRecord(value)) continue;
+      const entityId = value["entity_id"];
+      const name = value["name"];
+      if (typeof entityId !== "string" || entityId.length === 0) continue;
+      if (typeof name !== "string") continue;
+      if (seen.has(entityId)) continue;
+      if (!normalizeMatchText(name).includes(normalizedQuery)) continue;
+      seen.add(entityId);
+      results.push(value);
+      if (results.length >= take) return results;
+    }
+  }
+  return results;
 }
 
 function selectEntityIds(values: unknown[], entityIds: string[] | undefined): unknown[] {
@@ -37,14 +67,13 @@ function selectEntityIds(values: unknown[], entityIds: string[] | undefined): un
 export function createMockQlooClient(): QlooClient {
   async function search(params: SearchParams): Promise<SearchResult> {
     await mockDelay();
-    const query = params.query.toLowerCase();
-    const payload = query.includes("rintaro")
-      ? searchRintaroFixture
-      : query.includes("fugazi")
-        ? searchFugaziFixture
-        : emptyResultsEnvelope();
-    const values = extractResultsArray(payload) ?? [];
-    return { entities: mapEntityList(values), durationMs: MOCK_DELAY_MS, raw: payload };
+    const take = Math.max(1, Math.trunc(params.take ?? DEFAULT_SEARCH_TAKE));
+    const payload = {
+      _fixture: QLOO_FIXTURE_MARKER,
+      success: true,
+      results: selectSearchResults(params.query, take),
+    };
+    return { entities: mapEntityList(payload.results), durationMs: MOCK_DELAY_MS, raw: payload };
   }
 
   async function insights(params: InsightsParams): Promise<InsightsResult> {

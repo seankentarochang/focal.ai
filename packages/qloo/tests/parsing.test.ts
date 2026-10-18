@@ -33,7 +33,7 @@ describe("search parsing", () => {
     expect(result.entities.map((entity) => entity.name)).toEqual(["Rintaro", "State Bird Provisions", "Zuni Café"]);
     const rintaro = result.entities[0]!;
     expect(rintaro.entityId).toBe(RIN);
-    expect(rintaro.subtype).toBe("urn:place:restaurant");
+    expect(rintaro.subtype).toBe("urn:entity:place");
     expect(rintaro.disambiguation).toBe("San Francisco, California");
     expect(rintaro.popularity).toBe(0.82);
     expect(rintaro.tagIds).toContain("urn:tag:cuisine:japanese");

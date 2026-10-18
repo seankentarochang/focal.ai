@@ -6,6 +6,7 @@ import { QLOO_FIXTURE_MARKER, createMockQlooClient } from "../src/mock.js";
 
 const FUG = "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948";
 const RIN = "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01";
+const SBP = "9C4D7E12-5F38-4A61-B7C0-2D8F1E5A9B42";
 const ZUNI = "6E1B94D8-3A27-4C85-95F6-7B2E0A4D3C97";
 const HOPR = "D5F70A63-8C49-4B1E-A2D8-9E3B6C05F124";
 const CHEF = "1B6E38F9-2D54-4F7A-B3E0-C8A5D9142E6B";
@@ -15,12 +16,14 @@ function rawMarker(raw: unknown): unknown {
 }
 
 describe("mock search", () => {
-  it("returns the Rintaro fixture entities with the marker intact in raw", async () => {
+  it("matches a fixture entity by name, maps it, and keeps the marker in raw", async () => {
     const client = createMockQlooClient();
     const result = await client.search({ query: "Rintaro" });
 
-    expect(result.entities).toHaveLength(3);
-    expect(result.entities.map((entity) => entity.name)).toEqual(["Rintaro", "State Bird Provisions", "Zuni Café"]);
+    expect(result.entities).toHaveLength(1);
+    expect(result.entities.map((entity) => entity.name)).toEqual(["Rintaro"]);
+    expect(result.entities[0]?.entityId).toBe(RIN);
+    expect(result.entities[0]?.subtype).toBe("urn:entity:place");
     expect(result.entities[0]?.disambiguation).toBe("San Francisco, California");
     expect(result.entities[0]?.tagIds).toContain("urn:tag:venue_style:izakaya");
     expect(rawMarker(result.raw)).toBe(QLOO_FIXTURE_MARKER);
@@ -30,12 +33,28 @@ describe("mock search", () => {
     expect(QLOO_FIXTURE_MARKER).toBe("mock — hand-authored from public docs examples, not live Qloo data");
   });
 
-  it("matches Rintaro case-insensitively and inside a longer query", async () => {
+  it("matches case-insensitively on substrings of the entity name", async () => {
     const client = createMockQlooClient();
-    const result = await client.search({ query: "best rintaro ramen" });
+    const upper = await client.search({ query: "  RINTARO " });
 
-    expect(result.entities).toHaveLength(3);
-    expect(result.entities[0]?.entityId).toBe(RIN);
+    expect(upper.entities.map((entity) => entity.entityId)).toEqual([RIN]);
+
+    const substring = await client.search({ query: "bird provisions" });
+
+    expect(substring.entities.map((entity) => entity.name)).toEqual(["State Bird Provisions"]);
+  });
+
+  it("dedupes entities that appear in several fixtures and respects take", async () => {
+    const client = createMockQlooClient();
+
+    const deduped = await client.search({ query: "zuni" });
+    expect(deduped.entities.map((entity) => entity.entityId)).toEqual([ZUNI]);
+
+    const broad = await client.search({ query: "a" });
+    expect(broad.entities.map((entity) => entity.entityId)).toEqual([RIN, SBP, ZUNI, FUG]);
+
+    const capped = await client.search({ query: "a", take: 2 });
+    expect(capped.entities.map((entity) => entity.entityId)).toEqual([RIN, SBP]);
   });
 
   it("returns the Fugazi fixture for a Fugazi query", async () => {
@@ -45,7 +64,7 @@ describe("mock search", () => {
     expect(result.entities).toHaveLength(1);
     expect(result.entities[0]?.name).toBe("Fugazi");
     expect(result.entities[0]?.disambiguation).toBe("Washington, D.C.");
-    expect(result.entities[0]?.subtype).toBe("urn:artist:musical_artist");
+    expect(result.entities[0]?.subtype).toBe("urn:entity:artist");
   });
 
   it("returns an empty envelope for unknown queries", async () => {
@@ -183,7 +202,8 @@ describe("mock tags, entities, and delay", () => {
     const client = createQlooClient({ mock: true });
     const result = await client.search({ query: "Rintaro" });
 
-    expect(result.entities).toHaveLength(3);
+    expect(result.entities).toHaveLength(1);
+    expect(result.entities[0]?.entityId).toBe(RIN);
     expect(rawMarker(result.raw)).toBe(QLOO_FIXTURE_MARKER);
   });
 });
