@@ -1,0 +1,99 @@
+{
+  "_fixture": "mock — hand-authored from public docs examples, not live Qloo data",
+  "success": true,
+  "results": [
+    {
+      "entity_id": "B4E7A1C6-2F59-4D83-9E21-6A08C5D3F764",
+      "type": "urn:entity:place",
+      "subtype": "urn:entity:place",
+      "name": "Bairro Alto Hotel",
+      "disambiguation": "Lisbon, Portugal",
+      "popularity": 0.77,
+      "tags": [
+        { "id": "urn:tag:place_type:hotel", "name": "Hotel" },
+        { "id": "urn:tag:neighborhood:chiado", "name": "Chiado" },
+        { "id": "urn:tag:venue_style:boutique", "name": "Boutique" },
+        { "id": "urn:tag:price:luxury", "name": "Luxury Price" },
+        { "id": "urn:tag:amenity:rooftop_bar", "name": "Rooftop Bar" },
+        { "id": "urn:tag:cuisine:portuguese", "name": "Portuguese Cuisine" },
+        { "id": "urn:tag:view:river", "name": "River View" }
+      ],
+      "properties": {
+        "address": "Praça Luís de Camões 2",
+        "city": "Lisbon",
+        "region": "Lisboa",
+        "country": "Portugal",
+        "geocode": { "city": "Lisbon", "country_code": "PT" }
+      }
+    },
+    {
+      "entity_id": "C8D2F3A9-6E14-4B75-A3C8-1D92E7B04F00",
+      "type": "urn:entity:place",
+      "subtype": "urn:entity:place",
+      "name": "Memmo Alfama",
+      "disambiguation": "Lisbon, Portugal",
+      "popularity": 0.73,
+      "tags": [
+        { "id": "urn:tag:place_type:hotel", "name": "Hotel" },
+        { "id": "urn:tag:neighborhood:alfama", "name": "Alfama" },
+        { "id": "urn:tag:venue_style:boutique", "name": "Boutique" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" },
+        { "id": "urn:tag:amenity:rooftop_pool", "name": "Rooftop Pool" },
+        { "id": "urn:tag:view:river", "name": "River View" }
+      ],
+      "properties": {
+        "address": "Travessa das Merceeiras 27",
+        "city": "Lisbon",
+        "region": "Lisboa",
+        "country": "Portugal",
+        "geocode": { "city": "Lisbon", "country_code": "PT" }
+      }
+    },
+    {
+      "entity_id": "2F6B9D47-8C31-4E05-B6A9-3E8D0C7F21B4",
+      "type": "urn:entity:place",
+      "subtype": "urn:entity:place",
+      "name": "Santiago de Alfama",
+      "disambiguation": "Lisbon, Portugal",
+      "popularity": 0.66,
+      "tags": [
+        { "id": "urn:tag:place_type:hotel", "name": "Hotel" },
+        { "id": "urn:tag:neighborhood:alfama", "name": "Alfama" },
+        { "id": "urn:tag:venue_style:boutique", "name": "Boutique" },
+        { "id": "urn:tag:architecture:pombaline", "name": "Pombaline Architecture" },
+        { "id": "urn:tag:cuisine:portuguese", "name": "Portuguese Cuisine" },
+        { "id": "urn:tag:amenity:spa", "name": "Spa" }
+      ],
+      "properties": {
+        "address": "Rua de Santiago 10",
+        "city": "Lisbon",
+        "region": "Lisboa",
+        "country": "Portugal",
+        "geocode": { "city": "Lisbon", "country_code": "PT" }
+      }
+    },
+    {
+      "entity_id": "E71C4A86-9D23-4F58-8B60-5C1E9A3D7201",
+      "type": "urn:entity:place",
+      "subtype": "urn:entity:place",
+      "name": "The Lumiares",
+      "disambiguation": "Lisbon, Portugal",
+      "popularity": 0.69,
+      "tags": [
+        { "id": "urn:tag:place_type:hotel", "name": "Hotel" },
+        { "id": "urn:tag:neighborhood:bairro_alto", "name": "Bairro Alto" },
+        { "id": "urn:tag:venue_style:boutique", "name": "Boutique" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" },
+        { "id": "urn:tag:amenity:spa", "name": "Spa" },
+        { "id": "urn:tag:amenity:rooftop_bar", "name": "Rooftop Bar" }
+      ],
+      "properties": {
+        "address": "Rua do Diário de Notícias 44",
+        "city": "Lisbon",
+        "region": "Lisboa",
+        "country": "Portugal",
+        "geocode": { "city": "Lisbon", "country_code": "PT" }
+      }
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 import entitiesFixture from "../fixtures/entities.json";
 import insightsPlacesFixture from "../fixtures/insights-places.json";
+import searchBrandsFixture from "../fixtures/search-brands.json";
 import searchFugaziFixture from "../fixtures/search-fugazi.json";
+import searchLisbonFixture from "../fixtures/search-lisbon.json";
 import searchRintaroFixture from "../fixtures/search-rintaro.json";
 import tagsNaturalWineFixture from "../fixtures/tags-natural-wine.json";
 import { extractResultsArray, extractTagsArray, isRecord, mapEntityList, mapScoredEntity, mapTagList } from "./mapping";
@@ -25,7 +27,91 @@ const SEARCH_FIXTURES: unknown[] = [
   searchFugaziFixture,
   entitiesFixture,
   insightsPlacesFixture,
+  searchLisbonFixture,
+  searchBrandsFixture,
 ];
+
+// ---------------------------------------------------------------------------
+// SYNTHETIC INSIGHT AFFINITIES — MOCK MODE ONLY
+//
+// The insights fixture below only covers five San Francisco places, which left
+// the Studio's Lisbon (Atlas) and brand (Verve) demo pages unresolved in mock
+// mode. For requested ids that are missing from the insights fixture but known
+// to any other mock fixture, the mock synthesizes a scored entry so the demo
+// stays usable end to end.
+//
+// These affinities are entirely fake: they exist ONLY to make the clearly
+// labeled mock demo work, and they never touch live mode (createQlooClient
+// returns this client only for QLOO_MOCK=1 or { mock: true }). The derivation
+// is a pure FNV-1a hash of the entity id, so repeated calls and test runs are
+// stable and deterministic:
+//
+//   affinity    = round(0.58 + (fnv1a(id) % 37) / 100, 4)        -> 0.58..0.94
+//   foundAt     = "query.affinity"
+//   rankIndex   = position in the returned entity list
+//   contributions, only when fnv1a(id) % 2 === 0 (about half of the ids):
+//     [{ entity_id: <Fugazi id>, score: round(0.2 + (fnv1a(id + "c") % 40) / 100, 2) }]
+//
+// Fixture-backed ids always win: anything present in insights-places.json keeps
+// its authored values (Rintaro stays 0.93, House of Prime Rib keeps the
+// query.measurements.affinity path, Che Fico stays affinity-less). Requested
+// ids that appear in no fixture at all are skipped, exactly as before, so the
+// caller keeps seeing "resolved without affinity" for them.
+// ---------------------------------------------------------------------------
+
+const FNV1A_OFFSET_BASIS = 0x811c9dc5;
+const FNV1A_PRIME = 0x01000193;
+const MOCK_SIGNAL_ENTITY_ID = "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948";
+
+const SYNTHESIS_SOURCE_FIXTURES: unknown[] = [
+  searchRintaroFixture,
+  searchFugaziFixture,
+  searchLisbonFixture,
+  searchBrandsFixture,
+  entitiesFixture,
+];
+
+function fnv1a(value: string): number {
+  let hash = FNV1A_OFFSET_BASIS;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, FNV1A_PRIME) >>> 0;
+  }
+  return hash;
+}
+
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function buildInsightSourceIndex(fixtures: unknown[]): Map<string, Record<string, unknown>> {
+  const index = new Map<string, Record<string, unknown>>();
+  for (const fixture of fixtures) {
+    for (const value of extractResultsArray(fixture) ?? []) {
+      if (!isRecord(value)) continue;
+      const entityId = value["entity_id"];
+      if (typeof entityId !== "string" || entityId.length === 0) continue;
+      if (!index.has(entityId)) index.set(entityId, value);
+    }
+  }
+  return index;
+}
+
+const INSIGHT_ENTITY_SOURCES = buildInsightSourceIndex(SYNTHESIS_SOURCE_FIXTURES);
+
+function synthesizeInsightsEntry(entityId: string, source: Record<string, unknown>): Record<string, unknown> {
+  const hash = fnv1a(entityId);
+  const query: Record<string, unknown> = { affinity: roundTo(0.58 + (hash % 37) / 100, 4) };
+  if (hash % 2 === 0) {
+    query["explainability"] = {
+      contributions: [
+        { entity_id: MOCK_SIGNAL_ENTITY_ID, score: roundTo(0.2 + (fnv1a(`${entityId}c`) % 40) / 100, 2) },
+      ],
+    };
+  }
+  return { ...source, query };
+}
 
 function mockDelay(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
@@ -64,6 +150,29 @@ function selectEntityIds(values: unknown[], entityIds: string[] | undefined): un
   );
 }
 
+function selectInsightsValues(resultEntityIds: string[] | undefined): unknown[] {
+  const fixtureValues = extractResultsArray(insightsPlacesFixture) ?? [];
+  if (resultEntityIds === undefined || resultEntityIds.length === 0) return fixtureValues;
+
+  // Fixture-backed ids come first, in fixture order, with their authored values.
+  const values = selectEntityIds(fixtureValues, resultEntityIds);
+  const matched = new Set<string>();
+  for (const value of values) {
+    if (isRecord(value) && typeof value["entity_id"] === "string") matched.add(value["entity_id"]);
+  }
+
+  // Remaining requested ids are synthesized in request order when some other
+  // fixture knows them; ids no fixture knows are skipped (stay unscored).
+  for (const entityId of resultEntityIds) {
+    if (matched.has(entityId)) continue;
+    const source = INSIGHT_ENTITY_SOURCES.get(entityId);
+    if (source === undefined) continue;
+    matched.add(entityId);
+    values.push(synthesizeInsightsEntry(entityId, source));
+  }
+  return values;
+}
+
 export function createMockQlooClient(): QlooClient {
   async function search(params: SearchParams): Promise<SearchResult> {
     await mockDelay();
@@ -78,7 +187,7 @@ export function createMockQlooClient(): QlooClient {
 
   async function insights(params: InsightsParams): Promise<InsightsResult> {
     await mockDelay();
-    const values = selectEntityIds(extractResultsArray(insightsPlacesFixture) ?? [], params.resultEntityIds);
+    const values = selectInsightsValues(params.resultEntityIds);
     const entities: ScoredEntity[] = [];
     values.forEach((value, rankIndex) => {
       const scored = mapScoredEntity(value, rankIndex);

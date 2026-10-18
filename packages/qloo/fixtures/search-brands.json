@@ -1,0 +1,82 @@
+{
+  "_fixture": "mock — hand-authored from public docs examples, not live Qloo data",
+  "success": true,
+  "results": [
+    {
+      "entity_id": "A5F2C87E-3B94-4D16-8E70-6F2B9C4A1D83",
+      "type": "urn:entity:brand",
+      "subtype": "urn:entity:brand",
+      "name": "Aesop",
+      "disambiguation": "Melbourne, Australia",
+      "popularity": 0.81,
+      "tags": [
+        { "id": "urn:tag:category:skincare", "name": "Skincare" },
+        { "id": "urn:tag:category:personal_care", "name": "Personal Care" },
+        { "id": "urn:tag:style:minimalist", "name": "Minimalist Design" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" },
+        { "id": "urn:tag:material:botanical", "name": "Botanical Formulations" }
+      ],
+      "properties": {
+        "country": "Australia",
+        "founded": "1987"
+      }
+    },
+    {
+      "entity_id": "D91E6B34-7A28-4C50-9F3D-2B8E5A0C76F1",
+      "type": "urn:entity:brand",
+      "subtype": "urn:entity:brand",
+      "name": "MUJI",
+      "disambiguation": "Tokyo, Japan",
+      "popularity": 0.79,
+      "tags": [
+        { "id": "urn:tag:category:home_goods", "name": "Home Goods" },
+        { "id": "urn:tag:category:stationery", "name": "Stationery" },
+        { "id": "urn:tag:category:apparel", "name": "Apparel" },
+        { "id": "urn:tag:style:minimalist", "name": "Minimalist Design" },
+        { "id": "urn:tag:price:moderate", "name": "Moderate Price" }
+      ],
+      "properties": {
+        "country": "Japan",
+        "founded": "1980"
+      }
+    },
+    {
+      "entity_id": "37C8E5A2-9F46-4B81-A0D5-C31E7B9F2D46",
+      "type": "urn:entity:brand",
+      "subtype": "urn:entity:brand",
+      "name": "Patagonia",
+      "disambiguation": "Ventura, California",
+      "popularity": 0.83,
+      "tags": [
+        { "id": "urn:tag:category:outdoor_apparel", "name": "Outdoor Apparel" },
+        { "id": "urn:tag:category:outdoor_equipment", "name": "Outdoor Equipment" },
+        { "id": "urn:tag:value:sustainability", "name": "Sustainability" },
+        { "id": "urn:tag:style:utility", "name": "Utilitarian Design" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" }
+      ],
+      "properties": {
+        "country": "United States",
+        "founded": "1973"
+      }
+    },
+    {
+      "entity_id": "F62B9D18-4C73-4E29-85B1-9A7D3C06E854",
+      "type": "urn:entity:brand",
+      "subtype": "urn:entity:brand",
+      "name": "Tekla",
+      "disambiguation": "Copenhagen, Denmark",
+      "popularity": 0.62,
+      "tags": [
+        { "id": "urn:tag:category:home_textiles", "name": "Home Textiles" },
+        { "id": "urn:tag:category:bedding", "name": "Bedding" },
+        { "id": "urn:tag:material:organic_cotton", "name": "Organic Cotton" },
+        { "id": "urn:tag:style:minimalist", "name": "Minimalist Design" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" }
+      ],
+      "properties": {
+        "country": "Denmark",
+        "founded": "2017"
+      }
+    }
+  ]
+}

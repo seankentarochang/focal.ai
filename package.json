@@ -14,7 +14,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "check": "pnpm -r typecheck && pnpm -r test",
-    "probe": "tsx scripts/probe-qloo.ts"
+    "probe": "tsx scripts/probe-qloo.ts",
+    "smoke": "tsx scripts/smoke-prod.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
