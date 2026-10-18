@@ -56,10 +56,14 @@ export function ListingCard({ candidate, ranked, mode, delta }: ListingCardProps
             {ranked?.reason?.text ? (
               <p className="mt-0.5 line-clamp-2 text-[11px] text-muted">{ranked.reason.text}</p>
             ) : null}
-            <p className="mt-0.5 truncate text-xs text-muted">{candidate.meta}</p>
-            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">
-              {candidate.blurb}
-            </p>
+            {candidate.meta.length > 0 ? (
+              <p className="mt-0.5 truncate text-xs text-muted">{candidate.meta}</p>
+            ) : null}
+            {candidate.blurb.length > 0 ? (
+              <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">
+                {candidate.blurb}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 flex-col items-end gap-1.5">

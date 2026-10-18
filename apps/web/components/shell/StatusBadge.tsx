@@ -15,13 +15,13 @@ export function StatusBadge({ health, seedCount }: StatusBadgeProps) {
     <div className="flex items-center gap-2">
       {health === null ? (
         <span className={`${PILL} border-line bg-surface text-muted`}>checking…</span>
-      ) : !health.hasQlooKey ? (
-        <span className={`${PILL} border-warning/40 bg-warning/10 text-warning`}>
-          Qloo key not configured
-        </span>
       ) : health.dataSource === "mock" ? (
         <span className={`${PILL} border-warning/40 bg-warning/10 text-warning`}>
           MOCK DATA
+        </span>
+      ) : !health.hasQlooKey ? (
+        <span className={`${PILL} border-warning/40 bg-warning/10 text-warning`}>
+          Qloo key not configured
         </span>
       ) : (
         <span className={`${PILL} border-line bg-surface text-ink`}>

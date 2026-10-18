@@ -3,6 +3,7 @@ import {
   planRender,
   rankCandidates,
   resolveCandidates,
+  validatePlan,
   type RankedCandidate,
 } from "@focal-ai/core";
 import type { QlooEntityType } from "@focal-ai/qloo";
@@ -19,6 +20,13 @@ function invalidBodyResponse(): Response {
   return Response.json(
     { error: { code: "BAD_REQUEST", message: "invalid request body" } },
     { status: 400 },
+  );
+}
+
+function planValidationFailedResponse(): Response {
+  return Response.json(
+    { error: { code: "INTERNAL", message: "plan validation failed" } },
+    { status: 500 },
   );
 }
 
@@ -75,6 +83,7 @@ export async function POST(req: Request): Promise<Response> {
     if (resolvedIds.length === 0) {
       const ranked = rankCandidates({ candidates: resolved, scores: [], profile });
       const plan = planRender({ pageId, ranked, options: { containerId } });
+      if (!validatePlan(plan).ok) return planValidationFailedResponse();
       return Response.json({
         ranked,
         plan,
@@ -123,6 +132,8 @@ export async function POST(req: Request): Promise<Response> {
         emphasizeThreshold: 85,
       },
     });
+
+    if (!validatePlan(plan).ok) return planValidationFailedResponse();
 
     const unresolved = ranked.filter((entry) => entry.status === "unresolved").length;
 

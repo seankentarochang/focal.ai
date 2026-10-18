@@ -1,12 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import type { DemoPage, HealthResponse, PageId, SurfaceMode } from "@/lib/client/types";
+import type { HealthResponse, PageId, SurfaceMode } from "@/lib/client/types";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { StatusBadge } from "./StatusBadge";
 
+export interface TopBarTab {
+  id: PageId;
+  label: string;
+  count: number;
+}
+
 interface TopBarProps {
-  pages: DemoPage[];
+  tabs: TopBarTab[];
   pageId: PageId;
   onPageChange: (id: PageId) => void;
   mode: SurfaceMode;
@@ -21,7 +27,7 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  pages,
+  tabs,
   pageId,
   onPageChange,
   mode,
@@ -34,8 +40,7 @@ export function TopBar({
   health,
   seedCount,
 }: TopBarProps) {
-  const page = pages.find((p) => p.id === pageId);
-  const candidateCount = page?.candidates.length ?? 0;
+  const candidateCount = tabs.find((tab) => tab.id === pageId)?.count ?? 0;
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-md">
@@ -46,21 +51,21 @@ export function TopBar({
         </span>
 
         <nav className="flex items-center gap-0.5" aria-label="Demo pages">
-          {pages.map((p) => {
-            const active = p.id === pageId;
+          {tabs.map((tab) => {
+            const active = tab.id === pageId;
             return (
               <button
-                key={p.id}
+                key={tab.id}
                 type="button"
                 aria-current={active ? "page" : undefined}
-                onClick={() => onPageChange(p.id)}
+                onClick={() => onPageChange(tab.id)}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
                   active
                     ? "bg-surface-2 text-ink"
                     : "text-muted hover:bg-surface hover:text-ink"
                 }`}
               >
-                {p.name}
+                {tab.label}
               </button>
             );
           })}

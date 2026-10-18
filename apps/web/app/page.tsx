@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Inspector } from "@/components/inspector/Inspector";
+import { PasteList } from "@/components/paste/PasteList";
 import { ProfilePanel } from "@/components/profile/ProfilePanel";
-import { TopBar } from "@/components/shell/TopBar";
+import { TopBar, type TopBarTab } from "@/components/shell/TopBar";
 import { RenderSurface } from "@/components/surface/RenderSurface";
 import { getHealth, rankPage } from "@/lib/client/api";
 import { useProfile } from "@/lib/client/store";
@@ -14,9 +15,13 @@ import type {
   RankResponse,
   SurfaceMode,
 } from "@/lib/client/types";
-import { getPage, PAGES } from "@/lib/pages";
+import { BUILT_IN_PAGE_IDS, PAGES } from "@/lib/pages";
 
-const PAGE_LIST: DemoPage[] = [PAGES.tables, PAGES.atlas, PAGES.verve];
+const BUILT_IN_TABS: TopBarTab[] = BUILT_IN_PAGE_IDS.map((id) => ({
+  id,
+  label: PAGES[id].name,
+  count: PAGES[id].candidates.length,
+}));
 
 export default function Home() {
   return <FocalApp />;
@@ -24,6 +29,7 @@ export default function Home() {
 
 function FocalApp() {
   const [pageId, setPageId] = useState<PageId>("tables");
+  const [pastePage, setPastePage] = useState<DemoPage | null>(null);
   const [response, setResponse] = useState<RankResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +38,12 @@ function FocalApp() {
 
   const { profile, setProfile, reset } = useProfile();
 
-  const page = getPage(pageId);
+  const page: DemoPage | null = pageId === "paste" ? pastePage : PAGES[pageId];
+
+  const tabs: TopBarTab[] = [
+    ...BUILT_IN_TABS,
+    { id: "paste", label: "Paste", count: pastePage?.candidates.length ?? 0 },
+  ];
 
   useEffect(() => {
     getHealth()
@@ -47,10 +58,21 @@ function FocalApp() {
     setError(null);
   }
 
-  const canFocus = profile.seeds.some((seed) => seed.polarity === "like") && !busy;
+  function handlePasteReady(next: DemoPage) {
+    setPastePage(next);
+    setResponse(null);
+    setMode("original");
+    setError(null);
+  }
+
+  const canFocus =
+    page !== null &&
+    page.candidates.length > 0 &&
+    profile.seeds.some((seed) => seed.polarity === "like") &&
+    !busy;
 
   async function handleFocus() {
-    if (!canFocus) return;
+    if (!canFocus || page === null) return;
     setBusy(true);
     setError(null);
     try {
@@ -73,7 +95,7 @@ function FocalApp() {
   return (
     <div className="flex min-h-dvh flex-col">
       <TopBar
-        pages={PAGE_LIST}
+        tabs={tabs}
         pageId={pageId}
         onPageChange={handlePageChange}
         mode={mode}
@@ -103,10 +125,23 @@ function FocalApp() {
             </div>
           ) : null}
 
-          <RenderSurface page={page} response={response} mode={mode} busy={busy} />
+          {page !== null ? (
+            <RenderSurface page={page} response={response} mode={mode} busy={busy} />
+          ) : (
+            <PasteList onReady={handlePasteReady} />
+          )}
         </div>
 
-        <Inspector page={page} response={response} error={error} busy={busy} />
+        {page !== null ? (
+          <Inspector page={page} response={response} error={error} busy={busy} />
+        ) : (
+          <aside className="flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-4 lg:sticky lg:top-[76px] lg:self-start">
+            <h2 className="text-sm font-semibold text-ink">Inspector</h2>
+            <p className="text-xs text-muted">
+              Use your list to see exactly what focal.ai sent to Qloo and why each item moved.
+            </p>
+          </aside>
+        )}
       </main>
     </div>
   );

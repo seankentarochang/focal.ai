@@ -60,7 +60,14 @@ export function RenderSurface({ page, response, mode, busy }: RenderSurfaceProps
   return (
     <section className="flex min-w-0 flex-col gap-3">
       <header>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">{page.name}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight text-ink">{page.name}</h1>
+          {page.id !== "paste" ? (
+            <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-medium text-muted">
+              Demo directory
+            </span>
+          ) : null}
+        </div>
         <p className="mt-0.5 text-xs text-muted">{page.kind}</p>
       </header>
 

@@ -1,7 +1,7 @@
 import type { PageCandidate, RankedCandidate, RenderPlan, TasteProfile } from "@focal-ai/core";
 import type { DataSource, QlooEntity } from "@focal-ai/qloo";
 
-export type PageId = "tables" | "atlas" | "verve";
+export type PageId = "tables" | "atlas" | "verve" | "paste";
 export type SurfaceMode = "original" | "focal" | "diff";
 
 export interface DemoCandidate extends PageCandidate {
