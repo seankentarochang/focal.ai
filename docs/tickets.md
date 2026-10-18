@@ -1,10 +1,10 @@
 # Implementation tickets — focal.ai
 
-**Last status update:** 2026-10-18 (commit `8d18351`) — see `docs/status.md` for the full log.
+**Last status update:** 2026-10-18 (commit `8f7c909`) — see `docs/status.md` for the full log.
 
 **Deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). **Submit a day early** — target Oct 29.
 
-**Current state:** the Studio app, engine packages, and API routes are implemented and verified in mock mode (139 tests: core 72, qloo 46, web 21); live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
+**Current state:** the Studio app, engine packages, and API routes are implemented and verified in mock mode (151 tests: core 72, qloo 46, web 33); live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
 
 **Wave model:** one wave = one parallel agent batch. Wave A foundation → B engine → C web app → D agent & MCP → E ship. Within a wave, tickets that don't share files run in parallel. Keep file ownership disjoint (see `Owns:` globs); if two open tickets touch the same path, the dependency is missing — fix the ticket order, not the file.
 
@@ -217,7 +217,8 @@ Status: [x] · **P0** · ~3 agent-hours · Deps: T-13, T-14 · Owns: `apps/web/a
 **Risks:** cross-domain support claim (per docs) unverified until T-01 → fallback is same-domain seeds with an honest UI note.
 
 ### T-17 · Paste-any-list input (P1)
-Status: [ ] — **Pending** · **P1** · ~3 agent-hours · Deps: T-07, T-13 · Owns: `apps/web/components/paste/**`
+Status: [x] · **P1** · ~3 agent-hours · Deps: T-07, T-13 · Owns: `apps/web/components/paste/**`
+**Evidence:** commit `8f7c909` — paste surface (`components/paste/**`, `lib/client/paste.ts`, line parser + 12 tests; web suite now 33); release-verifier mock smoke green (Paste tab in the static shell, rank 200).
 
 **Description:** Textarea where users paste any list; parse per line, resolve each line, show per-line status (`resolved`/`ambiguous`/`unresolved`) with a picker for ambiguous rows; feeds the same rank pipeline.
 **Acceptance criteria:**
@@ -278,7 +279,7 @@ Status: [ ] — **Partial** (secret hygiene + validation done; CSP/headers pendi
 **Risks:** CSP vs Next inline scripts → nonce/hash strategy; verify before enforce.
 
 ### T-22 · Test suite + live smoke
-Status: [ ] — **Partial** (139 unit/integration tests green: core 72, qloo 46, web 21; Playwright e2e + live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
+Status: [ ] — **Partial** (151 unit/integration tests green: core 72, qloo 46, web 33; Playwright e2e + live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
 
 **Description:** vitest unit/integration per package as specified per ticket; Playwright e2e for the primary journey with Qloo routes mocked (CI-safe); `scripts/smoke-live.ts` hitting real endpoints, run pre-submit.
 **Acceptance criteria:**
@@ -325,7 +326,7 @@ Status: [ ] — **Deferred** (stretch; starts only when every P0 is complete) ·
 
 `T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-23` [pending] → `T-24` [pending]
 
-Remaining on the path: T-17–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
+Remaining on the path: T-18–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
 
 ## Key-independent work
 

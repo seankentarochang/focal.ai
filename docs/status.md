@@ -3,11 +3,11 @@
 **Last updated:** 2026-10-18
 **Team:** repo owner + autonomous coding agents (waves run as parallel agent batches, each closed by an independent release-verifier pass — see "Verification model" and `docs/testing.md`).
 **Hackathon deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). Target submission: Oct 29, one day early.
-**Repo state:** 2 local commits ahead of `origin/main`, never pushed: `18cd0cd` and `8d18351` on top of `4532f11`.
+**Repo state:** 5 local commits ahead of `origin/main`, never pushed: `18cd0cd` (W1+W2), `8d18351` (W3), `0af7a62` (docs), `8f7c909` (W4a), and this docs commit — all on top of `4532f11`.
 
 ## Current state
 
-The hosted "Focal Studio" web app is implemented and verified end-to-end in mock mode: a taste profile (seed picker with search, persistence under `focal.profile.v1`) drives three demo pages — Tables (12 SF restaurants, 2 sponsored), Atlas (Lisbon hotels), Verve (brands) — through `/api/qloo/rank` and `/api/qloo/search`, with a ranked surface (Original / Focal / Diff), a diff strip fed by `plan.summary`, and an inspector (plan / request / evidence). The engine packages are done and green: 139 passing tests (core 72, qloo 46, web 21). The browser extension and MCP server are not yet implemented; `packages/mcp` is a stub that exits 0 with a pointer to T-20. Everything runs against `QLOO_MOCK=1` fixtures today — live-data verification is waiting on the Qloo hackathon key.
+The hosted "Focal Studio" web app is implemented and verified end-to-end in mock mode: a taste profile (seed picker with search, persistence under `focal.profile.v1`) drives three demo pages — Tables (12 SF restaurants, 2 sponsored), Atlas (Lisbon hotels), Verve (brands) — through `/api/qloo/rank` and `/api/qloo/search`, with a ranked surface (Original / Focal / Diff), a diff strip fed by `plan.summary`, and an inspector (plan / request / evidence). A fourth Paste tab (T-17) ranks an arbitrary pasted list through the same pipeline, and `/api/qloo/rank` re-validates every compiled plan at runtime before responding. The engine packages are done and green: 151 passing tests (core 72, qloo 46, web 33). The browser extension and MCP server are not yet implemented; `packages/mcp` is a stub that exits 0 with a pointer to T-20. Everything runs against `QLOO_MOCK=1` fixtures today — live-data verification is waiting on the Qloo hackathon key.
 
 ## Wave history
 
@@ -17,6 +17,7 @@ The hosted "Focal Studio" web app is implemented and verified end-to-end in mock
 | Wave 1 — foundation | Oct 17 | pnpm monorepo scaffold (`apps/web` Next.js 16.4.2, `packages/{qloo,core,mcp}`, CI, dev scripts, probe script) + `docs/tickets.md` (25 tickets) + `docs/contracts.md` (frozen interfaces) + `docs/qloo-contract.md` template | `18cd0cd` — 69 files, +10,323/−6 | Frozen install, typecheck, build, CI config, probe stub |
 | Wave 2 — engine | Oct 17 | `@focal-ai/qloo` typed client (search / insights / tags / entities, error taxonomy, retry + TTL cache, defensive affinity extraction, fixture mock) + `@focal-ai/core` engine (profile codec, city-aware resolver, ranker, plan compiler / validator, grounded evidence) — 117 tests at the time | Included in `18cd0cd` after a verified fix | Independent verifier caught a Turbopack `.js`-import defect; fixed, then frozen install + tests + build green |
 | Wave 3 — Studio | Oct 18 | Studio UI + API routes (`/api/qloo/rank`, `/api/qloo/search`), demo page data (Tables / Atlas / Verve), ranked surface + diff strip + inspector, mock fixture realism fix (subtype `urn:entity:place`, broader mock search), Next 16 prerender fix (`SSR_EMPTY_PROFILE`), lint cleanup — 139 tests total | `8d18351` — 37 files, +2,341/−98 | Full release-verifier pass: typecheck 4/4, tests core 72 / qloo 46 / web 21, web build green, lint 0 errors, probe exits 2 (no key, friendly message), MCP stub exits 0, no key material in client bundles, runtime mock smoke (rank returns Rintaro at 93% match, 1 correctly unresolved) |
+| Wave 4a — paste + integrity | Oct 18 | Paste-any-list for arbitrary lists (per-line parser + statuses, Paste tab; T-17), runtime `validatePlan` gate on `/api/qloo/rank`, mock badge precedence fix (`dataSource === "mock"` wins over a missing key), "Demo directory" disclosure chip, +12 paste tests → web total 33 | `8f7c909` — 11 files, +361/−32 | Release-verifier pass (2026-10-18): typecheck 4/4, tests core 72 / qloo 46 / web 33 (151 total), web build green, lint 0 errors, probe exit 2, MCP stub exit 0, no key material in `.next/static`, runtime mock smoke (ranked 3, Rintaro 93%, 1 unresolved, `/v2/insights`; invalid body → 400) |
 
 ## Verification model
 
@@ -31,7 +32,7 @@ Every wave ends with an independent release-verifier pass — run by agents that
 
 ## Next up
 
-- **Wave 4:** paste-any-list input (T-17), error / mock / empty / rate-limit state polish (T-18), visible agent workflow with tool timeline + approval cards, deterministic without an LLM (T-19), MCP stdio server (T-20).
+- **Wave 4 (remaining):** error / mock / empty / rate-limit state polish (T-18, partial), visible agent workflow with tool timeline + approval cards, deterministic without an LLM (T-19), MCP stdio server (T-20).
 - **Wave 5:** hardening + CSP (T-21), Playwright e2e + live smoke (T-22), deploy + prod smoke (T-23), README rewrite + Devpost submission materials (T-24).
 
 ## How to update this file
