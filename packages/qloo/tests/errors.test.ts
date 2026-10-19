@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { QlooError } from "../src/errors.js";
 import { abortErrorLike, createFetchSpy, createLiveClient, jsonResponse, rejection, statusResponse } from "./support.js";
 
@@ -18,14 +18,51 @@ describe("HTTP error mapping", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("maps 429 to RATE_LIMIT and populates retryAfterMs from Retry-After", async () => {
-    const fetchImpl = createFetchSpy(async () => statusResponse(429, { "retry-after": "2" }));
-    const error = await rejection(createLiveClient(fetchImpl).search({ query: "x" }));
+  it("maps repeated 429 to RATE_LIMIT after exactly one retry, honoring Retry-After", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = createFetchSpy(async () => statusResponse(429, { "retry-after": "2" }));
+      const pending = rejection(createLiveClient(fetchImpl).search({ query: "x" }));
+      await vi.advanceTimersByTimeAsync(0);
 
-    expect(error.code).toBe("RATE_LIMIT");
-    expect(error.status).toBe(429);
-    expect(error.retryAfterMs).toBe(2000);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      const error = await pending;
+
+      expect(error.code).toBe("RATE_LIMIT");
+      expect(error.status).toBe(429);
+      expect(error.retryAfterMs).toBe(2000);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries a 429 once after ~1000ms by default and returns the result", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const fetchImpl = createFetchSpy(async () => {
+        calls += 1;
+        return calls === 1 ? statusResponse(429) : jsonResponse(ONE_ENTITY);
+      });
+      const pending = createLiveClient(fetchImpl).search({ query: "Rintaro" });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      const result = await pending;
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0]?.name).toBe("Rintaro");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("maps 400 and 422 to BAD_REQUEST", async () => {

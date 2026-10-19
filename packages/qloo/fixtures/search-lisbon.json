@@ -94,6 +94,28 @@
         "country": "Portugal",
         "geocode": { "city": "Lisbon", "country_code": "PT" }
       }
+    },
+    {
+      "entity_id": "6A2F8C41-D973-4E50-9B18-7C4D2F0E9A36",
+      "type": "urn:entity:place",
+      "subtype": "urn:entity:place",
+      "name": "The Vintage Lisbon",
+      "disambiguation": "Lisbon, Portugal",
+      "popularity": 0.71,
+      "tags": [
+        { "id": "urn:tag:place_type:hotel", "name": "Hotel" },
+        { "id": "urn:tag:venue_style:boutique", "name": "Boutique" },
+        { "id": "urn:tag:amenity:spa", "name": "Spa" },
+        { "id": "urn:tag:view:city", "name": "City View" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" }
+      ],
+      "properties": {
+        "address": "R. Rodrigo da Fonseca 2",
+        "city": "Lisbon",
+        "region": "Lisboa",
+        "country": "Portugal",
+        "geocode": { "city": "Lisbon", "country_code": "PT" }
+      }
     }
   ]
 }

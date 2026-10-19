@@ -53,17 +53,21 @@ export function mapEntity(raw: unknown): QlooEntity | undefined {
   if (Array.isArray(raw["tags"])) {
     for (const tag of raw["tags"] as unknown[]) {
       if (!isRecord(tag)) continue;
-      const id = tag["id"];
+      const id = typeof tag["id"] === "string" ? tag["id"] : tag["tag_id"];
       const tagName = tag["name"];
       if (typeof id === "string") tagIds.push(id);
       if (typeof tagName === "string") tagNames.push(tagName);
     }
   }
 
+  const subtype = raw["subtype"];
+  const types = raw["types"];
+  const typeFallback = Array.isArray(types) ? types[0] : undefined;
   const entity: QlooEntity = {
     entityId,
     name,
-    subtype: typeof raw["subtype"] === "string" ? raw["subtype"] : "",
+    subtype:
+      typeof subtype === "string" ? subtype : typeof typeFallback === "string" ? typeFallback : "",
     tagIds,
     tagNames,
     raw,
@@ -131,7 +135,7 @@ export function extractContributions(explainability: unknown): ScoreContribution
   if (Array.isArray(explainability)) {
     source = explainability as unknown[];
   } else if (isRecord(explainability)) {
-    for (const key of ["contributions", "entities"]) {
+    for (const key of ["contributions", "entities", "signal.interests.entities"]) {
       const value = explainability[key];
       if (Array.isArray(value)) {
         source = value as unknown[];

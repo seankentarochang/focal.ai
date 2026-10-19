@@ -16,16 +16,20 @@
  *    length >= 3. "Best match" = the first result that is normalized-equal to
  *    the query when one exists, otherwise the first match (Qloo relevance
  *    order is preserved).
- * 5. Outcomes:
+ * 5. Outcomes (city context gets the final word over duplicate names):
  *    - no matches                          -> "unresolved" (no entity)
- *    - >= 2 matches with normalized-equal names but different entityIds
+ *    - context non-empty: cityMatches are the matches whose normalized
+ *      disambiguation contains any city token (>= 3 chars)
+ *        exactly one distinct entityId    -> "resolved" (that entity)
+ *        more than one distinct entityId  -> "ambiguous" (first cityMatch)
+ *        zero cityMatches                 -> "ambiguous" (first matching result)
+ *      This is what lets a San Francisco "Rintaro" resolve to the SF entity
+ *      even when same-named entities in other cities are also returned, and
+ *      what stops a lone same-named business in the wrong city from resolving.
+ *    - context empty: exactly one normalized-equal match
+ *                                          -> "resolved"
+ *      2+ normalized-equal matches with different entityIds
  *                                          -> "ambiguous" (first match attached)
- *    - context non-empty and the best match's normalized disambiguation
- *      contains any city token             -> "resolved" (best match attached)
- *      otherwise                           -> "ambiguous" (best match attached)
- *      (this is what stops "Rintaro" from resolving to a same-named business
- *      in the wrong city)
- *    - context empty: normalized equality  -> "resolved"
  *      startsWith-only match               -> "ambiguous"
  *
  * Same input -> same output. Search errors propagate to the caller; the
@@ -77,6 +81,31 @@ export async function resolveCandidates(
       continue;
     }
 
+    const context = normalizeName(candidate.locationText ?? defaults?.location ?? "");
+    if (context.length > 0) {
+      const cityTokens = context.split(" ").filter((token) => token.length >= 3);
+      const cityMatches = matches.filter((entity) => {
+        const disambiguationTokens = new Set(
+          normalizeName(entity.disambiguation ?? "")
+            .split(" ")
+            .filter(Boolean),
+        );
+        return cityTokens.some((token) => disambiguationTokens.has(token));
+      });
+      const cityEntityIds = new Set(cityMatches.map((entity) => entity.entityId));
+
+      if (cityEntityIds.size === 1) {
+        resolved.push({ ...candidate, status: "resolved", entity: cityMatches[0] });
+        continue;
+      }
+      if (cityEntityIds.size > 1) {
+        resolved.push({ ...candidate, status: "ambiguous", entity: cityMatches[0] });
+        continue;
+      }
+      resolved.push({ ...candidate, status: "ambiguous", entity: matches[0] });
+      continue;
+    }
+
     const hasDuplicateNames =
       matches.some((a) =>
         matches.some((b) => b.entityId !== a.entityId && normalizeName(a.name) === normalizeName(b.name)),
@@ -89,23 +118,6 @@ export async function resolveCandidates(
     const best = matches.find((m) => normalizeName(m.name) === query) ?? matches[0];
     if (best === undefined) {
       resolved.push({ ...candidate, status: "unresolved", entity: undefined });
-      continue;
-    }
-
-    const context = normalizeName(candidate.locationText ?? defaults?.location ?? "");
-    if (context.length > 0) {
-      const cityTokens = context.split(" ").filter((token) => token.length >= 3);
-      const disambiguationTokens = new Set(
-        normalizeName(best.disambiguation ?? "")
-          .split(" ")
-          .filter(Boolean),
-      );
-      const cityMatches = cityTokens.some((token) => disambiguationTokens.has(token));
-      resolved.push({
-        ...candidate,
-        status: cityMatches ? "resolved" : "ambiguous",
-        entity: best,
-      });
       continue;
     }
 

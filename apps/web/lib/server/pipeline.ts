@@ -23,7 +23,7 @@ import {
   type RankPipelineResult,
   type TasteProfile,
 } from "@focal-ai/core";
-import type { DataSource, QlooEntityType } from "@focal-ai/qloo";
+import { warmSearchCache, type DataSource, type QlooClient, type QlooEntityType } from "@focal-ai/qloo";
 import { toCandidateScores, toCoreSearchFn } from "@/lib/server/adapters";
 import { dataSource, getQlooClient } from "@/lib/server/qloo";
 
@@ -31,6 +31,9 @@ import { dataSource, getQlooClient } from "@/lib/server/qloo";
 const INSIGHTS_TAKE_MIN = 1;
 const INSIGHTS_TAKE_MAX = 50;
 const INSIGHTS_DEFAULT_TAKE = 20;
+
+/** Same take the resolve adapter uses, so warmed cache entries are the ones the pipeline reads. */
+const RESOLVE_SEARCH_TAKE = 3;
 
 export interface RunPageRankInput {
   pageId: string;
@@ -95,9 +98,85 @@ export function buildInsightsParams(args: {
   return params;
 }
 
+/**
+ * One warm request per unique (name, type, location) tuple, mirroring the
+ * resolver's search calls. Pacing keeps the upstream under the 5 req/s burst
+ * limit; the cache entries warmed here are exactly the keys the resolver reads
+ * (same take), so the pipeline resolves from cache instead of re-querying.
+ */
+function candidateWarmRequests(input: RunPageRankInput) {
+  const seen = new Set<string>();
+  const requests: { query: string; types: string[]; location?: string }[] = [];
+  for (const candidate of input.candidates) {
+    const location = candidate.locationText ?? input.locationQuery;
+    const key = JSON.stringify([candidate.name, input.pageType, location ?? null]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    requests.push({
+      query: candidate.name,
+      types: [input.pageType],
+      ...(location !== undefined ? { location } : {}),
+    });
+  }
+  return requests;
+}
+
+/**
+ * Per-process memo of completed warm passes, keyed by page type + location +
+ * the sorted warm request tuples. The client's own TTL cache already holds the
+ * warmed results, but warmSearchCache still pays its pacing floor on every
+ * call; skipping a re-warm lets repeat ranks resolve from that cache instantly.
+ * In-memory per server instance (fine for the demo's scale); 5 minutes mirrors
+ * the client cache's 10-minute TTL while leaving slack for expiry.
+ */
+const WARM_MEMO_TTL_MS = 5 * 60 * 1000;
+const warmMemo = new Map<string, number>();
+
+function warmMemoKey(
+  input: RunPageRankInput,
+  requests: { query: string; types: string[]; location?: string }[],
+): string {
+  const tuples = requests
+    .map((request) => [request.query, request.types, request.location ?? null])
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return JSON.stringify({
+    pageType: input.pageType,
+    locationQuery: input.locationQuery ?? null,
+    requests: tuples,
+  });
+}
+
+/** Best-effort cache warming: never throws, never fails the rank request. */
+async function warmCandidateSearch(client: QlooClient, input: RunPageRankInput): Promise<void> {
+  const requests = candidateWarmRequests(input);
+  if (requests.length === 0) return;
+
+  const key = warmMemoKey(input, requests);
+  const warmedAt = warmMemo.get(key);
+  if (warmedAt !== undefined) {
+    if (Date.now() - warmedAt < WARM_MEMO_TTL_MS) return;
+    warmMemo.delete(key);
+  }
+
+  const warmingClient: QlooClient = {
+    ...client,
+    search: (params) => client.search({ ...params, take: RESOLVE_SEARCH_TAKE }),
+  };
+  try {
+    await warmSearchCache(warmingClient, requests);
+    warmMemo.set(key, Date.now());
+  } catch {
+    // Leave the memo cold so the next rank retries the warm pass.
+  }
+}
+
 export async function runPageRank(input: RunPageRankInput): Promise<RankPipelineResult> {
   const client = getQlooClient();
-  const search = toCoreSearchFn(client, 3);
+  const search = toCoreSearchFn(client, RESOLVE_SEARCH_TAKE);
+
+  if (input.profile.seeds.some((seed) => seed.polarity === "like")) {
+    await warmCandidateSearch(client, input);
+  }
   const insights: PipelineInsightsFn = async (args) => {
     const params = buildInsightsParams(args);
     const result = await client.insights({

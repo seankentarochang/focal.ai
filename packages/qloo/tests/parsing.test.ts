@@ -55,6 +55,27 @@ describe("search parsing", () => {
     expect(result.entities[0]?.entityId).toBe("e-ok");
   });
 
+  it("falls back to types[0] for subtype and reads tag_id on live search shapes", async () => {
+    const client = createLiveClient(
+      serve({
+        success: true,
+        results: [
+          {
+            entity_id: "e-live",
+            name: "Rintaro",
+            types: ["urn:entity:place"],
+            tags: [{ name: "Izakaya", tag_id: "urn:tag:venue_style:izakaya" }],
+          },
+        ],
+      }),
+    );
+    const result = await client.search({ query: "Rintaro" });
+
+    expect(result.entities[0]?.subtype).toBe("urn:entity:place");
+    expect(result.entities[0]?.tagIds).toEqual(["urn:tag:venue_style:izakaya"]);
+    expect(result.entities[0]?.tagNames).toEqual(["Izakaya"]);
+  });
+
   it("throws PARSE when a 2xx search payload has no results array", async () => {
     const client = createLiveClient(serve({ success: true }));
     const error = await rejection(client.search({ query: "x" }));
@@ -83,6 +104,44 @@ describe("insights parsing", () => {
     expect(rintaro.affinityFoundAt).toBe("query.affinity");
     expect(rintaro.contributions).toEqual([{ entityId: FUG, score: 0.44 }]);
     expect(rintaro.explainabilityRaw).toEqual({ contributions: [{ entity_id: FUG, score: 0.44 }] });
+  });
+
+  it("extracts live signal.interests.entities explainability contributions", async () => {
+    const client = createLiveClient(
+      serve({
+        success: true,
+        results: {
+          entities: [
+            {
+              entity_id: "e-live",
+              name: "Rintaro",
+              subtype: "urn:entity:place",
+              query: {
+                affinity: 0.75,
+                explainability: {
+                  "signal.interests.entities": [
+                    { entity_id: FUG, score: 1 },
+                    { entity_id: RIN, score: 0.5 },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    const result = await client.insights({ resultType: "urn:entity:place", signalEntityIds: [FUG] });
+
+    expect(result.entities[0]?.contributions).toEqual([
+      { entityId: FUG, score: 1 },
+      { entityId: RIN, score: 0.5 },
+    ]);
+    expect(result.entities[0]?.explainabilityRaw).toEqual({
+      "signal.interests.entities": [
+        { entity_id: FUG, score: 1 },
+        { entity_id: RIN, score: 0.5 },
+      ],
+    });
   });
 
   it("records query.measurements.affinity as the fallback path", async () => {

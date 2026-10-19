@@ -104,7 +104,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-8 · Strict subtype matching in the resolver
 
-**Date:** 2026-10-17 · **Status:** Pending-verification
+**Date:** 2026-10-17 · **Status:** Verified (2026-10-19)
 
 **Context.** The resolver must never guess an entity. Qloo types are `urn:entity:*`; the real per-result `subtype` value on the live API is unknown until the T-01 probe runs.
 
@@ -112,7 +112,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 **Alternatives considered.** Fuzzy subtype matching; matching on type prefix; accepting ambiguous hits.
 
-**Consequences.** After T-01 confirms the live subtype values, pages/fixtures/parsers may need updating — decided by the probe record, not by code tweaks. An initial mock-fixture mismatch (`urn:place:restaurant` vs `urn:entity:place`) resolved everything to "unresolved"; fixtures were fixed, which is how this convention was caught. Until the probe runs, treat the live behavior as unverified.
+**Consequences.** After T-01 confirms the live subtype values, pages/fixtures/parsers may need updating — decided by the probe record, not by code tweaks. An initial mock-fixture mismatch (`urn:place:restaurant` vs `urn:entity:place`) resolved everything to "unresolved"; fixtures were fixed, which is how this convention was caught. **Outcome (live probe, 2026-10-19).** Live search omits `subtype`, so the mapper falls back to `types[0]`; live insights `subtype` equals the entity-type URN; fixtures are aligned; resolver logic is unchanged.
 
 ---
 

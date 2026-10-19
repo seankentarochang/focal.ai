@@ -51,11 +51,11 @@ export const VERVE_PAGE: DemoPage = {
       meta: "Apparel · Denim & knitwear",
     },
     {
-      clientId: "vitsoe",
-      name: "Vitsoe",
+      clientId: "vitra",
+      name: "Vitra",
       originalIndex: 6,
-      blurb: "Modular shelving built to be added to over time.",
-      meta: "Furniture · Modular shelving",
+      blurb: "Swiss furniture maker with a catalogue of design classics.",
+      meta: "Furniture · Design classics",
     },
     {
       clientId: "hay",
@@ -65,11 +65,11 @@ export const VERVE_PAGE: DemoPage = {
       meta: "Furniture · Everyday objects",
     },
     {
-      clientId: "tekla",
-      name: "Tekla",
+      clientId: "ferm-living",
+      name: "Ferm Living",
       originalIndex: 8,
-      blurb: "Textiles for sleep and bath in considered fabrics.",
-      meta: "Home textiles · Bedding",
+      blurb: "Homeware and furniture in a muted Scandinavian palette.",
+      meta: "Home & living · Scandinavian",
     },
     {
       clientId: "patagonia",

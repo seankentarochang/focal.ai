@@ -60,22 +60,41 @@
       }
     },
     {
-      "entity_id": "F62B9D18-4C73-4E29-85B1-9A7D3C06E854",
+      "entity_id": "8EC13F6A-5B27-4D90-B8A1-4F2C7E09D561",
       "type": "urn:entity:brand",
       "subtype": "urn:entity:brand",
-      "name": "Tekla",
-      "disambiguation": "Copenhagen, Denmark",
-      "popularity": 0.62,
+      "name": "Vitra",
+      "disambiguation": "Basel, Switzerland",
+      "popularity": 0.76,
       "tags": [
+        { "id": "urn:tag:category:furniture", "name": "Furniture" },
+        { "id": "urn:tag:category:home_goods", "name": "Home Goods" },
+        { "id": "urn:tag:style:minimalist", "name": "Minimalist Design" },
+        { "id": "urn:tag:style:industrial", "name": "Industrial Design" },
+        { "id": "urn:tag:price:premium", "name": "Premium Price" }
+      ],
+      "properties": {
+        "country": "Switzerland",
+        "founded": "1950"
+      }
+    },
+    {
+      "entity_id": "1D8B4E72-9C35-4A68-8F27-3B5E1A0C9D48",
+      "type": "urn:entity:brand",
+      "subtype": "urn:entity:brand",
+      "name": "Ferm Living",
+      "disambiguation": "Copenhagen, Denmark",
+      "popularity": 0.68,
+      "tags": [
+        { "id": "urn:tag:category:home_goods", "name": "Home Goods" },
+        { "id": "urn:tag:category:furniture", "name": "Furniture" },
         { "id": "urn:tag:category:home_textiles", "name": "Home Textiles" },
-        { "id": "urn:tag:category:bedding", "name": "Bedding" },
-        { "id": "urn:tag:material:organic_cotton", "name": "Organic Cotton" },
         { "id": "urn:tag:style:minimalist", "name": "Minimalist Design" },
         { "id": "urn:tag:price:premium", "name": "Premium Price" }
       ],
       "properties": {
         "country": "Denmark",
-        "founded": "2017"
+        "founded": "2006"
       }
     }
   ]

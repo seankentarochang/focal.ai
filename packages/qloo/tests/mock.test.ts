@@ -20,7 +20,7 @@ const LIS_LUMIARES = "E71C4A86-9D23-4F58-8B60-5C1E9A3D7201";
 const BR_AESOP = "A5F2C87E-3B94-4D16-8E70-6F2B9C4A1D83";
 const BR_MUJI = "D91E6B34-7A28-4C50-9F3D-2B8E5A0C76F1";
 const BR_PATAGONIA = "37C8E5A2-9F46-4B81-A0D5-C31E7B9F2D46";
-const BR_TEKLA = "F62B9D18-4C73-4E29-85B1-9A7D3C06E854";
+const BR_FERM_LIVING = "1D8B4E72-9C35-4A68-8F27-3B5E1A0C9D48";
 const UNKNOWN = "00000000-0000-0000-0000-000000000000";
 
 function rawMarker(raw: unknown): unknown {
@@ -255,14 +255,14 @@ describe("mock insights synthesis", () => {
     const result = await client.insights({
       resultType: "urn:entity:brand",
       signalEntityIds: [FUG],
-      resultEntityIds: [BR_AESOP, BR_MUJI, BR_PATAGONIA, BR_TEKLA],
+      resultEntityIds: [BR_AESOP, BR_MUJI, BR_PATAGONIA, BR_FERM_LIVING],
     });
 
     expect(result.entities.map((scored) => scored.entity.entityId)).toEqual([
       BR_AESOP,
       BR_MUJI,
       BR_PATAGONIA,
-      BR_TEKLA,
+      BR_FERM_LIVING,
     ]);
     expect(result.entities.map((scored) => scored.entity.subtype)).toEqual([
       "urn:entity:brand",
@@ -270,7 +270,7 @@ describe("mock insights synthesis", () => {
       "urn:entity:brand",
       "urn:entity:brand",
     ]);
-    expect(result.entities.map((scored) => scored.affinity)).toEqual([0.85, 0.91, 0.8, 0.78]);
+    expect(result.entities.map((scored) => scored.affinity)).toEqual([0.85, 0.91, 0.8, 0.76]);
     expect(result.entities[0]?.contributions).toEqual([{ entityId: FUG, score: 0.21 }]);
     expect(result.entities[1]?.contributions).toBeUndefined();
     expect(result.entities[0]?.entity.tagIds).toContain("urn:tag:style:minimalist");

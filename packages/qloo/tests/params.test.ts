@@ -28,7 +28,8 @@ describe("search request params", () => {
     expect(url.origin + url.pathname).toBe(`${TEST_BASE_URL}/search`);
     expect(url.searchParams.get("query")).toBe("Rintaro");
     expect(url.searchParams.get("types")).toBe("urn:entity:place");
-    expect(url.searchParams.get("filter.location")).toBe("San Francisco, California");
+    expect(url.searchParams.get("filter.location.query")).toBe("San Francisco, California");
+    expect(url.searchParams.has("filter.location")).toBe(false);
     expect(url.searchParams.get("take")).toBe("5");
     expect(url.searchParams.get("page")).toBe("2");
     expect(url.searchParams.has("feature.explainability")).toBe(false);
@@ -46,19 +47,19 @@ describe("search request params", () => {
 
     const { url } = requestAt(fetchImpl);
     expect(url.searchParams.get("types")).toBe("urn:entity:artist,urn:entity:place");
-    expect(url.searchParams.has("filter.location")).toBe(false);
+    expect(url.searchParams.has("filter.location.query")).toBe(false);
     expect(url.searchParams.has("take")).toBe(false);
     expect(url.searchParams.has("page")).toBe(false);
   });
 
-  it("clamps search take to 1..199", async () => {
+  it("clamps search take to 1..100", async () => {
     const fetchImpl = spyWithEmptyResults();
     const client = createLiveClient(fetchImpl);
 
-    await client.search({ query: "a", take: 500 });
+    await client.search({ query: "a", take: 150 });
     await client.search({ query: "b", take: 0 });
 
-    expect(requestAt(fetchImpl, 0).url.searchParams.get("take")).toBe("199");
+    expect(requestAt(fetchImpl, 0).url.searchParams.get("take")).toBe("100");
     expect(requestAt(fetchImpl, 1).url.searchParams.get("take")).toBe("1");
   });
 });
@@ -150,7 +151,7 @@ describe("tags and entities request params", () => {
     await client.getEntities([]);
 
     const first = requestAt(fetchImpl, 0);
-    expect(first.url.origin + first.url.pathname).toBe(`${TEST_BASE_URL}/v2/entities`);
+    expect(first.url.origin + first.url.pathname).toBe(`${TEST_BASE_URL}/entities`);
     expect(first.url.searchParams.get("entity_ids")).toBe(`${RIN},${FUG}`);
     expect(requestAt(fetchImpl, 1).url.searchParams.has("entity_ids")).toBe(false);
   });

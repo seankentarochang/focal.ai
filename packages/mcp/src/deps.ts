@@ -24,6 +24,7 @@ import {
 } from "@focal-ai/core";
 import {
   createQlooClient,
+  warmSearchCache,
   type QlooClient,
   type QlooEntity,
   type QlooEntityType,
@@ -116,6 +117,45 @@ export function toCandidateScores(entities: ScoredEntity[]): CandidateScore[] {
     contributions: scored.contributions,
     tagNames: scored.entity.tagNames,
   }));
+}
+
+export interface WarmCandidate {
+  name: string;
+  locationText?: string;
+}
+
+/**
+ * Best-effort cache warming for a candidate list (never throws, never fails a
+ * tool call). Mirrors the web wrapper: one request per unique
+ * (name, type, location) tuple, using the same take as toPipelineSearchFn so
+ * the resolver reads the warmed cache entries instead of re-querying; pacing
+ * keeps the upstream under the 5 req/s burst limit.
+ */
+export async function warmCandidateSearch(
+  client: QlooClient,
+  candidates: readonly WarmCandidate[],
+  pageType: string,
+  locationQuery?: string,
+): Promise<void> {
+  const seen = new Set<string>();
+  const requests: { query: string; types: string[]; location?: string }[] = [];
+  for (const candidate of candidates) {
+    const location = candidate.locationText ?? locationQuery;
+    const key = JSON.stringify([candidate.name, pageType, location ?? null]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    requests.push({
+      query: candidate.name,
+      types: [pageType],
+      ...(location !== undefined ? { location } : {}),
+    });
+  }
+  if (requests.length === 0) return;
+  const warmingClient: QlooClient = {
+    ...client,
+    search: (params) => client.search({ ...params, take: SEARCH_TAKE }),
+  };
+  await warmSearchCache(warmingClient, requests).catch(() => undefined);
 }
 
 /** CoreSearchFn/PipelineSearchFn seam over QlooClient.search (as in web). */

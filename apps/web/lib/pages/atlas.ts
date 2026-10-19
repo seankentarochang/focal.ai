@@ -12,7 +12,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "bairro-alto-hotel",
       name: "Bairro Alto Hotel",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 0,
       blurb: "Boutique hotel between Bairro Alto and Chiado.",
       meta: "Boutique · Chiado · 5★",
@@ -20,7 +20,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "santiago-de-alfama",
       name: "Santiago de Alfama",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 1,
       blurb: "Restored townhouse hotel in the Alfama district.",
       meta: "Boutique · Alfama · 5★",
@@ -28,7 +28,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "memmo-alfama",
       name: "Memmo Alfama",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 2,
       blurb: "Hillside hotel with a terrace over the old town.",
       meta: "Boutique · Alfama · 4★",
@@ -36,7 +36,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "the-lumiares",
       name: "The Lumiares",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 3,
       blurb: "Apartment-style suites in a central block.",
       meta: "Apartment hotel · Bairro Alto · 5★",
@@ -44,23 +44,23 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "1908-lisboa-hotel",
       name: "1908 Lisboa Hotel",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 4,
       blurb: "Design hotel in a restored early-1900s building.",
       meta: "Design hotel · Intendente · 4★",
     },
     {
-      clientId: "palacio-belmonte",
-      name: "Palácio Belmonte",
-      locationText: "Lisbon",
+      clientId: "the-vintage-lisbon",
+      name: "The Vintage Lisbon",
+      locationText: "Lisboa",
       originalIndex: 5,
-      blurb: "Small historic hotel beside the castle walls.",
-      meta: "Historic · Alfama · 5★",
+      blurb: "Retro-styled rooms in a restored mid-century building.",
+      meta: "Boutique · Marquês · 5★",
     },
     {
       clientId: "hotel-da-baixa",
       name: "Hotel da Baixa",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 6,
       blurb: "Modern rooms on a quiet street in the Baixa.",
       meta: "Boutique · Baixa · 4★",
@@ -68,7 +68,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "torel-avantgarde",
       name: "Torel Avantgarde",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 7,
       blurb: "Art-filled hotel on the Torel hillside.",
       meta: "Boutique · Torel · 5★",
@@ -76,7 +76,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "four-seasons-ritz-lisbon",
       name: "Four Seasons Hotel Ritz Lisbon",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 8,
       sponsored: true,
       blurb: "Grand hotel facing Eduardo VII Park.",
@@ -85,7 +85,7 @@ export const ATLAS_PAGE: DemoPage = {
     {
       clientId: "pestana-cr7-lisboa",
       name: "Pestana CR7 Lisboa",
-      locationText: "Lisbon",
+      locationText: "Lisboa",
       originalIndex: 9,
       sponsored: true,
       blurb: "Lifestyle hotel in a central Baixa building.",

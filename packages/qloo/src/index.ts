@@ -5,6 +5,8 @@ export {
   createQlooClient,
 } from "./client";
 export { QlooError } from "./errors";
+export { warmSearchCache } from "./pace";
+export type { WarmSearchOptions, WarmSearchRequest, WarmSearchResult } from "./pace";
 export type {
   DataSource,
   InsightsParams,

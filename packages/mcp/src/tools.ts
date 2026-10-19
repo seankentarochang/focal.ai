@@ -23,6 +23,7 @@ import {
   resolveProfilePath,
   toPipelineInsightsFn,
   toPipelineSearchFn,
+  warmCandidateSearch,
   type LoadedProfile,
 } from "./deps.js";
 
@@ -128,11 +129,14 @@ export function createToolHandlers(overrides: Partial<ToolDeps> = {}): ToolHandl
   const search = toPipelineSearchFn(deps.client);
   const insights = toPipelineInsightsFn(deps.client);
 
-  function runPipeline(
+  async function runPipeline(
     args: ScoreCandidatesArgs,
   ): Promise<{ result: RankPipelineResult; profile: TasteProfile }> {
     const { profile } = deps.loadProfile();
-    return runRankPipeline({
+    if (profile.seeds.some((seed) => seed.polarity === "like")) {
+      await warmCandidateSearch(deps.client, args.candidates, args.pageType, args.locationQuery);
+    }
+    const result = await runRankPipeline({
       pageId: args.pageId,
       pageType: args.pageType,
       ...(args.locationQuery !== undefined ? { locationQuery: args.locationQuery } : {}),
@@ -140,7 +144,8 @@ export function createToolHandlers(overrides: Partial<ToolDeps> = {}): ToolHandl
       candidates: args.candidates,
       profile,
       deps: { search, insights },
-    }).then((result) => ({ result, profile }));
+    });
+    return { result, profile };
   }
 
   async function getTasteProfile(): Promise<CallToolResult> {

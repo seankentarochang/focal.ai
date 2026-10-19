@@ -26,8 +26,9 @@ export const QLOO_DEFAULT_CACHE_TTL_MS = 600000;
 export const QLOO_DEFAULT_INSIGHTS_TAKE = 20;
 
 const RETRY_DELAY_MS = 300;
+const RATE_LIMIT_RETRY_DELAY_MS = 1000;
 const SEARCH_TAKE_MIN = 1;
-const SEARCH_TAKE_MAX = 199;
+const SEARCH_TAKE_MAX = 100;
 const INSIGHTS_TAKE_MIN = 1;
 const INSIGHTS_TAKE_MAX = 50;
 const TAGS_TAKE_MIN = 1;
@@ -114,14 +115,16 @@ export function createQlooClient(opts: {
     query: Record<string, string>,
     key: string,
   ): Promise<{ payload: unknown; durationMs: number }> {
-    for (let attempt = 0; ; attempt += 1) {
+    let retried = false;
+    for (;;) {
       try {
         return await fetchJsonOnce(path, query, key);
       } catch (error) {
         const qlooError = toQlooError(error, path);
-        const retryable = qlooError.code === "TIMEOUT" || qlooError.code === "UPSTREAM";
-        if (!retryable || attempt >= 1) throw qlooError;
-        await delay(RETRY_DELAY_MS);
+        const retryDelayMs = retryDelayFor(qlooError);
+        if (retryDelayMs === undefined || retried) throw qlooError;
+        retried = true;
+        await delay(retryDelayMs);
       }
     }
   }
@@ -145,7 +148,7 @@ export function createQlooClient(opts: {
     const query: Record<string, string> = {};
     addParam(query, "query", params.query);
     if (params.types?.length) addParam(query, "types", params.types.join(","));
-    addParam(query, "filter.location", params.location);
+    addParam(query, "filter.location.query", params.location);
     addParam(query, "take", clampTake(params.take, SEARCH_TAKE_MIN, SEARCH_TAKE_MAX));
     addParam(query, "page", params.page);
 
@@ -208,10 +211,10 @@ export function createQlooClient(opts: {
     const ids = Array.isArray(entityIds) ? entityIds : [];
     if (ids.length > 0) addParam(query, "entity_ids", ids.join(","));
 
-    return requestCached("/v2/entities", query, (payload) => {
+    return requestCached("/entities", query, (payload) => {
       const values = extractResultsArray(payload);
       if (values === undefined) {
-        throw new QlooError("PARSE", "Qloo /v2/entities response did not contain a results array");
+        throw new QlooError("PARSE", "Qloo /entities response did not contain a results array");
       }
       return { entities: mapEntityList(values), raw: payload };
     });
@@ -222,6 +225,15 @@ export function createQlooClient(opts: {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Retry taxonomy: TIMEOUT/UPSTREAM get one short retry; RATE_LIMIT gets one retry
+// honoring retryAfterMs (live 429s carry no Retry-After, so default to 1000 ms).
+// AUTH/BAD_REQUEST/NOT_FOUND/PARSE are never retried, and each request retries at most once.
+function retryDelayFor(error: QlooError): number | undefined {
+  if (error.code === "TIMEOUT" || error.code === "UPSTREAM") return RETRY_DELAY_MS;
+  if (error.code === "RATE_LIMIT") return error.retryAfterMs ?? RATE_LIMIT_RETRY_DELAY_MS;
+  return undefined;
 }
 
 function addParam(query: Record<string, string>, key: string, value: string | number | undefined): void {

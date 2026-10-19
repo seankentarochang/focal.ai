@@ -142,6 +142,72 @@ describe("resolveCandidates", () => {
     expect(r?.entity?.entityId).toBe("sf-1");
   });
 
+  it("resolves duplicate names when exactly one city match exists", async () => {
+    const search = searchFrom({
+      Rintaro: [
+        entity({ entityId: "ny-1", name: "Rintaro", disambiguation: "New York, NY" }),
+        entity({ entityId: "la-1", name: "Rintaro", disambiguation: "Los Angeles, CA" }),
+        entity({ entityId: "sf-1", name: "Rintaro", disambiguation: "San Francisco, CA" }),
+      ],
+    });
+    const [r] = await resolveCandidates(
+      [candidate("Rintaro", { locationText: "San Francisco" })],
+      search,
+      "urn:entity:place",
+    );
+    expect(r?.status).toBe("resolved");
+    expect(r?.entity?.entityId).toBe("sf-1");
+  });
+
+  it("marks duplicate names ambiguous when no city match exists", async () => {
+    const search = searchFrom({
+      Rintaro: [
+        entity({ entityId: "ny-1", name: "Rintaro", disambiguation: "New York, NY" }),
+        entity({ entityId: "la-1", name: "Rintaro", disambiguation: "Los Angeles, CA" }),
+      ],
+    });
+    const [r] = await resolveCandidates(
+      [candidate("Rintaro", { locationText: "San Francisco" })],
+      search,
+      "urn:entity:place",
+    );
+    expect(r?.status).toBe("ambiguous");
+    expect(r?.entity?.entityId).toBe("ny-1");
+  });
+
+  it("marks duplicate names ambiguous when two city matches exist", async () => {
+    const search = searchFrom({
+      Rintaro: [
+        entity({ entityId: "sf-1", name: "Rintaro", disambiguation: "San Francisco, CA" }),
+        entity({ entityId: "sf-2", name: "Rintaro", disambiguation: "San Francisco, CA" }),
+        entity({ entityId: "ny-1", name: "Rintaro", disambiguation: "New York, NY" }),
+      ],
+    });
+    const [r] = await resolveCandidates(
+      [candidate("Rintaro", { locationText: "San Francisco" })],
+      search,
+      "urn:entity:place",
+    );
+    expect(r?.status).toBe("ambiguous");
+    expect(r?.entity?.entityId).toBe("sf-1");
+  });
+
+  it("prefers a city match over a higher-ranked non-city result", async () => {
+    const search = searchFrom({
+      Rintaro: [
+        entity({ entityId: "ny-1", name: "Rintaro", disambiguation: "New York, NY" }),
+        entity({ entityId: "sf-1", name: "Rintaro", disambiguation: "San Francisco, CA" }),
+      ],
+    });
+    const [r] = await resolveCandidates(
+      [candidate("Rintaro", { locationText: "San Francisco" })],
+      search,
+      "urn:entity:place",
+    );
+    expect(r?.status).toBe("resolved");
+    expect(r?.entity?.entityId).toBe("sf-1");
+  });
+
   it("returns unresolved when search returns nothing", async () => {
     const search = searchFrom({});
     const [r] = await resolveCandidates([candidate("Ghost Place")], search, "urn:entity:place");
