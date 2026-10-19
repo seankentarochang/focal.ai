@@ -1,23 +1,24 @@
 # Implementation tickets — focal.ai
 
-**Last status update:** 2026-10-18 (commit `3d9796d`) — see `docs/status.md` for the full log.
+**Last status update:** 2026-10-19 (commit `9d6b6fb` — Wave K live Qloo verification) — see `docs/status.md` for the full log.
 
 **Deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). **Submit a day early** — target Oct 29.
 
-**Current state:** the Studio app (including the Ask-focal agent panel), engine packages, API routes, and the MCP stdio server are implemented and verified in mock mode (216 tests: core 82, qloo 53, mcp 13, web 68); security headers ship on every route and a Docker fallback + `pnpm smoke` production smoke script are ready; live-data verification waits on the Qloo key. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
+**Current state:** the Studio app (including the Ask-focal agent panel), engine packages, API routes, and the MCP stdio server are implemented and verified — 227 tests (core 86, qloo 60, mcp 13, web 68) plus live-data verification (probe 4/4 exit 0, contract frozen in `docs/qloo-contract.md`, live smoke 6/0/0, live page ranks with grounded affinities); security headers ship on every route and a Docker fallback + `pnpm smoke` production smoke script are ready. `docs/contracts.md` is the frozen interface reference; this file is the execution backlog. Every ticket below is sized for an autonomous coding agent.
 
 **Wave model:** one wave = one parallel agent batch. Wave A foundation → B engine → C web app → D agent & MCP → E ship. Within a wave, tickets that don't share files run in parallel. Keep file ownership disjoint (see `Owns:` globs); if two open tickets touch the same path, the dependency is missing — fix the ticket order, not the file.
 
 **Status convention:** each ticket carries an editable checkbox (`Status: [ ]`). Update it to `Status: [x]` as tickets complete. A ticket is done only when its acceptance criteria pass and its tests run in CI.
 
-**Blocked marks:** tickets marked `BLOCKED: QLOO KEY` cannot start/complete until the hackathon key is received. Everything else proceeds against the mock adapter (see "Key-independent work" at the bottom).
+**Blocked marks:** tickets marked `BLOCKED: QLOO KEY` could not start until the hackathon key arrived. The key was received 2026-10-19 and T-01 has completed, so no ticket carries this mark anymore.
 
 ---
 
 ## Wave A — foundation
 
 ### T-01 · Probe & freeze Qloo contract
-Status: [ ] — **Blocked (needs Qloo key)** · **P0** · ~3 agent-hours · Deps: Qloo key — **BLOCKED: QLOO KEY** (request submitted, not received; request via https://forms.gle/zz12orkLHTAneLGz6) · Owns: `scripts/probe-qloo.ts`, `docs/qloo-contract.md`, `packages/qloo/src/parsers/**`
+Status: [x] · **P0** · ~3 agent-hours · Deps: Qloo key — key received 2026-10-19 · Owns: `scripts/probe-qloo.ts`, `docs/qloo-contract.md`, `packages/qloo/src/parsers/**`
+**Evidence:** commit `9d6b6fb` + `docs/qloo-contract.md` — `pnpm probe` exit 0 with 4/4 HTTP 200 (redacted; key never printed) transcribed into the contract: affinity verdict `results.entities[i].query.affinity` (0..1, sample Rintaro 0.7525 / State Bird 0.7586), explainability at `query.explainability["signal.interests.entities"]`, `/entities` path (not `/v2/entities`), search take max 100, `filter.location.query` for text locality, 429 behavior above 5 req/s (no `Retry-After`). Client fixes and live smoke 6/0/0 landed in the same wave (contract `§3`, `§10`); live page ranks reproduced (Tables first ~3.0 s / State Bird 91.6 with live seeds, Atlas ~2.4 s, Verve ~2.8 s).
 
 **Description:** Run `scripts/probe-qloo.ts` against `https://hackathon.api.qloo.com` with a real key and transcribe exact (redacted) outcomes into `docs/qloo-contract.md`: affinity field exact path + scale, explainability JSON shape, `filter.results.entities` limits, tag shapes, latency, 429 behavior. Update `@focal-ai/qloo` parsers and, if any mapping in `docs/contracts.md` changes, edit `docs/contracts.md` FIRST.
 **Acceptance criteria:**
@@ -282,7 +283,7 @@ Status: [x] · **P0** · ~3 agent-hours · Deps: T-13, T-23 (re-run after deploy
 **Risks:** CSP vs Next inline scripts → nonce/hash strategy; verify before enforce.
 
 ### T-22 · Test suite + live smoke
-Status: [ ] — **Partial** (216 unit/integration tests green: core 82, qloo 53, mcp 13, web 68; `pnpm smoke` production smoke green on host + Docker; Playwright e2e deferred, live smoke pending — live part **BLOCKED: QLOO KEY**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
+Status: [ ] — **Partial** (227 unit/integration tests green: core 86, qloo 60, mcp 13, web 68; `pnpm smoke` production smoke green on host + Docker and **6 passed / 0 failed / 0 warnings against the live key locally**; Playwright e2e deferred; the pre-submit LIVE smoke has already passed once and **must be rerun against the deployed URL**) · **P0** · ~5 agent-hours · Deps: T-03..T-20 · Owns: `**/*.test.ts`, `e2e/**`, `scripts/smoke-live.ts`
 
 **Description:** vitest unit/integration per package as specified per ticket; Playwright e2e for the primary journey with Qloo routes mocked (CI-safe); `scripts/smoke-live.ts` hitting real endpoints, run pre-submit.
 **Acceptance criteria:**
@@ -329,13 +330,13 @@ Status: [ ] — **Deferred** (stretch; starts only when every P0 is complete) ·
 
 ## Critical path
 
-`T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-21` [done] → `T-23` [partial] → `T-24` [partial]
+`T-01` [done] → `T-02` [done] → `T-03`/`T-04` [done] → `T-08`/`T-09` [done] → `T-12`/`T-13`/`T-14` [done] → `T-21` [done] → `T-23` [partial] → `T-24` [partial]
 
-Remaining on the path: T-18 (partial), T-22–T-24, plus T-01 when the Qloo key arrives (T-22's live smoke waits on it too). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B and C landed early (Oct 17–18), so the remaining budget is buffer.
+Remaining on the path: T-18 (partial), T-22–T-24 (T-01 is done — key received, contract frozen; T-22's live smoke has passed once locally and must be rerun against the deployed URL). Anything not on this path is parallelizable. Suggested internal milestones: Wave B done Oct 22, Wave C done Oct 26, Wave E done Oct 28, buffer + submit Oct 29 — Waves B, C and the live-Qloo wave landed early (Oct 17–19), so the remaining budget is buffer.
 
 ## Key-independent work
 
-Everything except **T-01 fixture finalization** and the **live smoke run in T-22** proceeds without the Qloo key: all packages, tests, UI, agent, and deployment pipeline run against `QLOO_MOCK=1` fixtures and canned payloads. Treat every unverified mapping as a T-01 TODO, never as fact.
+Everything can still run without the Qloo key: all packages, tests, UI, agent, and deployment pipeline run against `QLOO_MOCK=1` fixtures and canned payloads, and CI requires no Qloo secret. T-01 has completed against the live API (key received 2026-10-19); treat any unverified mapping as a T-01 follow-up, never as fact.
 
 ## Definition of done for the hackathon
 
