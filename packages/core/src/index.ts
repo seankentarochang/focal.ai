@@ -13,5 +13,10 @@ export * from "./rank";
 export * from "./plan";
 export * from "./evidence";
 export * from "./pipeline";
+export * from "./taste";
+export * from "./signals";
+export * from "./lift";
+export * from "./labels";
+export * from "./pagePipeline";
 
 export const VERSION = "0.0.1";
