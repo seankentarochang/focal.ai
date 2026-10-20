@@ -223,6 +223,7 @@ Speed targets: first visit to a page about 2–3 s (Qloo pacing), repeat pages 0
   - Page-level "is a list": 0.97 / 0.98 on real lists, 0.05 / 0.06 on inbox and news, 0.45 on a product grid (brand ≠ product name).
   - Per-answer accuracy: 96% at confidence ≥ 0.8 and 100% at ≥ 0.9. The threshold stays 0.8; the page-level cut-off is 0.5.
 - **Live end-to-end** (Jev identify, then one live insights call): a 9-card SF page identified in 148 ms and ranked in 1.6 s. One item was lifted, labelled "Top pick for you · because you like Rintaro and Fugazi". Places the user already likes come back unscored because Qloo leaves signal entities out of results; whether to lift them anyway is an open product call.
+- **Free LLM (Groq):** `openai/gpt-oss-120b` is listed and returns a correct tool call (`search_entities({"query":"Fugazi","type":"artist"})`) in 404 ms. Free-tier limits seen: 1,000 requests and 8,000 tokens per minute. The token limit is tight, so chat context must stay compact (`summarizeProfile`). Cerebras and OpenRouter are untested (no keys).
 - **Sign-in and database:** see `docs/auth-and-db.md`.
 
 The probe script writes its report to `scripts/probe-output/` (gitignored, since Qloo data must not be stored in the public repo). Keys are read from `.env` or `apps/web/.env.local`: `QLOO_API_KEY`, `TYPESAFE_API_KEY`, and optionally `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`.
