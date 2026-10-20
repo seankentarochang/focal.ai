@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { ConnectExtension } from "@/components/connect/ConnectExtension";
 import { authEnabled } from "@/lib/server/auth/config";
@@ -8,7 +8,8 @@ async function Connect() {
   await connection();
   if (!authEnabled()) notFound();
   const { withAuth } = await import("@workos-inc/authkit-nextjs");
-  const { user } = await withAuth({ ensureSignedIn: true });
+  const { user } = await withAuth();
+  if (!user) redirect("/sign-in");
   return (
     <>
       <p className="text-sm opacity-80">Signed in as {user.email}.</p>
