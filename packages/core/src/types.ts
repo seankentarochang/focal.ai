@@ -82,7 +82,7 @@ export interface RankedCandidate extends ResolvedCandidate {
 export type RenderOp =
   | { op: "reorder"; containerId: string; order: string[] }
   | { op: "collapse"; containerId: string; clientIds: string[]; label: string }
-  | { op: "annotate"; containerId: string; clientId: string; text: string }
+  | { op: "annotate"; containerId: string; clientId: string; text: string; badge?: "top-pick" | "good-match" }
   | { op: "emphasize"; containerId: string; clientId: string; level: "high" }
   | { op: "hide"; containerId: string; clientIds: string[]; label: string };
 
@@ -91,7 +91,7 @@ export interface RenderPlan {
   pageId: string;
   createdAt: string;
   ops: RenderOp[];
-  summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number };
+  summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number; lifted?: number };
 }
 
 /**
