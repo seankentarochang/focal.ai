@@ -21,3 +21,4 @@ coverage/
 .next/
 scripts/probe-output/
 *.tsbuildinfo
+.neon

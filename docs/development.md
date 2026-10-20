@@ -30,7 +30,11 @@ cp apps/web/.env.example apps/web/.env.local
 | `QLOO_API_BASE` | same | No (default `https://hackathon.api.qloo.com`) | Override only if Qloo says otherwise. |
 | `QLOO_MOCK` | `@focal-ai/qloo` client and web `dataSource()` (`/api/health`) | No | Set `1` for labeled fixture data (local only). Never set in production. |
 | `FOCAL_DEV_SESSION` | `/api/page/{identify,rank,result}` | No | Set `1` locally: any bearer token resolves to a demo user and profile, and identification uses the mock identifier. Ignored when `NODE_ENV=production` (those routes return 401 until accounts land). |
+||||||| ce6103a
 | `DATABASE_URL` | `@focal-ai/db` (migrations via `pnpm --filter @focal-ai/db migrate`, tests) | Needed for DB tests; they skip when unset. CI runs a Postgres 17 service | Server-only. Local: Postgres 17 in Docker |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD` (≥32 chars), `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | sign-in (`/sign-in`, `/auth/callback`, `/connect`, `/api/extension/session`, `/api/chat`) | For accounts | Server-only except the redirect URI. Auth routes return 404 until client id, cookie password and redirect URI are set. |
+| `NEXT_PUBLIC_FOCAL_EXTENSION_ID` | `/connect` | For the session handoff | The extension id (`chrome://extensions`) that receives the session token. |
+| `GROQ_API_KEY` (then `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`) | `/api/chat` provider chain | For chat | Server-only. Tried in order; fails over on 429 or 5xx. |
 | `ANTHROPIC_API_KEY` | nothing today | No | Reserved for LLM-assisted features (T-19); no code path reads it yet. |
 | `FOCAL_API_KEY`, `FOCAL_MODEL_PROVIDER`, `FOCAL_MCP_TRANSPORT`, `FOCAL_MCP_PORT` | nothing today | No | Declared in root `.env.example` for the future MCP server (T-20 — currently a stub). |
 
