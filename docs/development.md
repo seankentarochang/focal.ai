@@ -29,6 +29,7 @@ cp apps/web/.env.example apps/web/.env.local
 | `QLOO_API_KEY` | web server (`@focal-ai/qloo` client), `pnpm probe` | Required for live data; not needed in mock mode | Server-only; sent upstream as `X-Api-Key`. Hackathon keys work only against the hackathon host. |
 | `QLOO_API_BASE` | same | No (default `https://hackathon.api.qloo.com`) | Override only if Qloo says otherwise. |
 | `QLOO_MOCK` | `@focal-ai/qloo` client and web `dataSource()` (`/api/health`) | No | Set `1` for labeled fixture data (local only). Never set in production. |
+| `FOCAL_DEV_SESSION` | `/api/page/{identify,rank,result}` | No | Set `1` locally: any bearer token resolves to a demo user and profile, and identification uses the mock identifier. Ignored when `NODE_ENV=production` (those routes return 401 until accounts land). |
 | `ANTHROPIC_API_KEY` | nothing today | No | Reserved for LLM-assisted features (T-19); no code path reads it yet. |
 | `FOCAL_API_KEY`, `FOCAL_MODEL_PROVIDER`, `FOCAL_MCP_TRANSPORT`, `FOCAL_MCP_PORT` | nothing today | No | Declared in root `.env.example` for the future MCP server (T-20 — currently a stub). |
 

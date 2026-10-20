@@ -1,0 +1,91 @@
+import type { IdentifiedItem, IdentifyBody, ShortType } from "./schemas";
+
+/** Cards whose answers fall below this are left untouched (§5.3). */
+export const CONFIDENCE_THRESHOLD = 0.8;
+
+export interface CardAnswer {
+  clientId: string;
+  name: string | null;
+  type: ShortType | null;
+  city: string | null;
+  confidence: number;
+}
+
+export interface PageAnswer {
+  isList: boolean;
+  cards: CardAnswer[];
+}
+
+/** Jev (TypeSafe System One) behind an interface; one call per page. */
+export interface Identifier {
+  identify(body: IdentifyBody): Promise<PageAnswer>;
+}
+
+export class IdentifyUnavailableError extends Error {
+  constructor() {
+    super("identification is not configured");
+    this.name = "IdentifyUnavailableError";
+  }
+}
+
+const HOST_TYPES: [RegExp, ShortType][] = [
+  [/(^|\.)(yelp|resy|opentable|tripadvisor|michelin|infatuation|eater|tock|ubereats|doordash|timeout)\./, "place"],
+  [/(^|\.)(booking|airbnb|expedia|lonelyplanet|kayak)\./, "destination"],
+  [/(^|\.)(goodreads|storygraph|bookshop|audible)\./, "book"],
+  [/(^|\.)(imdb|letterboxd|rottentomatoes|mubi)\./, "movie"],
+  [/(^|\.)(bandcamp|last\.fm|pitchfork|songkick|setlist)\./, "artist"],
+  [/(^|\.)(steampowered|igdb|gog|itch)\./, "videogame"],
+];
+
+/**
+ * Mock identifier for local development and tests until the Jev contract is
+ * verified (V-02): the card's first snippet is the name, the type comes from
+ * a small host table and the city is the first city hint. Unknown hosts are
+ * answered with zero confidence, so nothing is ranked there.
+ */
+export function createMockIdentifier(): Identifier {
+  return {
+    async identify(body) {
+      const type = HOST_TYPES.find(([re]) => re.test(`${body.host}.`))?.[1] ?? null;
+      const city = type === "place" || type === "destination" ? (body.cityHints[0] ?? null) : null;
+      const cards = body.cards.map((c) => ({
+        clientId: c.clientId,
+        name: c.snippets[0] ?? null,
+        type,
+        city,
+        confidence: type && c.snippets[0] ? 0.9 : 0,
+      }));
+      return { isList: type !== null && cards.filter((c) => c.name).length >= 3, cards };
+    },
+  };
+}
+
+let identifier: Identifier | undefined;
+
+export function getIdentifier(): Identifier {
+  if (identifier) return identifier;
+  if (process.env.QLOO_MOCK === "1" || process.env.FOCAL_DEV_SESSION === "1") return (identifier = createMockIdentifier());
+  throw new IdentifyUnavailableError();
+}
+
+export function __setIdentifierForTests(i: Identifier | undefined): void {
+  identifier = i;
+}
+
+/**
+ * Applies the confidence rule and the page-level answer. The page type is
+ * the majority type of the confident cards; cards of other types stay in the
+ * result so the rank step can skip them explicitly.
+ */
+export function selectIdentified(answer: PageAnswer, threshold = CONFIDENCE_THRESHOLD) {
+  if (!answer.isList) return { isList: false, pageType: null, items: [] as IdentifiedItem[] };
+  const items: IdentifiedItem[] = [];
+  const counts = new Map<ShortType, number>();
+  for (const c of answer.cards) {
+    if (c.confidence < threshold || !c.name || !c.type) continue;
+    items.push({ clientId: c.clientId, name: c.name, type: c.type, ...(c.city ? { city: c.city } : {}) });
+    counts.set(c.type, (counts.get(c.type) ?? 0) + 1);
+  }
+  const pageType = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return { isList: items.length > 0, pageType, items };
+}
