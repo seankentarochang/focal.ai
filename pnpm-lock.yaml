@@ -191,8 +191,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/qloo
       '@workos-inc/authkit-nextjs':
-        specifier: ^4.5.0
-        version: 4.5.0(@workos-inc/node@10.14.0)(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
+        specifier: 4.4.0
+        version: 4.4.0(@workos-inc/node@10.14.0)(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)
       '@workos-inc/node':
         specifier: ^10.14.0
         version: 10.14.0
@@ -1409,8 +1409,8 @@ packages:
   '@vitest/spy@5.0.5':
     resolution: {integrity: sha512-lwJRExuH417257Q5wv9QYugN9IMJkoxcrKrYxGPQkBzl7wlNpTUxD/5yNX4ESKVUIShKPgkGchYPFMWOOk0wzw==}
 
-  '@workos-inc/authkit-nextjs@4.5.0':
-    resolution: {integrity: sha512-G8CYJhw3aZEbukpdFbJLi6rLKgtz2luAzeGzjyPjMfYJtJTmIopwed3I5c14zOxFqXCSOO3uPR/8E/8w0nwGIw==}
+  '@workos-inc/authkit-nextjs@4.4.0':
+    resolution: {integrity: sha512-0Ee9bioHuiY95TXkGM8LlWhYchgOynCkZ5J7I3mxeduz3R3HwJCEclDnZzCA3AuxOyOPo7Dw239SYl0SqrpHvw==}
     engines: {node: '>=22.11.0'}
     peerDependencies:
       '@workos-inc/node': ^9.0.0 || ^10.0.0
@@ -4040,7 +4040,7 @@ snapshots:
 
   '@vitest/spy@5.0.5': {}
 
-  '@workos-inc/authkit-nextjs@4.5.0(@workos-inc/node@10.14.0)(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)':
+  '@workos-inc/authkit-nextjs@4.4.0(@workos-inc/node@10.14.0)(next@16.4.2(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3)':
     dependencies:
       '@sindresorhus/fnv1a': 3.1.0
       '@workos-inc/node': 10.14.0

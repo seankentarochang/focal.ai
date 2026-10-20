@@ -13,10 +13,10 @@ export interface Migration {
 }
 
 export function loadMigrations(dir = MIGRATIONS_DIR): Migration[] {
-  return readdirSync(dir)
+  return readdirSync(/*turbopackIgnore: true*/ dir)
     .filter((f) => /^\d{4}_[\w-]+\.sql$/.test(f))
     .sort()
-    .map((name) => ({ name, sql: readFileSync(join(dir, name), "utf8") }));
+    .map((name) => ({ name, sql: readFileSync(/*turbopackIgnore: true*/ join(dir, name), "utf8") }));
 }
 
 /** Applies pending migrations in order, each in its own transaction. Returns the names applied. */
