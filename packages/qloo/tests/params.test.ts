@@ -90,6 +90,27 @@ describe("insights request params", () => {
     expect(init?.method).toBe("GET");
   });
 
+  it("sends tag signals as signal.interests.tags", async () => {
+    const fetchImpl = spyWithEmptyResults();
+    const client = createLiveClient(fetchImpl);
+
+    await client.insights({
+      resultType: "urn:entity:movie",
+      signalEntityIds: [FUG],
+      signalTagIds: ["urn:tag:genre:media:anime", "urn:tag:keyword:media:heist"],
+    });
+
+    const { url } = requestAt(fetchImpl);
+    expect(url.searchParams.get("signal.interests.tags")).toBe("urn:tag:genre:media:anime,urn:tag:keyword:media:heist");
+  });
+
+  it("omits signal.interests.tags when there are none", async () => {
+    const fetchImpl = spyWithEmptyResults();
+    const client = createLiveClient(fetchImpl);
+    await client.insights({ resultType: "urn:entity:place", signalEntityIds: [FUG], signalTagIds: [] });
+    expect(requestAt(fetchImpl).url.searchParams.has("signal.interests.tags")).toBe(false);
+  });
+
   it("omits feature.explainability unless requested and defaults take to 20", async () => {
     const fetchImpl = spyWithEmptyResults();
     const client = createLiveClient(fetchImpl);

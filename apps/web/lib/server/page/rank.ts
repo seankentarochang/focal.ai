@@ -13,19 +13,13 @@ import { toInsightType, type PageRankBody } from "./schemas";
 
 const RESOLVE_SEARCH_TAKE = 3;
 
-/**
- * The qloo client cannot send tag signals yet and Qloo's handling of them is
- * UNVERIFIED (V-01), so vibes act as local boosts on every type for now.
- */
-const SIGNAL_CONFIG = { tagSignalTypes: "none" as const };
-
 function pageInsights(): PageInsightsFn {
   const client = getQlooClient();
   return async (args) => {
-    const signalEntityIds = args.entitySignals.map((s) => s.id);
     const query = {
       resultType: args.resultType,
-      signalEntityIds,
+      signalEntityIds: args.entitySignals.map((s) => s.id),
+      signalTagIds: args.tagSignals.map((s) => s.id),
       resultEntityIds: args.resultEntityIds,
       locationQuery: args.locationQuery,
       explainability: args.explainability,
@@ -43,16 +37,14 @@ function mostCommonCity(body: PageRankBody): string | undefined {
 }
 
 /** Server side of the extension's rank request: one insights call, lift-only plan. */
-export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: string): Promise<PageRankResult | null> {
+export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: string): Promise<PageRankResult> {
   const pageType = toInsightType(body.pageType);
-  if (!pageType) return null;
   const items: PageItem[] = body.items.map((item, originalIndex) => {
-    const type = toInsightType(item.type);
     return {
       clientId: item.clientId,
       name: item.name,
       originalIndex,
-      ...(type ? { type } : {}),
+      type: toInsightType(item.type),
       ...(item.city ? { city: item.city } : {}),
     };
   });
@@ -63,7 +55,6 @@ export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: s
     items,
     profile,
     ...(locationQuery ? { locationQuery } : {}),
-    signalConfig: SIGNAL_CONFIG,
     deps: { search: toCoreSearchFn(getQlooClient(), RESOLVE_SEARCH_TAKE), insights: pageInsights() },
   });
 }

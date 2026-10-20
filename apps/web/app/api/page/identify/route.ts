@@ -1,4 +1,5 @@
 import { errorResponse } from "@/lib/server/errors";
+import { JevError } from "@/lib/server/jev/client";
 import { getIdentifier, IdentifyUnavailableError, selectIdentified } from "@/lib/server/page/identify";
 import { identifyBodySchema } from "@/lib/server/page/schemas";
 import { resolveSession, unauthorizedResponse } from "@/lib/server/page/session";
@@ -31,6 +32,9 @@ export async function POST(req: Request): Promise<Response> {
   } catch (e) {
     if (e instanceof IdentifyUnavailableError) {
       return Response.json({ error: { code: "UNAVAILABLE", message: e.message } }, { status: 503 });
+    }
+    if (e instanceof JevError) {
+      return Response.json({ error: { code: "UPSTREAM", message: "identification failed" } }, { status: 502 });
     }
     return errorResponse(e);
   }

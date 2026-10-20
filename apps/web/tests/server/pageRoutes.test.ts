@@ -130,8 +130,8 @@ describe("POST /api/page/rank → GET /api/page/result/:id", () => {
     expect(res.status).toBe(404);
   });
 
-  it("album pages are never ranked", async () => {
-    const body = await (await rankPOST(req("/api/page/rank", { host: "x.com", pathPattern: "/", pageType: "album", items: [{ clientId: "c0", name: "Repeater", type: "album" }] }))).json();
-    expect(body).toEqual({ pageResultId: null, status: "nothing_scored", plan: null });
+  it("rejects types outside Qloo's insight types", async () => {
+    const res = await rankPOST(req("/api/page/rank", { host: "x.com", pathPattern: "/", pageType: "album", items: [{ clientId: "c0", name: "Repeater", type: "album" }] }));
+    expect(res.status).toBe(400);
   });
 });

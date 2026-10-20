@@ -75,6 +75,7 @@ function clampInsightsTake(take: number | undefined): number | undefined {
 export function buildInsightsParams(args: {
   resultType: string;
   signalEntityIds: string[];
+  signalTagIds?: string[];
   resultEntityIds?: string[];
   locationQuery?: string;
   explainability?: boolean;
@@ -84,6 +85,9 @@ export function buildInsightsParams(args: {
   params["filter.type"] = args.resultType;
   if (args.signalEntityIds.length > 0) {
     params["signal.interests.entities"] = args.signalEntityIds.join(",");
+  }
+  if (args.signalTagIds !== undefined && args.signalTagIds.length > 0) {
+    params["signal.interests.tags"] = args.signalTagIds.join(",");
   }
   if (args.resultEntityIds !== undefined && args.resultEntityIds.length > 0) {
     params["filter.results.entities"] = args.resultEntityIds.join(",");

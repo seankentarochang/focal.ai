@@ -31,7 +31,6 @@ export async function POST(req: Request): Promise<Response> {
   const pageResultId = crypto.randomUUID();
   try {
     const result = await rankPage(parsed.data, session.profile, pageResultId);
-    if (!result) return Response.json({ pageResultId: null, status: "nothing_scored", plan: null });
     await getPageResultStore().save({
       id: pageResultId,
       userId: session.userId,

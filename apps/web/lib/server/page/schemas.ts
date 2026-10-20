@@ -3,13 +3,12 @@ import { z } from "zod";
 
 /** Short type names used on the wire by the extension (apps/extension/src/api.ts). */
 export const SHORT_TYPES = [
-  "place", "destination", "movie", "tv_show", "book", "artist", "album", "podcast", "videogame", "person",
+  "place", "destination", "movie", "tv_show", "book", "artist", "brand", "podcast", "videogame", "person",
 ] as const;
 export type ShortType = (typeof SHORT_TYPES)[number];
 
-/** Core insight types; `album` has no v2 insight type and is never ranked. */
-export function toInsightType(t: ShortType): InsightType | null {
-  return t === "album" ? null : (`urn:entity:${t}` as InsightType);
+export function toInsightType(t: ShortType): InsightType {
+  return `urn:entity:${t}` as InsightType;
 }
 
 const text = (max: number) => z.string().trim().min(1).max(max);
