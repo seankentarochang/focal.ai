@@ -1,9 +1,9 @@
 import type { CardSnapshot, RenderPlan } from "./types";
 
-/** Qloo's 10 insight types (mirrors @focal-ai/core InsightType). */
+/** Qloo's 10 insight types, short form (core `urn:entity:<type>`). */
 export type InsightType =
   | "place" | "destination" | "movie" | "tv_show" | "book"
-  | "artist" | "album" | "podcast" | "videogame" | "person";
+  | "artist" | "brand" | "podcast" | "videogame" | "person";
 
 /** Sent only for a new layout: card snippets, never full HTML (§6). */
 export interface IdentifyRequest {
