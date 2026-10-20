@@ -1,0 +1,85 @@
+/**
+ * Built-in never-run list (§5.1). Not user-configurable. Bump the version when
+ * the list changes so cached copies in chrome.storage can be compared.
+ */
+export const NEVER_RUN_VERSION = 1;
+
+export type NeverRunCategory =
+  | "banking"
+  | "health"
+  | "government"
+  | "email"
+  | "messaging"
+  | "documents"
+  | "passwords"
+  | "sign-in"
+  | "focal";
+
+const SITES: Record<Exclude<NeverRunCategory, "focal">, string[]> = {
+  banking: [
+    "paypal.com", "stripe.com", "venmo.com", "wise.com", "revolut.com", "monzo.com",
+    "chase.com", "bankofamerica.com", "wellsfargo.com", "citi.com", "capitalone.com",
+    "americanexpress.com", "discover.com", "usbank.com", "schwab.com", "fidelity.com",
+    "vanguard.com", "robinhood.com", "coinbase.com", "klarna.com", "affirm.com",
+    "barclays.co.uk", "hsbc.com", "hsbc.co.uk", "lloydsbank.com", "natwest.com",
+    "santander.co.uk", "starlingbank.com", "n26.com", "ing.com", "squareup.com",
+  ],
+  health: [
+    "mychart.com", "mychart.org", "nhs.uk", "healthcare.gov", "kp.org",
+    "kaiserpermanente.org", "patient.info", "zocdoc.com", "teladoc.com", "onemedical.com",
+    "cvs.com", "walgreens.com", "goodrx.com", "23andme.com", "followmyhealth.com",
+  ],
+  government: ["europa.eu", "service.gov.uk", "irs.gov", "ssa.gov", "canada.ca"],
+  email: [
+    "mail.google.com", "outlook.live.com", "outlook.office.com", "outlook.office365.com",
+    "mail.yahoo.com", "mail.proton.me", "proton.me", "protonmail.com", "fastmail.com",
+    "mail.aol.com", "hey.com", "tutanota.com", "zoho.com",
+  ],
+  messaging: [
+    "web.whatsapp.com", "messenger.com", "web.telegram.org", "discord.com", "slack.com",
+    "app.slack.com", "teams.microsoft.com", "teams.live.com", "messages.google.com",
+    "chat.google.com", "signal.org", "web.skype.com",
+  ],
+  documents: [
+    "docs.google.com", "drive.google.com", "sheets.google.com", "dropbox.com",
+    "onedrive.live.com", "sharepoint.com", "box.com", "icloud.com", "notion.so",
+    "notion.site", "evernote.com", "office.com", "quip.com", "airtable.com",
+  ],
+  passwords: [
+    "1password.com", "bitwarden.com", "lastpass.com", "dashlane.com",
+    "keepersecurity.com", "nordpass.com", "roboform.com",
+  ],
+  "sign-in": [
+    "accounts.google.com", "login.microsoftonline.com", "login.live.com",
+    "appleid.apple.com", "id.apple.com", "auth0.com", "okta.com", "onelogin.com",
+    "login.gov", "id.me",
+  ],
+};
+
+const GOV_SUFFIX = /(^|\.)(gov|mil)(\.[a-z]{2})?$|(^|\.)gouv\.[a-z]{2}$|(^|\.)gob\.[a-z]{2}$|(^|\.)gc\.ca$|(^|\.)bund\.de$/;
+const BANK_LABEL = /(^|[.-])[a-z0-9]*bank(ing)?[a-z0-9]*\./;
+const HEALTH_LABEL = /(^|\.)(mychart|patient(portal)?|myhealth)[.-]/;
+const SIGNIN_LABEL = /^(login|signin|auth|accounts?|sso|id|secure|passport)\./;
+const SIGNIN_PATH =
+  /\/(log-?in|sign-?in|sign-?up|register|auth|oauth2?|sso|account|accounts|my-?account|password|reset-password|checkout|payment|billing|wallet)(\/|$|\.|\?)/i;
+
+function suffixMatch(host: string, site: string): boolean {
+  return host === site || host.endsWith(`.${site}`);
+}
+
+/**
+ * Returns the never-run category for a URL, or null when focal may run.
+ * `focalHosts` are focal's own site hosts (never ranked).
+ */
+export function matchNeverRun(url: URL, focalHosts: string[] = []): NeverRunCategory | null {
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (focalHosts.some((f) => suffixMatch(host, f.toLowerCase().replace(/^www\./, "")))) return "focal";
+  for (const [category, sites] of Object.entries(SITES) as [NeverRunCategory, string[]][]) {
+    if (sites.some((s) => suffixMatch(host, s))) return category;
+  }
+  if (GOV_SUFFIX.test(host)) return "government";
+  if (BANK_LABEL.test(`${host}.`)) return "banking";
+  if (HEALTH_LABEL.test(`${host}.`)) return "health";
+  if (SIGNIN_LABEL.test(host) || SIGNIN_PATH.test(url.pathname)) return "sign-in";
+  return null;
+}
