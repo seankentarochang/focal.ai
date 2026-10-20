@@ -213,6 +213,18 @@ Speed targets: first visit to a page about 2–3 s (Qloo pacing), repeat pages 0
 | Which sign-in service can also be the OAuth server for MCP connectors? | ChatGPT and claude.ai connections | Desk research: MCP requires OAuth 2.1 with resource indicators and client registration (Client ID Metadata Documents or dynamic registration). Candidates to check: WorkOS AuthKit, Clerk, Stytch, Descope, Better Auth, Supabase Auth, Cloudflare's workers-oauth-provider |
 | How reliable is automatic list detection on real sites? | Core promise | Prototype the extractor and run it on saved pages from 10 target sites (restaurants, hotels, films, music, books, games, fashion) |
 
+### Results (2026-10-20, live keys)
+
+- **Tag signals take effect** for every type tested. place: max |Δaffinity| 0.021, order unchanged. movie: 0.138, order changed. brand: 0.131, order changed. Vibes are now sent as `signal.interests.tags`; local boosts are only a config fallback.
+- **Weights:** both JSON syntaxes (`[{"entity","weight"}]`, `[{"entity_id","weight"}]`) are rejected with HTTP 400. Strength only decides which likes make the cut.
+- **Signal cap:** going from 20 to 35 to 50 entity signals moves scores by only about 0.002–0.003 each step. The extra signals are used but barely matter, so the cap stays at 20 (latency 0.64 s → 1.29 s).
+- **Jev** (`jev-latest`):
+  - Speed and cost: 60–90 ms per page, about 540 input tokens per card, so a 30-card page is about 16k tokens or $0.0007.
+  - Page-level "is a list": 0.97 / 0.98 on real lists, 0.05 / 0.06 on inbox and news, 0.45 on a product grid (brand ≠ product name).
+  - Per-answer accuracy: 96% at confidence ≥ 0.8 and 100% at ≥ 0.9. The threshold stays 0.8; the page-level cut-off is 0.5.
+- **Live end-to-end** (Jev identify, then one live insights call): a 9-card SF page identified in 148 ms and ranked in 1.6 s. One item was lifted, labelled "Top pick for you · because you like Rintaro and Fugazi". Places the user already likes come back unscored because Qloo leaves signal entities out of results; whether to lift them anyway is an open product call.
+- **Sign-in and database:** see `docs/auth-and-db.md`.
+
 The probe script writes its report to `scripts/probe-output/` (gitignored, since Qloo data must not be stored in the public repo). Keys are read from `.env` or `apps/web/.env.local`: `QLOO_API_KEY`, `TYPESAFE_API_KEY`, and optionally `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`.
 
 ## 9. What we reuse
@@ -259,3 +271,5 @@ New: `apps/extension`, database and migrations, auth, the identify endpoint, the
 | 24 | Labels are page-relative words with the reason first; exact score in "Why this order?" |
 | 25 | Dislikes are never lifted; hard rules fold matching items behind "Show" only on Qloo's own tag |
 | 26 | This spec lands through a pull request for team review |
+| 26 | Vibes go to Qloo as tag signals (verified to move scores); strength is not sent as a weight (rejected) |
+| 27 | Jev keeps the 0.8 per-answer threshold and a 0.5 page-level "is a list" cut-off |

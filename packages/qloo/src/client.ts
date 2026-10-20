@@ -167,6 +167,9 @@ export function createQlooClient(opts: {
     if (params.signalEntityIds?.length) {
       addParam(query, "signal.interests.entities", params.signalEntityIds.join(","));
     }
+    if (params.signalTagIds?.length) {
+      addParam(query, "signal.interests.tags", params.signalTagIds.join(","));
+    }
     if (params.resultEntityIds?.length) {
       addParam(query, "filter.results.entities", params.resultEntityIds.join(","));
     }

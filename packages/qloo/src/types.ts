@@ -21,6 +21,8 @@ export interface SearchResult { entities: QlooEntity[]; durationMs: number; raw:
 export interface InsightsParams {
   resultType: QlooEntityType;
   signalEntityIds: string[];
+  /** Tag URNs sent as `signal.interests.tags` (verified to move scores, 2026-10-20). */
+  signalTagIds?: string[];
   resultEntityIds?: string[];
   locationQuery?: string;
   explainability?: boolean;
