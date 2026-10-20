@@ -15,6 +15,7 @@
     "lint": "pnpm -r lint",
     "check": "pnpm -r typecheck && pnpm -r test",
     "probe": "tsx scripts/probe-qloo.ts",
+    "probe:unknowns": "tsx scripts/probe-unknowns.ts",
     "smoke": "tsx scripts/smoke-prod.ts"
   },
   "devDependencies": {

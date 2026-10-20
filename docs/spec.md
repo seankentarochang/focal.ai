@@ -1,0 +1,261 @@
+# Product spec — focal.ai v2 (the extension)
+
+**Date:** 2026-10-20 · **Status:** Proposed (pending team review) · **Supersedes:** the hosted-Studio plan in [decisions.md](./decisions.md) D-1 and D-2; the previous backlog is archived at [archive/tickets-studio.md](./archive/tickets-studio.md).
+
+This spec defines the product we are building: a browser extension that re-orders real websites around the user's taste, with a profile written by a chat agent. It was produced by walking the design tree one decision at a time; §10 lists every decision. Anything not yet verified against a live API is marked **UNVERIFIED** and appears in §8 with the test that settles it.
+
+---
+
+## 1. North star
+
+> You tell a chat agent what you like. It builds your taste profile. Every site you visit after that shows what you care about most first, automatically.
+
+Same site, same data, your ordering. focal lifts what you will care about to the top of the lists you already browse, says why, and leaves the rest of the page as the site made it.
+
+## 2. User journeys
+
+**First run (account first).**
+1. The user lands on the focal website (from the landing page, the Web Store listing or a shared link) and signs in with Google or an email link.
+2. Onboarding chat: "Tell me a few things you love." The agent resolves what they mention to Qloo entities and tags and writes the profile (rules in §5.8).
+3. Sites to skip: the built-in never-run list is shown; the user adds their own.
+4. Install the extension, or confirm it is connected. The website shows "Try it now" links matched to the profile (e.g. restaurant search in their city, a film list).
+
+**Every day.** The user browses normally. On any eligible page with a list of things Qloo knows about (restaurants, hotels, films, shows, artists, books, podcasts, games, brands, destinations, people), the clear matches move to the top with a label such as "Top pick for you · because you like Fugazi and Rintaro". A strip above the list says "focal lifted 3 for you · Undo". Each lifted card has **More like this** and **Not for me**.
+
+**Teaching it more.** In the website chat ("I loved Kissaki last night, and I'm done with sports bars"), or from an outside assistant over MCP ("add the ramen place I just mentioned to my focal profile"). Every change lands in the activity feed with who made it and an undo.
+
+**Asking why.** The extension's toolbar menu has "Why this order?", which opens the website's inspector for the page the user was on: what was identified, what was sent to Qloo, each item's exact Qloo affinity and the likes behind it.
+
+**Trying without installing.** The website's playground (`/try`) re-orders demo lists and pasted lists with the same rules as the extension, no account needed.
+
+## 3. Scope
+
+**In:** Chromium extension (Chrome, Edge, Brave, Arc, Opera); automatic list detection on any site; Jev-assisted identification with learned layouts; lift-only ranking with labels; dislikes and hard rules; accounts and a server-side profile; website (onboarding, chat, profile, activity, settings, connect assistants, playground, inspector); hosted MCP with OAuth and write tools; explicit on-page feedback.
+
+**Out (decided against):** sponsored-result detection; passive learning from clicks or browsing; hiding anything except by a user's hard rule; per-site hand-written adapters as the primary mechanism.
+
+**Later:** Firefox; community sharing of learned layouts; multiple profiles (work/home/travel); local-only mode; paid LLM tier; commercial Qloo key (required to run past the hackathon, see §7).
+
+## 4. Architecture
+
+```
+┌──────────────────────── user's browser ─────────────────────────┐
+│ Extension (MV3)                                                  │
+│  guards → detect list → extract snippets → [layout known?] ──┐   │
+│  apply plan (CSS order / move) ← labels, undo, feedback taps │   │
+│  toolbar: site on/off · "Why this order?" · open dashboard   │   │
+└───────────────┬───────────────────────────────▲──────────────┼───┘
+                │ identify (new layouts only)   │ plan          │ rank
+                ▼                               │               ▼
+┌──────────────────────── focal server (Next.js) ─────────────────┐
+│ /api/page/identify ──► Jev (TypeSafe)   layout store (shared)    │
+│ /api/page/rank ──► resolve (shared cache) ──► Qloo insights      │
+│                    signal selection · lift rule · plan           │
+│ /api/profile · /api/activity · /api/feedback · /api/settings     │
+│ /api/chat ──► open-weight LLM (free tiers, fallback chain)       │
+│ /mcp (HTTP, OAuth) ──► same profile tools                        │
+│ Postgres: users, profile entries, activity, settings, layouts,   │
+│           resolution cache, short-lived page results            │
+└──────────────────────────────────────────────────────────────────┘
+        ▲ website pages (same Next.js app): onboarding, chat, profile,
+          activity, settings, connect, /try playground, /why/<id>
+```
+
+### 4.1 Extension (`apps/extension`, new)
+
+- **Manifest V3**, one build for Chromium browsers. Host permission `<all_urls>` (Chrome shows "read and change all your data on all websites"; expect a slower, in-depth Web Store review).
+- **Session:** the website hands the extension a session token after sign-in (externally connectable messaging from the focal origin); the extension never shows its own login.
+- **Local state (`chrome.storage`):** session token, built-in never-run list version, the user's sites to skip, per-site on/off, learned layouts for sites visited, and the profile version. The profile itself stays on the server; the extension caches settings so eligibility checks never need the network.
+- **Pipeline per page:** guards (§5.1) → list detection (§5.2) → identification (§5.3) → rank request (§5.4) → apply (§5.6) → watch for changes (§5.7).
+- **Server calls go from the background service worker**, which is exempt from page CORS under its host permissions; content scripts never call the API directly.
+- **Toolbar menu:** on/off for this site, "Why this order?", open dashboard, signed-in status.
+
+### 4.2 focal server (`apps/web` API routes, evolved)
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/page/identify` | Card snippets for a new layout → Jev → name/type/city per card + a layout description to save |
+| `POST /api/page/rank` | Identified items for a page → resolve → one Qloo insights call → lift decision → render plan + labels; stores the result for "Why this order?" (24 h) |
+| `GET/POST /api/profile` | Read and write things, vibes and rules (§4.5); every write produces an activity event |
+| `GET /api/activity`, `POST /api/activity/:id/undo` | Activity feed and undo |
+| `POST /api/feedback` | More like this / Not for me from a page |
+| `GET/PUT /api/settings` | Sites to skip, preferences |
+| `POST /api/chat` | Website chat agent (§5.9) |
+| `/mcp` | Hosted MCP endpoint with OAuth (§5.10) |
+
+Server-wide concerns: one Qloo request queue paced under 5 req/s; a shared resolution cache keyed by (normalized name, type, city) → entity, kept indefinitely (Qloo's hackathon guide allows private server-side caching with no time limit); per-user limits on Jev calls, rank calls and chat messages.
+
+### 4.3 Website (`apps/web` pages)
+
+`/` landing · `/signin` · `/onboarding` · `/chat` · `/profile` · `/activity` · `/settings` · `/connect` (ChatGPT / Claude setup) · `/try` (playground: today's Studio pages on the new ranking rules) · `/why/<id>` (inspector for a page ranking) · `/privacy`.
+
+### 4.4 MCP (`packages/mcp`, evolved)
+
+Moves from local stdio to a hosted HTTP endpoint with OAuth so ChatGPT and claude.ai can connect; stdio stays for local clients. Tools and rules in §5.10.
+
+### 4.5 Data model
+
+| Record | Fields (sketch) | Notes |
+|---|---|---|
+| User | id, email, auth provider ids, created | |
+| ProfileEntry | id, user, kind (`thing` / `vibe` / `rule`), qloo id (entity or tag URN), name, type, strength (`love` / `like` / `dislike`; rules are `never`), source (`chat` / `mcp:<client>` / `page` / `manual`), created | Rules start `pending` when proposed by an agent and become active on approval |
+| ActivityEvent | id, user, actor, action (add / remove / change / approve / undo), entry snapshot, at, undone | Feeds the activity page and undo |
+| SiteSetting | user, hostname, mode (`skip` / `off` / `on`) | Built-in never-run list is code, not data |
+| Layout | hostname, path pattern, card fingerprint, name position, type, city source, confidence, learned at | Shared across users: holds structure only, never page content |
+| ResolutionCache | normalized name, type, city → entity id + match status | Shared across users |
+| PageResult | id, user, hostname, items with status/affinity/reasons, plan, created | Deleted after 24 h; backs `/why/<id>` |
+
+## 5. Behaviour
+
+### 5.1 Where focal runs
+
+Runs on every page except:
+- **Built-in never-run list (not configurable):** banking and payments, health portals, government sites, email, messaging, document and file storage, password managers, sign-in and account pages, and focal's own site.
+- **Sites the user skips** (entered during onboarding, editable in settings) and sites switched off from the toolbar.
+- **Pages with a password or payment field**, and **incognito windows** unless the user enables incognito.
+
+Pages with no detected list are left alone, and nothing is sent anywhere.
+
+### 5.2 Finding the list
+
+Automatic detection on any site, no per-site adapters: find the dominant group of repeated sibling elements with similar structure (cards), at least 3 of them, containing short title-like text. For each card, extract up to 6 text snippets (title, subtitle, address line, badge; each at most 80 characters) and any outbound link hosts and paths. Detection and extraction run locally.
+
+### 5.3 Identifying each item (Jev)
+
+- **New layout:** the extension sends the page's hostname, path pattern, any city hints found on the page (search box value, URL parameters, headings) and the card snippets to `/api/page/identify`. The server asks Jev (TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`) one request per page with, for each card:
+  - `name`: choice among that card's snippets (or `none`)
+  - `type`: choice among Qloo's 10 insight types (or `not_a_thing`)
+  - `city`: choice among the page's city hints (or `unknown`), for places and destinations
+  
+  plus one page-level yes/no: "is this a list of real-world things?"
+- **Confidence rule:** a card whose answers fall below the confidence threshold is left untouched. Initial threshold 0.8, tuned with the validation script (§8).
+- **Layout learning:** once Jev has picked names on a page, the server derives where names sit in that card structure, the page's type and where the city comes from, and saves a Layout. Later visits to a matching layout are identified locally with no Jev call and only names, type and city are sent to the rank endpoint.
+- **Confirmation by outside IDs:** where a card links to a site Qloo records an ID for (Resy, Michelin, Tripadvisor, Google Place), a matching ID on the Qloo entity confirms the match.
+
+### 5.4 Matching and scoring
+
+1. Resolve each identified item through the shared cache, then Qloo `/search` (type and city filtered). The existing strict resolver rules apply (name normalization, type must match, city context decides between same-named entities; never invent a match).
+2. Choose the signals for this page (§5.5) and make **one** `/v2/insights` call with `filter.results.entities` set to the resolved items and `feature.explainability=true`.
+
+### 5.5 Which likes go into a ranking
+
+- Your top ~5 favourites overall, of any type (cross-domain taste is Qloo's strength).
+- Fill up to the signal cap with your strongest likes of this page's type.
+- Add the vibes (tags) that apply to this type as `signal.interests.tags` (**UNVERIFIED**: if the live test shows tag signals have no effect for a type, vibes act only as local boosts there).
+- Strength is sent as a weight if Qloo accepts weights (**UNVERIFIED**); otherwise it only decides which likes make the cut.
+- The cap starts at 20 (the current code's choice); the validation script measures Qloo's real limit.
+
+### 5.6 Changing the page
+
+- **Lift only.** Items that score clearly above this page's average move to the top, best first. Initial rule, to be tuned: at least 3 scored items on the page; lift items whose affinity is at least one standard deviation above the page mean, at most 5. Everything else, including unmatched items, keeps the site's order. Scores are compared within the page because Qloo's levels differ by type (places around 0.7, destinations around 0.9).
+- **Reorder in place.** Prefer CSS ordering when the container is flex or grid (no nodes move); otherwise move nodes; re-apply when the site re-renders its list. Rewriting the list is a last-resort fallback for layouts where neither works.
+- **Labels:** "Top pick for you" for the one or two clearest matches, "Good match" for the rest, followed by "because you like X and Y" only when Qloo's explainability names likes from the profile. No reason text is ever invented. Exact Qloo affinity appears only in "Why this order?".
+- **Dislikes** (things and vibes) are never lifted and stay where the site put them.
+- **Hard rules** fold matching items into one line in place, e.g. "2 hidden by your rules (chain) · Show", only when Qloo has the item tagged with the rule's tag.
+- **Undo** in the strip restores the site's order for that page.
+- **Sponsored results are not detected** and are ranked like anything else; labels say "matches your taste", never "recommended".
+
+### 5.7 Timing and changing pages
+
+- **Render gate:** hide the list for at most 300 ms. If the plan is ready, the page appears already ordered. If not, show the site's order with a "focal is ranking…" chip; when the plan arrives, re-order with a short animation only if the user has not scrolled or clicked in the list, otherwise the chip offers "Apply".
+- **Items loaded later** (infinite scroll): scored in the background through the cache, with no Jev call. Clear matches are labelled where they appear; the lifted section updates only while it is off screen. Nothing the user has already seen moves.
+- **New search, filter or page within a single-page app** counts as a new page.
+
+### 5.8 Learning
+
+- **Chat:** the website chat and MCP assistants write the profile (§5.9, §5.10).
+- **On-page taps:** More like this and Not for me write a like or dislike, logged in the activity feed with undo.
+- **No passive learning.** Clicks, visits and dwell time are never recorded or used.
+
+### 5.9 Website chat agent
+
+- **Model:** an open-weight model chosen by a bake-off: about 20 scripted onboarding chats, scored on picking the right entity, asking when a name is ambiguous, and setting strength correctly. Shortlist from families currently strong at tool use (Qwen, GLM, DeepSeek, Kimi, gpt-oss).
+- **Hosting, free for now:** OpenAI-compatible free tiers tried in order (Groq, then Cerebras, then OpenRouter `:free` models), switching on rate-limit errors; local models through Ollama for development and the bake-off. Tool calling on each free tier is **UNVERIFIED** (§8).
+- **Lean context:** a compact profile summary instead of full history, short instructions and tool descriptions; target 50–100k tokens per onboarding chat. A per-user daily message cap protects the shared allowance.
+- **Tools:** search entities, search tags, add entry (with strength), remove entry, propose rule, recommendations, taste summary, read profile.
+- **Write rules, enforced in the tools rather than by the model:** save directly when Qloo returns exactly one match of the right type (with undo); return the choices when ambiguous so the agent asks; hard rules are created `pending` until the user approves them.
+
+### 5.10 Outside assistants (MCP)
+
+Read and write with the same rules as the chat: read profile, search entities and tags, add and remove things and vibes with strength, propose rules (pending until approved on the website), recommendations, taste summary, rank a list. When a name is ambiguous the tool refuses to save and returns the choices for the assistant to ask the user. Settings and sites to skip are website-only. Every write appears in the activity feed as "via <assistant>" with undo.
+
+## 6. Privacy and security
+
+- **What leaves the browser:** on a new site layout, the text snippets of list cards (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server. Item names go to Qloo.
+- **Stored on the server:** account, profile, activity, settings, shared layouts (structure only), the shared resolution cache, and page results for 24 h. No browsing history.
+- **Chat text** is processed by the free LLM providers, some of which log prompts; the privacy policy names them.
+- **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.
+- **Agents cannot act quietly:** every write is attributed and undoable; hard rules need approval; MCP cannot change settings.
+- **Export and delete** the profile and account at any time.
+- **Keys** (Qloo, TypeSafe, LLM providers) are server-only and never reach the extension or the browser.
+- **Render plans stay declarative** (reorder, collapse, annotate, emphasize, hide). Selectors exist only in learned layouts used by the extension's own code, never in plans sent from the server.
+
+## 7. External services, limits and costs
+
+| Service | Use | Limits and cost |
+|---|---|---|
+| Qloo (hackathon key) | search, entities, tags, insights | Free; 5 req/s burst; key deactivated after judging closes, so a commercial key is needed to keep running. Do not store Qloo response data in the public repo |
+| TypeSafe Jev | card identification on new layouts | Reported $0.042 per million input tokens, output free (third-party sources; measure with §8). Budget $5 ≈ 12–24k page identifications at 5–10k tokens each |
+| Open-weight LLM | website chat | Free tiers: Groq about 1,000 requests and 200k tokens per day per model; Cerebras and OpenRouter as fallbacks (figures from third-party summaries, verify) |
+| Hosting, database, auth | website, API, storage, sign-in | Free tiers (Vercel Hobby, hosted Postgres, sign-in service) |
+
+Speed targets: first visit to a page about 2–3 s (Qloo pacing), repeat pages 0.2–0.5 s, render gate 300 ms.
+
+## 8. Open questions and how we settle them
+
+| Unknown | Why it matters | How to settle |
+|---|---|---|
+| Do tag signals (`signal.interests.tags`) change insights scores, per type? | Whether vibes reach Qloo or stay local boosts | `pnpm probe:unknowns qloo` compares insights with and without a tag signal for place, movie and brand |
+| Does Qloo accept per-signal weights, and in what syntax? | Whether love vs like reaches Qloo | Same script tries candidate syntaxes and checks the scores move toward the heavier like. Confirm against Qloo's Parameter Reference |
+| How many entity signals does one insights call accept and use? | The signal cap in §5.5 | Same script sends 20, 35 and 50 signals and compares results |
+| Jev cost, speed and accuracy on card identification | Budget, render gate, confidence threshold | `pnpm probe:unknowns jev` runs labelled sample pages (and a non-list page) and reports tokens, latency, accuracy by confidence |
+| Do the free LLM tiers support tool calling, with which models? | Whether the chat can run free | `pnpm probe:unknowns llm` lists models and sends a tool-calling request to each configured provider |
+| Which sign-in service can also be the OAuth server for MCP connectors? | ChatGPT and claude.ai connections | Desk research: MCP requires OAuth 2.1 with resource indicators and client registration (Client ID Metadata Documents or dynamic registration). Candidates to check: WorkOS AuthKit, Clerk, Stytch, Descope, Better Auth, Supabase Auth, Cloudflare's workers-oauth-provider |
+| How reliable is automatic list detection on real sites? | Core promise | Prototype the extractor and run it on saved pages from 10 target sites (restaurants, hotels, films, music, books, games, fashion) |
+
+The probe script writes its report to `scripts/probe-output/` (gitignored, since Qloo data must not be stored in the public repo). Keys are read from `.env` or `apps/web/.env.local`: `QLOO_API_KEY`, `TYPESAFE_API_KEY`, and optionally `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`.
+
+## 9. What we reuse
+
+| Existing | Becomes |
+|---|---|
+| `packages/qloo` (typed client, pacing, cache, error taxonomy) | Server's Qloo client; add tag signals, weights and the shared cache |
+| `packages/core` resolver, profile codec, ranker, plan compiler, evidence | Resolver as is; profile v2 (things, vibes, rules, strength); ranker gains the lift-only rule; plan compiler gains rule folds; evidence builds the "because you like" reasons |
+| `apps/web` Studio | Website shell; Studio pages become `/try`; Inspector becomes `/why/<id>` |
+| `apps/web` agent route | Replaced by the LLM chat agent; the deterministic intent parser is retired |
+| `packages/mcp` tools | Hosted HTTP transport, OAuth, write tools |
+| `scripts/probe-qloo.ts`, `scripts/smoke-prod.ts` | Kept; joined by `scripts/probe-unknowns.ts` |
+| Dockerfile, security headers, CI | Kept |
+
+New: `apps/extension`, database and migrations, auth, the identify endpoint, the chat agent, the activity feed.
+
+## 10. Decision log
+
+| # | Decision |
+|---|---|
+| 1 | The product is the extension, shipped by the hackathon deadline |
+| 2 | Automatic list detection on any site, no per-site adapters |
+| 3 | Jev identifies name, type and city per card with confidence; unsure cards are left alone; layouts are learned and reused |
+| 4 | Reorder the site's own cards in place |
+| 5 | No sponsored detection |
+| 6 | The profile is written by the website chat and by outside assistants over MCP |
+| 7 | Profile on our server with accounts; the extension caches settings |
+| 8 | A profile holds things, vibes and hard rules |
+| 9 | Runs everywhere except a built-in never-run list and sites the user skips; never on password or payment pages or in incognito by default |
+| 10 | 300 ms render gate, then the site's order with a chip; re-order only before the user interacts, otherwise offer Apply |
+| 11 | Lift clear matches above the page average; the rest keep the site's order |
+| 12 | Each ranking uses top favourites plus the strongest likes of the page's type plus applicable vibes, in one Qloo call |
+| 13 | Agents save when certain, ask when ambiguous, and need approval for hard rules; activity feed with attribution and undo |
+| 14 | Learning from chat and explicit taps only; no passive tracking |
+| 15 | Chat, profile, feed and settings live on the website; the extension only reorders, labels and has a toolbar menu |
+| 16 | Sign-in with Google or an email link through a service that can also serve MCP OAuth |
+| 17 | Nothing moves after the user has seen it; a new search or filter is a new page |
+| 18 | MCP reads and writes under the chat's rules; settings are website-only |
+| 19 | The chat runs on an open-weight model |
+| 20 | Free hosted tiers with fallback for now; local models for development |
+| 21 | Chromium browsers (Chrome, Edge, Brave, Arc, Opera); Firefox later |
+| 22 | Studio pages stay as a no-install playground on the same ranking rules |
+| 23 | First run is account first: sign in, chat, sites to skip, install |
+| 24 | Labels are page-relative words with the reason first; exact score in "Why this order?" |
+| 25 | Dislikes are never lifted; hard rules fold matching items behind "Show" only on Qloo's own tag |
+| 26 | This spec lands through a pull request for team review |

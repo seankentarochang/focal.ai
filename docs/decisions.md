@@ -1,12 +1,12 @@
 # Decision log — focal.ai
 
-ADR-style record of the decisions that shaped this build. Follows [contracts.md](./contracts.md); architecture is described in [architecture.md](./architecture.md). Statuses: **Accepted** (in force), **Deferred** (post-hackathon), **Pending** / **Pending-verification** (blocked on an external event).
+ADR-style record of the decisions that shaped this build. Follows [contracts.md](./contracts.md); architecture is described in [architecture.md](./architecture.md). Statuses: **Accepted** (in force), **Deferred** (post-hackathon), **Pending** / **Pending-verification** (blocked on an external event), **Amended** / **Superseded** (changed by a later decision, named in the status line).
 
 ---
 
 ## D-1 · Hosted Studio is the core submission journey; extension deferred
 
-**Date:** 2026-10-17 · **Status:** Accepted
+**Date:** 2026-10-17 · **Status:** Superseded by D-15 (2026-10-20): the extension is the product; the Studio pages become the `/try` playground
 
 **Context.** The hackathon requires a hosted, end-to-end usable demo. Browser-extension distribution (store review) cannot ship in time; the README's extension-first narrative describes the intended product.
 
@@ -20,7 +20,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-2 · Stateless server with a browser-local profile
 
-**Date:** 2026-10-17 · **Status:** Accepted
+**Date:** 2026-10-17 · **Status:** Superseded by D-15 (2026-10-20): the profile lives on the server with accounts so the extension, the website chat and outside assistants share it
 
 **Context.** Accounts and a database add build time and weaken the privacy story; nothing in the demo needs cross-device state.
 
@@ -34,7 +34,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-3 · LLM features optional by design
 
-**Date:** 2026-10-17 · **Status:** Accepted
+**Date:** 2026-10-17 · **Status:** Amended by D-15 (2026-10-20): the website chat agent runs on an open-weight LLM and card identification uses Jev; ranking and render plans stay deterministic
 
 **Context.** No Anthropic key was available at build time; a judged demo must not depend on one.
 
@@ -90,7 +90,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-7 · Ranking contract: raw Qloo affinity only
 
-**Date:** 2026-10-17 · **Status:** Accepted
+**Date:** 2026-10-17 · **Status:** Amended by D-15 (2026-10-20): ranking lifts only items clearly above the page average and leaves the rest in site order; labels are page-relative words, with raw affinity shown in "Why this order?". Raw affinity remains the only score
 
 **Context.** The product promise ("ranked by what you like") is only credible if scores are real, legible, and never invented.
 
@@ -118,7 +118,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-9 · Render plans are declarative enum ops only
 
-**Date:** 2026-10-17 · **Status:** Accepted
+**Date:** 2026-10-17 · **Status:** Accepted; amended by D-15 (2026-10-20): learned page layouts contain structural positions used by the extension's own code, never inside render plans
 
 **Context.** The extension vision (arbitrary per-site selectors/JS) is a safety and scope liability; the Studio only needs a portable, inspectable plan.
 
@@ -188,7 +188,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-14 · No pushes to `tsangh5/focal.ai` from this machine yet
 
-**Date:** 2026-10-18 · **Status:** Accepted (temporary)
+**Date:** 2026-10-18 · **Status:** Superseded (2026-10-19): push access was resolved and all waves are on `origin/main`
 
 **Context.** `origin` is `https://github.com/tsangh5/focal.ai.git`; push rights from this machine are unconfirmed.
 
@@ -197,3 +197,17 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 **Alternatives considered.** Pushing immediately; forking.
 
 **Consequences.** Remote CI has not run for waves 2–3 (nothing was pushed from this machine; local checks stand in) and `origin/main` lacks those commits. When pushing is unblocked, the first push should be preceded by a fresh secret scan — `.env*` is gitignored, and route tests assert the key never appears in responses.
+
+---
+
+## D-15 · Extension-first product with a server-side profile
+
+**Date:** 2026-10-20 · **Status:** Proposed (pending team review of [spec.md](./spec.md))
+
+**Context.** The hosted Studio demonstrates the ranking engine on in-repo demo pages, but the product promise is re-ordering the real websites people already use. The team decided to build that product for the hackathon rather than after it.
+
+**Decision.** Build the browser extension described in [spec.md](./spec.md): automatic list detection on any site, Jev-assisted identification with learned layouts, lift-only ranking with labels, a profile of things, vibes and hard rules written by a website chat agent and by outside assistants over a hosted MCP endpoint, and accounts with the profile stored on the server. The spec's §10 lists the 26 decisions behind this.
+
+**Alternatives considered.** Submitting the Studio and building the extension afterwards; hand-written per-site adapters; a browser-local profile with a local-only MCP bridge.
+
+**Consequences.** Supersedes D-1, D-2 and D-14; amends D-3, D-7 and D-9. Adds a database, sign-in, a Jev dependency and an LLM dependency. The previous backlog moves to [archive/tickets-studio.md](./archive/tickets-studio.md) and [tickets.md](./tickets.md) becomes the extension backlog. Open technical questions are tracked in spec §8 and settled by `pnpm probe:unknowns`.

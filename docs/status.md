@@ -1,6 +1,6 @@
 # Project status — focal.ai
 
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-20
 **Team:** repo owner + autonomous coding agents (waves run as parallel agent batches, each closed by an independent release-verifier pass — see "Verification model" and `docs/testing.md`).
 **Hackathon deadline:** October 30, 2026, 11:45pm EDT (Qloo Agentic Hackathon). Target submission: Oct 29, one day early.
 **Repo state:** pushed to `origin/main`: `4532f11` → `18cd0cd` (W1+W2) → `8d18351` (W3) → `0af7a62` (docs) → `8f7c909` (W4a) → `8f8aeee` (W4a docs) → `473f91d` (W4b) → `e213ab8` (W4b docs) → `3d9796d` (W5a) → `7152647` (W5a docs) → `9d6b6fb` (Wave K, live Qloo) → this docs commit; the release verifier confirmed the remote head equals local HEAD after the push.
@@ -36,8 +36,9 @@ Every wave ends with an independent release-verifier pass — run by agents that
 
 ## Next up
 
-- **Remaining to submit:** T-22 Playwright e2e plus the live smoke rerun against the deployed URL, T-23 actual Vercel deploy (needs an account), and T-24 final README rewrite + Devpost submission with the hosted URLs. T-18 (error / empty / rate-limit polish) stays Partial. T-01 is Done (key received; probe exit 0; contract frozen).
-- **Blockers:** Vercel account/deploy; Playwright + pre-submit live smoke rerun; submission pending deploy.
+- **Plan changed (2026-10-20, proposed):** the product is now the browser extension described in [spec.md](./spec.md) (decision D-15). The new backlog is [tickets.md](./tickets.md); the Studio backlog is archived in [archive/tickets-studio.md](./archive/tickets-studio.md).
+- **First:** Wave V settles the open technical questions with `pnpm probe:unknowns` (Qloo tag signals, weights and signal cap; Jev cost and accuracy; free LLM tool calling) plus the sign-in / MCP OAuth choice.
+- **Then:** platform (database, accounts, profile v2), the extension pipeline, the website chat and pages, hosted MCP, ship.
 
 ## How to update this file
 
