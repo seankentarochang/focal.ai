@@ -22,3 +22,8 @@ jobs:
       - run: pnpm -r typecheck
       - run: pnpm -r test
       - run: pnpm --filter @focal-ai/web build
+      - run: pnpm --filter @focal-ai/extension zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: focal-extension
+          path: apps/extension/focal-extension-*.zip
