@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>focal</title>
+    <style>
+      body { width: 280px; margin: 0; padding: 14px; font: 14px/1.4 system-ui, sans-serif; color: #111827; }
+      h1 { font-size: 15px; margin: 0 0 10px; }
+      .row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
+      .muted { color: #6b7280; font-size: 12px; }
+      button, a.button { width: 100%; margin-top: 8px; padding: 6px 10px; border: 1px solid #c7d2fe; border-radius: 6px; background: #eef2ff; color: #1e3a8a; font: inherit; cursor: pointer; text-align: center; text-decoration: none; display: block; box-sizing: border-box; }
+      button:disabled { opacity: 0.5; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <h1>focal</h1>
+    <div id="account" class="muted">Checking sign-in…</div>
+    <div class="row">
+      <label for="site-toggle" id="site-label">This site</label>
+      <input type="checkbox" id="site-toggle" />
+    </div>
+    <div id="site-status" class="muted"></div>
+    <button id="why" type="button" disabled>Why this order?</button>
+    <a id="dashboard" class="button" target="_blank" rel="noopener">Open dashboard</a>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
