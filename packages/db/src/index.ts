@@ -1,10 +1,12 @@
 import { connect, type ConnectOptions, type Sql } from "./client";
+import { extensionSessionsRepo } from "./sessions";
 import { layoutsRepo, pageResultsRepo, profileRepo, resolutionsRepo, sitesRepo, usersRepo } from "./repos";
 
 export * from "./types";
 export { connect, type Sql, type ConnectOptions } from "./client";
 export { migrate, loadMigrations, MIGRATIONS_DIR, type Migration } from "./migrate";
 export { PAGE_RESULT_TTL_MS } from "./repos";
+export { EXTENSION_SESSION_TTL_MS, hashToken, type ExtensionSession } from "./sessions";
 
 export function createDb(sql: Sql) {
   return {
@@ -15,6 +17,7 @@ export function createDb(sql: Sql) {
     layouts: layoutsRepo(sql),
     resolutions: resolutionsRepo(sql),
     pageResults: pageResultsRepo(sql),
+    extensionSessions: extensionSessionsRepo(sql),
     close: () => sql.end(),
   };
 }

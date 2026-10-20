@@ -12,11 +12,11 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
 
   describe("migrations", () => {
     it("apply from empty and are idempotent", async () => {
-      expect(loadMigrations().map((m) => m.name)).toContain("0001_init.sql");
+      expect(loadMigrations().map((m) => m.name)).toEqual(["0001_init.sql", "0002_extension_sessions.sql"]);
       expect(await migrate(db.sql)).toEqual([]);
       const tables = await db.sql`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() ORDER BY 1`;
       expect(tables.map((t) => t.table_name)).toEqual([
-        "activity_events", "layouts", "page_results", "profile_entries", "resolution_cache", "schema_migrations", "site_settings", "users",
+        "activity_events", "extension_sessions", "layouts", "page_results", "profile_entries", "resolution_cache", "schema_migrations", "site_settings", "users",
       ]);
     });
   });
@@ -194,6 +194,31 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
       expect(await db.pageResults.purgeExpired()).toBeGreaterThanOrEqual(1);
       const [n] = await db.sql`SELECT count(*)::int AS n FROM page_results WHERE id = 'pr2'`;
       expect(n!.n).toBe(0);
+    });
+  });
+
+  describe("extension sessions", () => {
+    it("issues opaque tokens, stores only a hash, resolves and revokes", async () => {
+      const u = await db.users.upsert("x1@example.com");
+      const { token, session } = await db.extensionSessions.issue(u.id);
+      expect(token).toMatch(/^fx_[\w-]{40,}$/);
+      const [row] = await db.sql`SELECT token_hash FROM extension_sessions WHERE id = ${session.id}`;
+      expect(row!.token_hash).not.toContain(token);
+      expect((await db.extensionSessions.resolve(token))?.userId).toBe(u.id);
+      expect(await db.extensionSessions.resolve("fx_wrong")).toBeNull();
+      expect(await db.extensionSessions.revoke(token)).toBe(true);
+      expect(await db.extensionSessions.resolve(token)).toBeNull();
+    });
+
+    it("expired sessions don't resolve; revokeAll signs out every device", async () => {
+      const u = await db.users.upsert("x2@example.com");
+      const old = await db.extensionSessions.issue(u.id, -1000);
+      expect(await db.extensionSessions.resolve(old.token)).toBeNull();
+      const a = await db.extensionSessions.issue(u.id);
+      const b = await db.extensionSessions.issue(u.id);
+      expect(await db.extensionSessions.revokeAll(u.id)).toBe(3);
+      expect(await db.extensionSessions.resolve(a.token)).toBeNull();
+      expect(await db.extensionSessions.resolve(b.token)).toBeNull();
     });
   });
 });

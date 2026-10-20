@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { __setDbForTests } from "@/lib/server/db";
 import { __setIdentifierForTests } from "@/lib/server/page/identify";
 import { __setPageResultStoreForTests, createMemoryPageResultStore } from "@/lib/server/page/store";
 import { __resetRateLimitForTests } from "@/lib/server/rateLimit";
@@ -12,6 +13,7 @@ let rankPOST: Post;
 let resultGET: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 
 beforeAll(async () => {
+  __setDbForTests(null);
   identifyPOST = (await import("@/app/api/page/identify/route")).POST;
   rankPOST = (await import("@/app/api/page/rank/route")).POST;
   resultGET = (await import("@/app/api/page/result/[id]/route")).GET;

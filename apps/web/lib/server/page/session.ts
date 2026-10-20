@@ -1,4 +1,5 @@
 import type { ProfileV2 } from "@focal-ai/core";
+import { getDb } from "../db";
 
 export interface PageSession {
   userId: string;
@@ -40,18 +41,26 @@ export function devSessionsEnabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.FOCAL_DEV_SESSION === "1";
 }
 
-function bearer(req: Request): string | null {
+export function bearer(req: Request): string | null {
   const m = /^Bearer\s+(\S{1,512})$/i.exec(req.headers.get("authorization") ?? "");
   return m?.[1] ?? null;
 }
 
 /**
- * Resolves the caller from the extension's bearer token. Until P-02 there is
- * no real token store: outside dev mode every request is unauthenticated.
+ * Resolves the caller from the extension's bearer token: an extension session
+ * in Postgres when the database is configured, else the dev demo session.
  */
 export async function resolveSession(req: Request): Promise<PageSession | null> {
   const token = bearer(req);
   if (!token) return null;
+  const db = getDb();
+  if (db) {
+    const session = await db.extensionSessions.resolve(token);
+    if (!session) return null;
+    const { entries } = await db.profile.load(session.userId);
+    const profile: ProfileV2 = { version: 2, updatedAt: new Date().toISOString(), entries: entries as unknown as ProfileV2["entries"] };
+    return { userId: session.userId, profile };
+  }
   if (devSessionsEnabled()) return { userId: "dev", profile: DEV_PROFILE };
   return null;
 }
