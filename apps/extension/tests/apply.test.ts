@@ -54,10 +54,13 @@ describe("applyPlan", () => {
       plan([
         { op: "reorder", containerId: "x", order: ["c2", "c0", "c1", "c3"] },
         { op: "annotate", containerId: "x", clientId: "c2", text: "Top pick for you", badge: "top-pick" },
+        { op: "collapse", containerId: "x", clientIds: ["c3"], label: "1 hidden by your rules" },
       ]),
     );
+    expect(d.querySelector('[data-focal="fold"]')!.closest("tr")!.parentElement!.tagName).toBe("TBODY");
     const label = d.querySelector('[data-focal="label"]')!;
     expect(label.parentElement!.tagName).toBe("TD");
+    expect(d.querySelector('[data-focal="strip"]')!.nextElementSibling!.tagName).toBe("TABLE");
     expect([...d.querySelectorAll("tr")].every((tr) => [...tr.children].every((c) => c.tagName === "TD"))).toBe(true);
     handle.undo();
     expect(d.querySelector('[data-focal="label"]')).toBeNull();

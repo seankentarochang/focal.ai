@@ -1,5 +1,5 @@
 import type { RenderOp, RenderPlan } from "../types";
-import { decorate, flip, popIn, sparkleSvg, VIOLET } from "./ui";
+import { blockAnchor, decorate, flip, popIn, sparkleSvg, VIOLET } from "./ui";
 
 export const FOCAL_ATTR = "data-focal";
 
@@ -178,21 +178,29 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         }
         const fold = decorate(make(doc, "div", "fold"), "fold");
         fold.append(doc.createTextNode(op.label));
+        let holder: HTMLElement = fold;
+        if (first.tagName === "TR") {
+          holder = make(doc, "tr", "fold-row");
+          const cell = doc.createElement("td");
+          cell.colSpan = Math.max(1, first.children.length);
+          cell.append(fold);
+          holder.append(cell);
+        }
         if (op.op === "collapse") {
           const show = make(doc, "button", "show", "Show");
           show.setAttribute("type", "button");
           show.addEventListener("click", () => {
             for (const el of els) el.style.removeProperty("display");
-            fold.remove();
+            holder.remove();
           });
           fold.append(show);
         }
-        if (mode === "css-order" && position(first)) fold.style.setProperty("order", position(first));
-        first.before(fold);
-        inserted.push(fold);
+        if (mode === "css-order" && position(first)) holder.style.setProperty("order", position(first));
+        first.before(holder);
+        inserted.push(holder);
       }
     }
-    if (reorder || plan.ops.some((o) => o.op === "collapse" || o.op === "hide")) container.before(strip());
+    if (reorder || plan.ops.some((o) => o.op === "collapse" || o.op === "hide")) blockAnchor(container).before(strip());
   }, glow);
 
   function strip(): HTMLElement {

@@ -80,6 +80,11 @@ export function decorate(host: HTMLElement, kind: keyof typeof SHEETS): HTMLElem
   return host;
 }
 
+/** Table parts can only hold rows and cells, so page-level UI goes before the whole table. */
+export function blockAnchor(el: Element): Element {
+  return /^(TABLE|TBODY|THEAD|TFOOT|TR)$/.test(el.tagName) ? (el.closest("table") ?? el) : el;
+}
+
 export function sparkleSvg(): string {
   return SPARKLE;
 }

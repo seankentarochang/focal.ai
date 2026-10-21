@@ -1,4 +1,4 @@
-import { decorate } from "./ui";
+import { blockAnchor, decorate } from "./ui";
 
 export const GATE_MS = 300;
 
@@ -55,7 +55,7 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
     chip.setAttribute("data-focal", "chip");
     chip.setAttribute("role", "status");
     chip.textContent = "focal is ranking…";
-    container.before(chip);
+    blockAnchor(container).before(chip);
   }, ms);
 
   return {
