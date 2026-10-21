@@ -67,13 +67,33 @@ const hasTitleLink = (el: Element) => !!el.querySelector("a[href]") && (el.textC
 
 /**
  * Where a label goes: the main cell for table rows, the text column for
- * side-by-side (flex/grid) cards, else the card itself.
+ * side-by-side cards (poster left, text right), else the card itself.
  */
 function labelSlot(card: HTMLElement): HTMLElement {
   if (card.tagName === "TR") {
     const cells = [...card.children].filter((c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH");
     return cells.find(hasTitleLink) ?? cells.find((c) => (c.textContent ?? "").trim().length > 1) ?? cells[0] ?? card;
   }
+  return textColumnByLayout(card) ?? textColumnByStyle(card);
+}
+
+function titleOf(card: HTMLElement): HTMLElement | null {
+  const heading = card.querySelector<HTMLElement>('h1, h2, h3, h4, h5, h6, [role="heading"]');
+  if (heading) return heading;
+  return [...card.querySelectorAll<HTMLElement>("a[href]")].find((a) => (a.textContent ?? "").trim().length > 1) ?? null;
+}
+
+/** Highest ancestor of the title that sits clearly right of the card's left edge. */
+function textColumnByLayout(card: HTMLElement): HTMLElement | null {
+  const box = card.getBoundingClientRect();
+  const title = titleOf(card);
+  if (box.width === 0 || !title || title.getBoundingClientRect().left - box.left < 24) return null;
+  let col = title;
+  while (col.parentElement && col.parentElement !== card && col.parentElement.getBoundingClientRect().left - box.left >= 24) col = col.parentElement;
+  return /^(A|BUTTON)$/.test(col.tagName) && col.parentElement ? col.parentElement : col;
+}
+
+function textColumnByStyle(card: HTMLElement): HTMLElement {
   let slot = card;
   let el: HTMLElement = card;
   for (let depth = 0; depth < 4 && !/^(A|BUTTON)$/.test(el.tagName); depth++) {
@@ -82,7 +102,8 @@ function labelSlot(card: HTMLElement): HTMLElement {
       el = kids[0]!;
       continue;
     }
-    const text = kids.length > 1 && isFlexOrGrid(el) ? kids.find((k) => k.tagName !== "A" && hasTitleLink(k)) : undefined;
+    const title = titleOf(el);
+    const text = kids.length > 1 && isFlexOrGrid(el) && title ? kids.find((k) => k.tagName !== "A" && k.contains(title)) : undefined;
     if (!text) break;
     slot = el = text;
   }

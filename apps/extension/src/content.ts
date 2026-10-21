@@ -14,22 +14,31 @@ function send<T>(msg: ContentMessage): Promise<BackgroundReply<T>> {
 let current: ApplyHandle | null = null;
 let watcher: MutationObserver | null = null;
 let rerunTimer: ReturnType<typeof setTimeout> | undefined;
+let firstScheduledAt = 0;
 const runTimes: number[] = [];
 let generation = 0;
 let lastList: { container: Element; cards: Set<Element> } | null = null;
+let last: { key: string; hints: string[] } | null = null;
+/** Lists that weren't worth ranking, with their size then; a new card makes them worth another look. */
+let rejected = new WeakMap<Element, number>();
 
 const RERUN_DELAY_MS = 1000;
+const RERUN_MAX_WAIT_MS = 3000;
 const MAX_RUNS_PER_MINUTE = 6;
 
 /** Sorting, infinite scroll and in-app navigation change the list after load; rank it again. */
 function scheduleRerun(): void {
+  const now = Date.now();
+  if (rerunTimer === undefined) firstScheduledAt = now;
+  else if (now - firstScheduledAt > RERUN_MAX_WAIT_MS) return;
   clearTimeout(rerunTimer);
   rerunTimer = setTimeout(() => {
-    const now = Date.now();
-    while (runTimes.length > 0 && now - runTimes[0]! > 60_000) runTimes.shift();
+    rerunTimer = undefined;
+    const at = Date.now();
+    while (runTimes.length > 0 && at - runTimes[0]! > 60_000) runTimes.shift();
     if (runTimes.length >= MAX_RUNS_PER_MINUTE) return scheduleRerun();
-    // Some apps change the URL before swapping the list; wait for the new cards.
-    if (sameList(detectList(document))) return;
+    const list = detectList(document);
+    if (!list || sameList(list) || rejected.get(list.container) === list.cards.size) return;
     watcher?.disconnect();
     watcher = null;
     current?.undo();
@@ -38,8 +47,8 @@ function scheduleRerun(): void {
   }, RERUN_DELAY_MS);
 }
 
-function sameList(list: DetectedList | null): boolean {
-  if (!list || !lastList || list.container !== lastList.container || list.cards.size !== lastList.cards.size) return false;
+function sameList(list: DetectedList): boolean {
+  if (!lastList || list.container !== lastList.container || list.cards.size !== lastList.cards.size) return false;
   return [...list.cards.values()].every((el) => lastList!.cards.has(el));
 }
 
@@ -54,6 +63,20 @@ function watch(container: Element, cards: Iterable<Element>): void {
   });
   watcher.observe(container, { childList: true });
   if (container.parentElement) watcher.observe(container.parentElement, { childList: true });
+}
+
+/** No rankable list yet (still loading, or the wrong group was found): look again when the page changes. */
+function watchPage(): void {
+  watcher?.disconnect();
+  watcher = new MutationObserver((records) => {
+    if (records.some((r) => [...r.addedNodes].some((n) => n.nodeType === 1 && !(n as Element).hasAttribute("data-focal")))) scheduleRerun();
+  });
+  watcher.observe(document.body, { childList: true, subtree: true });
+}
+
+function reject(list: DetectedList): void {
+  rejected.set(list.container, list.cards.size);
+  watchPage();
 }
 
 /** guards → list detection → identify → rank → apply (§4.1). */
@@ -71,9 +94,15 @@ async function run(gateMs?: number): Promise<void> {
   if (!eligibility.eligible) return;
 
   const list = detectList(document);
-  if (!list) return;
+  if (!list) return watchPage();
   lastList = { container: list.container, cards: new Set(list.cards.values()) };
   watch(list.container, list.cards.values());
+
+  const cards = snapshotCards(list);
+  // Apps can change the URL (and its search box) before swapping the list; cards keep the context they came with.
+  const key = cards.map((c) => c.snippets[0] ?? "").sort().join("\n");
+  const hints = last?.key === key ? last.hints : cityHints(document);
+  last = { key, hints };
 
   const gate = createGate(list.container as HTMLElement, gateMs);
   const host = location.hostname.replace(/^www\./, "");
@@ -81,10 +110,12 @@ async function run(gateMs?: number): Promise<void> {
 
   const identified = await send<IdentifyResponse>({
     type: "identify",
-    body: { host, pathPattern: pattern, signature: list.signature, cityHints: cityHints(document), cards: snapshotCards(list) },
+    body: { host, pathPattern: pattern, signature: list.signature, cityHints: hints, cards },
   });
-  if (gen !== generation || !identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
+  if (gen !== generation) return gate.cancel();
+  if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
     gate.cancel();
+    if (identified.ok) reject(list);
     return;
   }
 
@@ -92,7 +123,8 @@ async function run(gateMs?: number): Promise<void> {
     type: "rank",
     body: { host, pathPattern: pattern, pageType: identified.data.pageType, items: identified.data.items },
   });
-  if (gen !== generation || !ranked.ok || !ranked.data.plan) {
+  if (gen !== generation) return gate.cancel();
+  if (!ranked.ok || !ranked.data.plan) {
     gate.cancel();
     return;
   }
@@ -111,6 +143,7 @@ let lastHref = location.href;
 setInterval(() => {
   if (location.href === lastHref) return;
   lastHref = location.href;
+  rejected = new WeakMap();
   scheduleRerun();
 }, 1000);
 
