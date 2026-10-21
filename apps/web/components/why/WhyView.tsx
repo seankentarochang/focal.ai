@@ -12,12 +12,17 @@ const STATUS_COPY: Record<string, string> = {
 
 const OUTCOME: Record<WhyItem["outcome"], { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   lifted: { label: "Lifted", variant: "default" },
-  kept: { label: "Kept in place", variant: "outline" },
+  kept: { label: "Site order", variant: "outline" },
   folded: { label: "Folded", variant: "secondary" },
   disliked: { label: "You dislike this", variant: "destructive" },
   unscored: { label: "Not scored", variant: "outline" },
   skipped: { label: "Skipped", variant: "outline" },
 };
+
+function outcomeLabel(item: WhyItem): string {
+  if (item.outcome === "kept" && item.moved < 0) return "Below your picks";
+  return OUTCOME[item.outcome].label;
+}
 
 function Movement({ moved }: { moved: number }) {
   if (moved > 0)
@@ -124,7 +129,7 @@ export function WhyView({ view }: { view: View }) {
                     {item.affinity === undefined ? <span className="text-muted">—</span> : item.affinity.toFixed(3)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={OUTCOME[item.outcome].variant}>{OUTCOME[item.outcome].label}</Badge>
+                    <Badge variant={OUTCOME[item.outcome].variant}>{outcomeLabel(item)}</Badge>
                   </TableCell>
                 </TableRow>
               ))}
