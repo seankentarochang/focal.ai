@@ -4,6 +4,8 @@ export const MIN_CARDS = 3;
 export const MAX_SNIPPETS = 6;
 export const MAX_SNIPPET_LENGTH = 80;
 export const MAX_LINKS = 4;
+/** Server cap per identify call; cards past it keep their site order. */
+export const MAX_CARDS = 60;
 
 export interface DetectedList {
   container: Element;
@@ -190,7 +192,7 @@ export function detectList(root: Document | Element): DetectedList | null {
 }
 
 export function snapshotCards(list: DetectedList, base?: string): CardSnapshot[] {
-  return [...list.cards].map(([clientId, el]) => ({
+  return [...list.cards].slice(0, MAX_CARDS).map(([clientId, el]) => ({
     clientId,
     snippets: extractSnippets(el),
     links: extractLinks(el, base),

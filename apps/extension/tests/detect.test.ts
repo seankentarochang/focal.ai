@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JSDOM } from "jsdom";
-import { cityHints, detectList, extractLinks, extractSnippets, snapshotCards } from "../src/detect/detect";
+import { MAX_CARDS, cityHints, detectList, extractLinks, extractSnippets, snapshotCards } from "../src/detect/detect";
 import { pathPattern } from "../src/api";
 import { ARTICLE, BOOK_LIST, RESTAURANT_GRID } from "./fixtures";
 
@@ -70,6 +70,16 @@ describe("extraction", () => {
     const snap = snapshotCards(detectList(d)!);
     expect(snap).toHaveLength(4);
     expect(JSON.stringify(snap)).not.toMatch(/<|class=/);
+  });
+
+  it("snapshots at most MAX_CARDS cards, in page order", () => {
+    const rows = Array.from({ length: 100 }, (_, i) => `<li><a href="/book/${i}">Book ${i}</a><span>Author ${i}</span></li>`).join("");
+    const list = detectList(page(`<ul>${rows}</ul>`))!;
+    expect(list.cards.size).toBe(100);
+    const snap = snapshotCards(list);
+    expect(snap).toHaveLength(MAX_CARDS);
+    expect(snap[0]!.clientId).toBe("c0");
+    expect(snap.at(-1)!.clientId).toBe(`c${MAX_CARDS - 1}`);
   });
 
   it("collects city hints from params, inputs and the heading", () => {
