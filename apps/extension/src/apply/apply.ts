@@ -63,12 +63,30 @@ function sequenceFor(container: Element, cards: Map<string, Element>, order: str
   return [...container.children].map((child) => (cardSet.has(child) ? (queue.shift() ?? child) : child));
 }
 
-/** Where a label goes: inside the main cell for table rows, else the card itself. */
+const hasTitleLink = (el: Element) => !!el.querySelector("a[href]") && (el.textContent ?? "").trim().length > 1;
+
+/**
+ * Where a label goes: the main cell for table rows, the text column for
+ * side-by-side (flex/grid) cards, else the card itself.
+ */
 function labelSlot(card: HTMLElement): HTMLElement {
-  if (card.tagName !== "TR") return card;
-  const cells = [...card.children].filter((c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH");
-  const withLink = cells.find((c) => c.querySelector("a[href]") && (c.textContent ?? "").trim().length > 1);
-  return withLink ?? cells.find((c) => (c.textContent ?? "").trim().length > 1) ?? cells[0] ?? card;
+  if (card.tagName === "TR") {
+    const cells = [...card.children].filter((c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH");
+    return cells.find(hasTitleLink) ?? cells.find((c) => (c.textContent ?? "").trim().length > 1) ?? cells[0] ?? card;
+  }
+  let slot = card;
+  let el: HTMLElement = card;
+  for (let depth = 0; depth < 4 && !/^(A|BUTTON)$/.test(el.tagName); depth++) {
+    const kids = [...el.children].filter((c): c is HTMLElement => !c.hasAttribute(FOCAL_ATTR));
+    if (kids.length === 1) {
+      el = kids[0]!;
+      continue;
+    }
+    const text = kids.length > 1 && isFlexOrGrid(el) ? kids.find((k) => k.tagName !== "A" && hasTitleLink(k)) : undefined;
+    if (!text) break;
+    slot = el = text;
+  }
+  return slot;
 }
 
 const LABEL_STYLE: Record<string, string> = {

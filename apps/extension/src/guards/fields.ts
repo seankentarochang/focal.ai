@@ -21,7 +21,8 @@ export function hasSensitiveField(root: ParentNode): boolean {
   }
   for (const input of root.querySelectorAll<HTMLInputElement>("input, select")) {
     const ac = input.getAttribute("autocomplete") ?? "";
-    if (PAYMENT_AUTOCOMPLETE.test(ac) || ac.includes("current-password") || ac.includes("new-password")) return true;
+    if (PAYMENT_AUTOCOMPLETE.test(ac)) return true;
+    if ((ac.includes("current-password") || ac.includes("new-password")) && rendered(input)) return true;
     const key = `${input.getAttribute("name") ?? ""} ${input.id} ${input.getAttribute("data-elements-stable-field-name") ?? ""}`;
     if (PAYMENT_NAME.test(key)) return true;
   }

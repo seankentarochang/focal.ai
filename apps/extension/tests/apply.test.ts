@@ -44,6 +44,15 @@ describe("applyPlan", () => {
     expect(titles(list.container.children)).toEqual(["Circe", "The Overstory", "Piranesi", "Klara and the Sun", "Pachinko"]);
   });
 
+  it("puts labels in the text column of side-by-side cards", () => {
+    const cards = ["Dune", "Emma", "Ulysses"].map((t, i) => `<li><div style="display:flex"><div><a href="/t/${i}"><img alt="${t} poster"></a></div><div><a href="/t/${i}"><h3>${t}</h3></a><span>2021</span></div></div></li>`).join("");
+    const d = page(`<ul>${cards}</ul>`);
+    const list = detectList(d)!;
+    applyPlan(list, plan([{ op: "annotate", containerId: "x", clientId: "c1", text: "Top pick for you", badge: "top-pick" }], 0));
+    const label = d.querySelector('[data-focal="label"]')!;
+    expect(label.nextElementSibling!.querySelector("h3")!.textContent).toBe("Emma");
+  });
+
   it("puts labels inside a cell for table rows", () => {
     const rows = ["Dune", "Emma", "Ulysses", "Beloved"].map((t, i) => `<tr><td>${i + 1}</td><td><a href="/book/${i}"><b>${t}</b></a><span>Author ${i}</span></td><td>4.${i}</td></tr>`).join("");
     const d = page(`<table><tbody>${rows}</tbody></table>`);

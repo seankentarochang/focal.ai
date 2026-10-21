@@ -3,7 +3,7 @@ import { pathPattern } from "./api";
 import { applyPlan, type ApplyHandle } from "./apply/apply";
 import { createGate } from "./apply/gate";
 import { FOCAL_HOSTS } from "./config";
-import { cityHints, detectList, snapshotCards } from "./detect/detect";
+import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
 import { checkEligibility } from "./guards/eligibility";
 import { getSettings } from "./storage";
 
@@ -15,6 +15,8 @@ let current: ApplyHandle | null = null;
 let watcher: MutationObserver | null = null;
 let rerunTimer: ReturnType<typeof setTimeout> | undefined;
 const runTimes: number[] = [];
+let generation = 0;
+let lastList: { container: Element; cards: Set<Element> } | null = null;
 
 const RERUN_DELAY_MS = 1000;
 const MAX_RUNS_PER_MINUTE = 6;
@@ -26,12 +28,19 @@ function scheduleRerun(): void {
     const now = Date.now();
     while (runTimes.length > 0 && now - runTimes[0]! > 60_000) runTimes.shift();
     if (runTimes.length >= MAX_RUNS_PER_MINUTE) return scheduleRerun();
+    // Some apps change the URL before swapping the list; wait for the new cards.
+    if (sameList(detectList(document))) return;
     watcher?.disconnect();
     watcher = null;
     current?.undo();
     current = null;
     void run(0);
   }, RERUN_DELAY_MS);
+}
+
+function sameList(list: DetectedList | null): boolean {
+  if (!list || !lastList || list.container !== lastList.container || list.cards.size !== lastList.cards.size) return false;
+  return [...list.cards.values()].every((el) => lastList!.cards.has(el));
 }
 
 function watch(container: Element, cards: Iterable<Element>): void {
@@ -50,6 +59,7 @@ function watch(container: Element, cards: Iterable<Element>): void {
 /** guards → list detection → identify → rank → apply (§4.1). */
 async function run(gateMs?: number): Promise<void> {
   runTimes.push(Date.now());
+  const gen = ++generation;
   const settings = await getSettings();
   const eligibility = checkEligibility({
     url: location.href,
@@ -62,6 +72,7 @@ async function run(gateMs?: number): Promise<void> {
 
   const list = detectList(document);
   if (!list) return;
+  lastList = { container: list.container, cards: new Set(list.cards.values()) };
   watch(list.container, list.cards.values());
 
   const gate = createGate(list.container as HTMLElement, gateMs);
@@ -72,7 +83,7 @@ async function run(gateMs?: number): Promise<void> {
     type: "identify",
     body: { host, pathPattern: pattern, signature: list.signature, cityHints: cityHints(document), cards: snapshotCards(list) },
   });
-  if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
+  if (gen !== generation || !identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
     gate.cancel();
     return;
   }
@@ -81,12 +92,13 @@ async function run(gateMs?: number): Promise<void> {
     type: "rank",
     body: { host, pathPattern: pattern, pageType: identified.data.pageType, items: identified.data.items },
   });
-  if (!ranked.ok || !ranked.data.plan) {
+  if (gen !== generation || !ranked.ok || !ranked.data.plan) {
     gate.cancel();
     return;
   }
   const { plan, pageResultId } = ranked.data;
   gate.ready(() => {
+    if (gen !== generation) return;
     current?.undo();
     current = applyPlan(list, plan, {
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
