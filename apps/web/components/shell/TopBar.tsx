@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { HealthResponse, PageId, SurfaceMode } from "@/lib/client/types";
+import { AccountMenu } from "@/components/site/AccountMenu";
 import { ModeSwitcher } from "./ModeSwitcher";
 import { StatusBadge } from "./StatusBadge";
 
@@ -97,6 +98,8 @@ export function TopBar({
               Reset
             </button>
           ) : null}
+
+          <AccountMenu />
         </div>
       </div>
     </header>

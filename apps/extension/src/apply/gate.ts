@@ -1,3 +1,5 @@
+import { blockAnchor, decorate } from "./ui";
+
 export const GATE_MS = 300;
 
 export type GateOutcome = "before-reveal" | "late-applied" | "late-offered" | "cancelled";
@@ -49,12 +51,11 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
   const timer = setTimeout(() => {
     reveal();
     if (settled) return;
-    chip = doc.createElement("div");
+    chip = decorate(doc.createElement("div"), "chip");
     chip.setAttribute("data-focal", "chip");
     chip.setAttribute("role", "status");
-    chip.setAttribute("style", "margin:8px 0;padding:4px 10px;border-radius:999px;display:inline-block;background:#eef2ff;color:#1e3a8a;font:500 12px/1.5 system-ui,sans-serif");
     chip.textContent = "focal is ranking…";
-    container.before(chip);
+    blockAnchor(container).before(chip);
   }, ms);
 
   return {
@@ -82,7 +83,7 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
       }
       detach();
       if (chip) {
-        chip.textContent = "focal found matches · ";
+        chip.textContent = "focal found matches";
         const button = doc.createElement("button");
         button.type = "button";
         button.setAttribute("data-focal", "apply");

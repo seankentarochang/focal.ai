@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+// React's development build uses eval() to rebuild server error stacks; production never does.
+const devEval = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -12,7 +15,7 @@ const securityHeaders = [
     // nonce-based CSP is post-hackathon work.
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src 'self' 'unsafe-inline'${devEval}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "connect-src 'self'",

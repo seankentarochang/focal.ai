@@ -110,7 +110,7 @@ export function parseJevAnswers(body: IdentifyBody, payload: unknown): PageAnswe
       clientId: card.clientId,
       name: nameMatch ? (card.snippets[Number(nameMatch[1])] ?? null) : null,
       type: mappedType,
-      city: cityMatch ? (body.cityHints[Number(cityMatch[1])] ?? null) : null,
+      city: cityMatch && (mappedType === "place" || mappedType === "destination") ? (body.cityHints[Number(cityMatch[1])] ?? null) : null,
       confidence: Math.min(num(name.confidence), num(type.confidence)),
     };
   });

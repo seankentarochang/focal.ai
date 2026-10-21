@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JSDOM } from "jsdom";
-import { cityHints, detectList, extractLinks, extractSnippets, snapshotCards } from "../src/detect/detect";
+import { MAX_CARDS, cityHints, detectList, extractLinks, extractSnippets, snapshotCards } from "../src/detect/detect";
 import { pathPattern } from "../src/api";
 import { ARTICLE, BOOK_LIST, RESTAURANT_GRID } from "./fixtures";
 
@@ -72,9 +72,40 @@ describe("extraction", () => {
     expect(JSON.stringify(snap)).not.toMatch(/<|class=/);
   });
 
+  it("snapshots at most MAX_CARDS cards, in page order", () => {
+    const rows = Array.from({ length: 100 }, (_, i) => `<li><a href="/book/${i}">Book ${i}</a><span>Author ${i}</span></li>`).join("");
+    const list = detectList(page(`<ul>${rows}</ul>`))!;
+    expect(list.cards.size).toBe(100);
+    const snap = snapshotCards(list);
+    expect(snap).toHaveLength(MAX_CARDS);
+    expect(snap[0]!.clientId).toBe("c0");
+    expect(snap.at(-1)!.clientId).toBe(`c${MAX_CARDS - 1}`);
+  });
+
   it("collects city hints from params, inputs and the heading", () => {
     const d = page(RESTAURANT_GRID, "https://www.yelp.com/search?find_desc=ramen&find_loc=Brooklyn%2C+NY");
     expect(cityHints(d)).toEqual(["Brooklyn, NY", "ramen", "Best ramen in Brooklyn"]);
+  });
+});
+
+describe("city hints", () => {
+  it("reads the place from a Maps search path and skips generic headings", () => {
+    const d = page("<h1>Results</h1>", "https://www.google.com/maps/search/restaurants+near+San+Francisco/@37.7,-122.4,13z");
+    expect(cityHints(d)).toEqual(["San Francisco"]);
+  });
+  it("reads the place from a search query", () => {
+    const d = page("<h1>Score</h1>", "https://www.example.com/search?q=ramen%20in%20Oakland");
+    expect(cityHints(d)).toEqual(["Oakland"]);
+  });
+});
+
+describe("poster grids", () => {
+  it("detects cards that only have an image title", () => {
+    const films = ["Dune", "Past Lives", "Aftersun", "Perfect Days", "Anatomy of a Fall", "Oppenheimer"];
+    const d = page(`<nav><a href="/sort">Sort</a></nav><ul class="posters">${films.map((f, i) => `<li><a href="/film/${i}/"><img src="/p${i}.jpg" alt="${f}"></a></li>`).join("")}</ul>`);
+    const list = detectList(d)!;
+    expect(list.cards.size).toBe(6);
+    expect(snapshotCards(list)[1]!.snippets).toEqual(["Past Lives"]);
   });
 });
 

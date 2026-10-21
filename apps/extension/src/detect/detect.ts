@@ -4,6 +4,8 @@ export const MIN_CARDS = 3;
 export const MAX_SNIPPETS = 6;
 export const MAX_SNIPPET_LENGTH = 80;
 export const MAX_LINKS = 4;
+/** Server cap per identify call; cards past it keep their site order. */
+export const MAX_CARDS = 60;
 
 export interface DetectedList {
   container: Element;
@@ -92,7 +94,11 @@ export function extractSnippets(card: Element): string[] {
   };
   visit(card);
   if (out.length === 0) {
-    const label = card.querySelector("[aria-label]")?.getAttribute("aria-label") ?? card.getAttribute("aria-label");
+    const label =
+      card.getAttribute("aria-label") ??
+      card.querySelector("[aria-label]")?.getAttribute("aria-label") ??
+      card.querySelector("img[alt]:not([alt=''])")?.getAttribute("alt") ??
+      card.querySelector("[title]")?.getAttribute("title");
     if (label && clean(label)) out.push(truncate(clean(label)));
   }
   return out;
@@ -146,7 +152,9 @@ function scoreGroup(container: Element, cards: Element[]): number {
   }
   if (titled < Math.max(MIN_CARDS, Math.ceil(cards.length * 0.6))) return 0;
   const avgSnippets = snippetTotal / cards.length;
-  if (avgSnippets < 1.5) return 0;
+  // Poster grids carry one title each (image alt); accept them when every card has an image or link.
+  const minSnippets = rich === cards.length && cards.length >= 6 ? 1 : 1.5;
+  if (avgSnippets < minSnippets) return 0;
   const shapes = new Set(cards.map(shape));
   const uniformity = 1 / shapes.size ** 0.5;
   const richness = 0.5 + rich / cards.length;
@@ -190,7 +198,7 @@ export function detectList(root: Document | Element): DetectedList | null {
 }
 
 export function snapshotCards(list: DetectedList, base?: string): CardSnapshot[] {
-  return [...list.cards].map(([clientId, el]) => ({
+  return [...list.cards].slice(0, MAX_CARDS).map(([clientId, el]) => ({
     clientId,
     snippets: extractSnippets(el),
     links: extractLinks(el, base),
@@ -198,6 +206,25 @@ export function snapshotCards(list: DetectedList, base?: string): CardSnapshot[]
 }
 
 const CITY_PARAMS = ["location", "loc", "city", "near", "where", "l", "destination", "find_loc", "geo"];
+const QUERY_PARAMS = ["q", "query", "search", "find_desc", "keyword"];
+const GENERIC_HINT = /^(results?|search( results)?|scores?|home|explore|top|best|lists?|filters?|sort( by)?|maps?)$/i;
+
+/** "restaurants near San Francisco" -> "San Francisco". */
+function locationPhrase(query: string | null | undefined): string | null {
+  const m = /\b(?:near|in|around)\s+(.{2,})$/i.exec(clean(query ?? ""));
+  return m ? m[1]! : null;
+}
+
+function searchPathQuery(pathname: string): string | null {
+  const m = /\/search\/([^/@]+)/.exec(pathname);
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1]!.replace(/\+/g, " "));
+  } catch {
+    return null;
+  }
+}
+
 const CITY_INPUT = 'input[type="search" i], input[name="location" i], input[name="city" i], input[name="near" i], input[name="where" i], input[name="find_loc" i], input[name="destination" i], input[aria-label*="location" i], input[placeholder*="city" i], input[placeholder*="location" i]';
 
 /**
@@ -208,17 +235,22 @@ export function cityHints(doc: Document, href?: string): string[] {
   const out: string[] = [];
   const add = (v: string | null | undefined) => {
     const t = clean(v ?? "");
+    if (GENERIC_HINT.test(t)) return;
     if (t.length >= 2 && t.length <= MAX_SNIPPET_LENGTH && !out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t);
   };
   try {
     const url = new URL(href ?? doc.location?.href ?? "");
     for (const p of CITY_PARAMS) add(url.searchParams.get(p));
+    for (const p of QUERY_PARAMS) add(locationPhrase(url.searchParams.get(p)));
+    add(locationPhrase(searchPathQuery(url.pathname)));
   } catch {
     // No usable URL.
   }
   for (const input of doc.querySelectorAll<HTMLInputElement>(CITY_INPUT)) {
     if (input.type === "password") continue;
-    add(input.value || input.getAttribute("value"));
+    const value = input.value || input.getAttribute("value");
+    add(locationPhrase(value));
+    add(value);
   }
   add(doc.querySelector("h1")?.textContent);
   return out.slice(0, 5);
