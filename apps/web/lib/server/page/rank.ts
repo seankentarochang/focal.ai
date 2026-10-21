@@ -30,6 +30,12 @@ function pageInsights(): PageInsightsFn {
   };
 }
 
+/** The extension names cards `c<n>` in page order, so gaps from unidentified cards keep true positions. */
+function pagePosition(clientId: string): number | undefined {
+  const m = /^c(\d{1,4})$/.exec(clientId);
+  return m ? Number(m[1]) : undefined;
+}
+
 function mostCommonCity(body: PageRankBody): string | undefined {
   const counts = new Map<string, number>();
   for (const item of body.items) if (item.city) counts.set(item.city, (counts.get(item.city) ?? 0) + 1);
@@ -39,13 +45,14 @@ function mostCommonCity(body: PageRankBody): string | undefined {
 /** Server side of the extension's rank request: one insights call, lift-only plan. */
 export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: string): Promise<PageRankResult> {
   const pageType = toInsightType(body.pageType);
-  const items: PageItem[] = body.items.map((item, originalIndex) => {
+  const items: PageItem[] = body.items.map((item, i) => {
+    const located = item.type === "place" || item.type === "destination";
     return {
       clientId: item.clientId,
       name: item.name,
-      originalIndex,
+      originalIndex: pagePosition(item.clientId) ?? i,
       type: toInsightType(item.type),
-      ...(item.city ? { city: item.city } : {}),
+      ...(item.city && located ? { city: item.city } : {}),
     };
   });
   const locationQuery = body.pageType === "place" || body.pageType === "destination" ? mostCommonCity(body) : undefined;

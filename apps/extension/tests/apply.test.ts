@@ -37,6 +37,32 @@ describe("applyPlan", () => {
     expect(titles(list.container.children)).toEqual(["Pachinko", "Circe", "sep", "The Overstory", "Piranesi", "Klara and the Sun"]);
   });
 
+  it("keeps cards the plan doesn't know in their place among the others", () => {
+    const d = page(BOOK_LIST);
+    const list = detectList(d)!;
+    applyPlan(list, plan([{ op: "reorder", containerId: "x", order: ["c3", "c0", "c4"] }], 1));
+    expect(titles(list.container.children)).toEqual(["Circe", "The Overstory", "Piranesi", "Klara and the Sun", "Pachinko"]);
+  });
+
+  it("puts labels inside a cell for table rows", () => {
+    const rows = ["Dune", "Emma", "Ulysses", "Beloved"].map((t, i) => `<tr><td>${i + 1}</td><td><a href="/book/${i}"><b>${t}</b></a><span>Author ${i}</span></td><td>4.${i}</td></tr>`).join("");
+    const d = page(`<table><tbody>${rows}</tbody></table>`);
+    const list = detectList(d)!;
+    expect(list.container.tagName).toBe("TBODY");
+    const handle = applyPlan(
+      list,
+      plan([
+        { op: "reorder", containerId: "x", order: ["c2", "c0", "c1", "c3"] },
+        { op: "annotate", containerId: "x", clientId: "c2", text: "Top pick for you", badge: "top-pick" },
+      ]),
+    );
+    const label = d.querySelector('[data-focal="label"]')!;
+    expect(label.parentElement!.tagName).toBe("TD");
+    expect([...d.querySelectorAll("tr")].every((tr) => [...tr.children].every((c) => c.tagName === "TD"))).toBe(true);
+    handle.undo();
+    expect(d.querySelector('[data-focal="label"]')).toBeNull();
+  });
+
   it("Undo restores the original DOM order and removes everything focal added", () => {
     const d = page(BOOK_LIST);
     const list = detectList(d)!;

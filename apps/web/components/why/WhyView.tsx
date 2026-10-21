@@ -58,7 +58,11 @@ export function WhyView({ view }: { view: View }) {
       <div className="flex flex-col gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Why this order?</p>
         <h1 className="text-2xl font-semibold tracking-tight text-ink">{view.hostname}</h1>
-        <p className="text-sm text-muted">{STATUS_COPY[view.status] ?? `Status: ${view.status}`}</p>
+        <p className="text-sm text-muted">
+          {view.status === "ranked" && view.counts.lifted === 0
+            ? "Nothing stood out clearly enough to move, so the site's order was kept."
+            : (STATUS_COPY[view.status] ?? `Status: ${view.status}`)}
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

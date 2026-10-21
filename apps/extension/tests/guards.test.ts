@@ -48,6 +48,10 @@ describe("sensitive fields", () => {
   it("detects password inputs", () => {
     expect(hasSensitiveField(doc('<input type="password">'))).toBe(true);
   });
+  it("ignores password inputs the user can't see", () => {
+    expect(hasSensitiveField(doc('<div hidden><input type="password"></div>'))).toBe(false);
+    expect(hasSensitiveField(doc('<form style="display:none"><input type="password"></form>'))).toBe(false);
+  });
   it("detects payment autocomplete, names and frames", () => {
     expect(hasSensitiveField(doc('<input autocomplete="cc-number">'))).toBe(true);
     expect(hasSensitiveField(doc('<input name="cvc">'))).toBe(true);

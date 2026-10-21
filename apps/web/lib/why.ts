@@ -68,15 +68,23 @@ export function buildWhyView(row: StoredPageResult): WhyView {
   const plan = row.plan && Array.isArray(asObject(row.plan).ops) ? (row.plan as RenderPlan) : null;
   const meta = asObject(row.meta) as Meta;
   const byId = new Map(items.map((i) => [i.clientId, i]));
-  const view: WhyItem[] = finalOrder(items, plan).map((id, index) => {
+  const order = finalOrder(items, plan);
+  const liftedIdx = plan ? order.map((id) => byId.get(id)!).filter((i) => i.outcome === "lifted").map((i) => i.originalIndex) : [];
+  // Positions on the page: lifted items go to the top, everything else shifts down past them.
+  const pagePosition = (item: PageResultItem): number => {
+    const rank = item.outcome === "lifted" ? liftedIdx.indexOf(item.originalIndex) : -1;
+    return rank >= 0 ? rank + 1 : item.originalIndex + 1 + liftedIdx.filter((i) => i > item.originalIndex).length;
+  };
+  const view: WhyItem[] = order.map((id) => {
     const item = byId.get(id)!;
     const originalPosition = item.originalIndex + 1;
+    const finalPosition = pagePosition(item);
     return {
       clientId: item.clientId,
       name: item.name,
       originalPosition,
-      finalPosition: index + 1,
-      moved: originalPosition - (index + 1),
+      finalPosition,
+      moved: originalPosition - finalPosition,
       status: item.status,
       outcome: item.outcome,
       ...(item.entityName ? { entityName: item.entityName } : {}),

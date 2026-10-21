@@ -41,15 +41,34 @@ function make(doc: Document, tag: string, kind: string, text?: string): HTMLElem
 }
 
 /**
- * New child sequence for the container: card slots are refilled in plan
- * order, anything that is not a card (ads, separators) keeps its slot.
+ * New child sequence for the container: lifted cards first, then every other
+ * card. Cards the plan doesn't know (unidentified, past the 60-card cap) keep
+ * their place among the others. Anything that is not a card keeps its slot.
  */
-function sequenceFor(container: Element, cards: Map<string, Element>, order: string[]): Element[] {
-  const cardSet = new Set(cards.values());
-  const ordered = order.map((id) => cards.get(id)).filter((el): el is Element => !!el && el.parentElement === container);
-  const rest = [...cards.values()].filter((el) => el.parentElement === container && !ordered.includes(el));
-  const queue = [...ordered, ...rest];
+function sequenceFor(container: Element, cards: Map<string, Element>, order: string[], lifted: number): Element[] {
+  const inContainer = [...cards.values()].filter((el) => el.parentElement === container);
+  const cardSet = new Set(inContainer);
+  const pick = (ids: string[]) => ids.map((id) => cards.get(id)).filter((el): el is Element => !!el && cardSet.has(el));
+  const top = pick(order.slice(0, lifted));
+  const planned = pick(order.slice(lifted));
+  const known = new Set([...top, ...planned]);
+  const pending = inContainer.filter((el) => !known.has(el));
+  const pos = new Map(inContainer.map((el, i) => [el, i]));
+  const queue = [...top];
+  for (const el of planned) {
+    while (pending.length > 0 && pos.get(pending[0]!)! < pos.get(el)!) queue.push(pending.shift()!);
+    queue.push(el);
+  }
+  queue.push(...pending);
   return [...container.children].map((child) => (cardSet.has(child) ? (queue.shift() ?? child) : child));
+}
+
+/** Where a label goes: inside the main cell for table rows, else the card itself. */
+function labelSlot(card: HTMLElement): HTMLElement {
+  if (card.tagName !== "TR") return card;
+  const cells = [...card.children].filter((c): c is HTMLElement => c.tagName === "TD" || c.tagName === "TH");
+  const withLink = cells.find((c) => c.querySelector("a[href]") && (c.textContent ?? "").trim().length > 1);
+  return withLink ?? cells.find((c) => (c.textContent ?? "").trim().length > 1) ?? cells[0] ?? card;
 }
 
 const LABEL_STYLE: Record<string, string> = {
@@ -94,8 +113,8 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
   let active = true;
 
   const reorder = plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder");
-  const sequence = reorder ? sequenceFor(container, cards, reorder.order) : originalChildren;
   const lifted = plan.summary.lifted ?? plan.summary.moved;
+  const sequence = reorder ? sequenceFor(container, cards, reorder.order, lifted) : originalChildren;
   const handle: ApplyHandle = {
     mode,
     lifted,
@@ -141,7 +160,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         const card = cards.get(op.clientId) as HTMLElement | undefined;
         if (!card) continue;
         const label = labelElement(doc, op.text, op.badge);
-        card.prepend(label);
+        labelSlot(card).prepend(label);
         inserted.push(label);
       } else if (op.op === "emphasize") {
         const card = cards.get(op.clientId) as HTMLElement | undefined;

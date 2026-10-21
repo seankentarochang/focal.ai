@@ -2,9 +2,23 @@ const PAYMENT_AUTOCOMPLETE = /\bcc-(number|csc|exp|exp-month|exp-year|name|type)
 const PAYMENT_NAME = /(card.?number|cardnum|ccnum|cc-?num|cvc|cvv|security.?code|iban|routing.?number|account.?number)/i;
 const PAYMENT_FRAME = /(js\.stripe\.com|checkout\.stripe\.com|braintreegateway\.com|adyen\.com|checkout\.com|paypal\.com|squareup\.com|recurly\.com)/i;
 
-/** True when the page has a password or payment field (§5.1). */
+/** False for fields the user can't see, like a closed sign-in dialog. */
+function rendered(el: HTMLElement): boolean {
+  if (typeof el.checkVisibility === "function") return el.checkVisibility({ visibilityProperty: true });
+  const view = el.ownerDocument.defaultView;
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    if (n.hasAttribute("hidden")) return false;
+    const style = view?.getComputedStyle(n);
+    if (style && (style.display === "none" || style.visibility === "hidden")) return false;
+  }
+  return true;
+}
+
+/** True when the page shows a password field or has a payment field (§5.1). */
 export function hasSensitiveField(root: ParentNode): boolean {
-  if (root.querySelector('input[type="password" i]')) return true;
+  for (const input of root.querySelectorAll<HTMLInputElement>('input[type="password" i]')) {
+    if (rendered(input)) return true;
+  }
   for (const input of root.querySelectorAll<HTMLInputElement>("input, select")) {
     const ac = input.getAttribute("autocomplete") ?? "";
     if (PAYMENT_AUTOCOMPLETE.test(ac) || ac.includes("current-password") || ac.includes("new-password")) return true;

@@ -60,6 +60,14 @@ describe("Jev answers", () => {
     expect(selectIdentified(page).items).toEqual([{ clientId: "c0", name: "Rintaro", type: "place", city: "San Francisco, CA" }]);
   });
 
+  it("only keeps a city for places and destinations", () => {
+    const page = parseJevAnswers(
+      { ...body, cards: [body.cards[1]!] },
+      { answers: { is_list: { noul: 0.9 }, c0_name: { choice: "s0", confidence: 1 }, c0_type: { choice: "movie", confidence: 1 }, c0_city: { choice: "h0", confidence: 0.9 } } },
+    );
+    expect(page.cards[0]!.city).toBeNull();
+  });
+
   it("maps video_game to videogame and treats a low is_list as no list", () => {
     const page = parseJevAnswers(
       { ...body, cards: [body.cards[1]!] },

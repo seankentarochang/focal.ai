@@ -88,6 +88,27 @@ describe("extraction", () => {
   });
 });
 
+describe("city hints", () => {
+  it("reads the place from a Maps search path and skips generic headings", () => {
+    const d = page("<h1>Results</h1>", "https://www.google.com/maps/search/restaurants+near+San+Francisco/@37.7,-122.4,13z");
+    expect(cityHints(d)).toEqual(["San Francisco"]);
+  });
+  it("reads the place from a search query", () => {
+    const d = page("<h1>Score</h1>", "https://www.example.com/search?q=ramen%20in%20Oakland");
+    expect(cityHints(d)).toEqual(["Oakland"]);
+  });
+});
+
+describe("poster grids", () => {
+  it("detects cards that only have an image title", () => {
+    const films = ["Dune", "Past Lives", "Aftersun", "Perfect Days", "Anatomy of a Fall", "Oppenheimer"];
+    const d = page(`<nav><a href="/sort">Sort</a></nav><ul class="posters">${films.map((f, i) => `<li><a href="/film/${i}/"><img src="/p${i}.jpg" alt="${f}"></a></li>`).join("")}</ul>`);
+    const list = detectList(d)!;
+    expect(list.cards.size).toBe(6);
+    expect(snapshotCards(list)[1]!.snippets).toEqual(["Past Lives"]);
+  });
+});
+
 describe("pathPattern", () => {
   it("generalises ids and lowercases", () => {
     expect(pathPattern("/biz/12345/Reviews")).toBe("/biz/:id/reviews");
