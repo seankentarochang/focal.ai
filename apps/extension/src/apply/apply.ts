@@ -115,7 +115,7 @@ const LABEL_STYLE: Record<string, string> = {
   "good-match": "background:#18181b;color:#fafafa;border:1px solid #3f3f46",
 };
 
-function labelElement(doc: Document, text: string, badge: string | undefined): HTMLElement {
+function labelElement(doc: Document, text: string, badge: string | undefined, compact = false): HTMLElement {
   const kind = badge === "top-pick" ? "top-pick" : "good-match";
   const host = make(doc, "focal-label", "label");
   host.setAttribute("data-badge", badge ?? "good-match");
@@ -129,9 +129,12 @@ function labelElement(doc: Document, text: string, badge: string | undefined): H
       LABEL_STYLE[kind],
   );
   if (kind === "top-pick") span.insertAdjacentHTML("afterbegin", sparkleSvg());
-  span.append(doc.createTextNode(text));
+  // Narrow tiles (poster grids) get the short form; the full reason stays in the tooltip.
+  span.append(doc.createTextNode(compact ? (text.split(" · ")[0] ?? text) : text));
+  if (compact) span.title = text;
   root.append(span);
-  host.setAttribute("style", "all:initial;display:block");
+  // width:0 + min-width:100% fills the card without letting the label's text widen it.
+  host.setAttribute("style", "all:initial;display:block;width:0;min-width:100%");
   popIn(span);
   return host;
 }
@@ -198,8 +201,10 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
       if (op.op === "annotate") {
         const card = cards.get(op.clientId) as HTMLElement | undefined;
         if (!card) continue;
-        const label = labelElement(doc, op.text, op.badge);
-        labelSlot(card).prepend(label);
+        const slot = labelSlot(card);
+        const width = slot.getBoundingClientRect().width;
+        const label = labelElement(doc, op.text, op.badge, width > 0 && width < 160);
+        slot.prepend(label);
         inserted.push(label);
       } else if (op.op === "emphasize") {
         const card = cards.get(op.clientId) as HTMLElement | undefined;
