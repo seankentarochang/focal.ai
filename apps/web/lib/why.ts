@@ -1,0 +1,116 @@
+import type { LiftLabel, PageResultItem, RenderPlan, SignalSelection } from "@focal-ai/core";
+import type { StoredPageResult } from "@/lib/server/page/store";
+
+export interface WhyItem {
+  clientId: string;
+  name: string;
+  originalPosition: number;
+  finalPosition: number;
+  /** Positions gained; positive means it moved up. */
+  moved: number;
+  status: PageResultItem["status"];
+  outcome: PageResultItem["outcome"];
+  entityName?: string;
+  disambiguation?: string;
+  affinity?: number;
+  z?: number;
+  label?: LiftLabel;
+  boosts: string[];
+  foldedBy: string[];
+}
+
+export interface WhyView {
+  id: string;
+  hostname: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string;
+  items: WhyItem[];
+  signals: SignalSelection;
+  stats: { scored: number; mean?: number; sd?: number };
+  counts: { lifted: number; folded: number; disliked: number; resolved: number; unresolved: number };
+  qlooRequest?: { path: string; params: Record<string, string> };
+  durationMs?: number;
+}
+
+type Meta = Partial<{
+  signals: SignalSelection;
+  stats: WhyView["stats"];
+  resolved: number;
+  unresolved: number;
+  qlooRequest: WhyView["qlooRequest"];
+  durationMs: number;
+}>;
+
+const asObject = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+
+function finalOrder(items: PageResultItem[], plan: RenderPlan | null): string[] {
+  const reorder = plan?.ops.find((op) => op.op === "reorder");
+  const order = reorder?.op === "reorder" ? reorder.order : [];
+  const known = new Set(items.map((i) => i.clientId));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of order) {
+    if (known.has(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  for (const item of [...items].sort((a, b) => a.originalIndex - b.originalIndex)) {
+    if (!seen.has(item.clientId)) out.push(item.clientId);
+  }
+  return out;
+}
+
+/** Shapes a stored page result for the "Why this order?" page, in the order the user saw. */
+export function buildWhyView(row: StoredPageResult): WhyView {
+  const items = Array.isArray(row.items) ? (row.items as PageResultItem[]) : [];
+  const plan = row.plan && Array.isArray(asObject(row.plan).ops) ? (row.plan as RenderPlan) : null;
+  const meta = asObject(row.meta) as Meta;
+  const byId = new Map(items.map((i) => [i.clientId, i]));
+  const view: WhyItem[] = finalOrder(items, plan).map((id, index) => {
+    const item = byId.get(id)!;
+    const originalPosition = item.originalIndex + 1;
+    return {
+      clientId: item.clientId,
+      name: item.name,
+      originalPosition,
+      finalPosition: index + 1,
+      moved: originalPosition - (index + 1),
+      status: item.status,
+      outcome: item.outcome,
+      ...(item.entityName ? { entityName: item.entityName } : {}),
+      ...(item.disambiguation ? { disambiguation: item.disambiguation } : {}),
+      ...(typeof item.affinity === "number" ? { affinity: item.affinity } : {}),
+      ...(typeof item.z === "number" ? { z: item.z } : {}),
+      ...(item.label ? { label: item.label } : {}),
+      boosts: item.boosts ?? [],
+      foldedBy: item.foldedBy ?? [],
+    };
+  });
+  const count = (outcome: PageResultItem["outcome"]) => items.filter((i) => i.outcome === outcome).length;
+  const signals = asObject(meta.signals);
+  return {
+    id: row.id,
+    hostname: row.hostname,
+    status: row.status,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    items: view,
+    signals: {
+      entities: Array.isArray(signals.entities) ? (signals.entities as SignalSelection["entities"]) : [],
+      tags: Array.isArray(signals.tags) ? (signals.tags as SignalSelection["tags"]) : [],
+      localBoosts: Array.isArray(signals.localBoosts) ? (signals.localBoosts as SignalSelection["localBoosts"]) : [],
+    },
+    stats: meta.stats ?? { scored: items.filter((i) => typeof i.affinity === "number").length },
+    counts: {
+      lifted: count("lifted"),
+      folded: count("folded"),
+      disliked: count("disliked"),
+      resolved: meta.resolved ?? items.filter((i) => i.status === "resolved").length,
+      unresolved: meta.unresolved ?? items.filter((i) => i.status === "unresolved").length,
+    },
+    ...(meta.qlooRequest ? { qlooRequest: meta.qlooRequest } : {}),
+    ...(typeof meta.durationMs === "number" ? { durationMs: meta.durationMs } : {}),
+  };
+}

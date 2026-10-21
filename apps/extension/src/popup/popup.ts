@@ -16,15 +16,15 @@ async function main(): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const session = await getSession();
   const settings = await getSettings();
-  $("dashboard").setAttribute("href", `${FOCAL_ORIGIN}/profile`);
+  $("dashboard").setAttribute("href", `${FOCAL_ORIGIN}/chat`);
 
   $("account").textContent = session ? `Signed in${session.email ? ` as ${session.email}` : ""}` : "Not signed in";
   if (!session) {
     const link = document.createElement("a");
     link.href = `${FOCAL_ORIGIN}/sign-in?from=extension`;
     link.target = "_blank";
-    link.textContent = " · Sign in";
-    $("account").append(link);
+    link.textContent = "Sign in";
+    $("account").append(" · ", link);
   }
 
   const url = tab?.url ?? "";

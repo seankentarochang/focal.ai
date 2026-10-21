@@ -1,12 +1,10 @@
 import { z } from "zod";
-import { authEnabled } from "@/lib/server/auth/config";
-import { ensureUser } from "@/lib/server/auth/users";
+import { currentViewer } from "@/lib/server/auth/viewer";
 import { runChat } from "@/lib/server/chat/agent";
 import { ChatProviderError, createProviderChain, providersFromEnv } from "@/lib/server/chat/providers";
 import { dbProfileStore, memoryProfileStore, type ChatProfileStore } from "@/lib/server/chat/store";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";
-import { devSessionsEnabled } from "@/lib/server/page/session";
 import { getQlooClient } from "@/lib/server/qloo";
 import { checkRateLimit } from "@/lib/server/rateLimit";
 
@@ -21,16 +19,11 @@ const bodySchema = z.object({
 });
 
 async function chatSession(): Promise<{ userId: string; store: ChatProfileStore } | null> {
+  const viewer = await currentViewer();
+  if (!viewer) return null;
   const db = getDb();
-  if (authEnabled() && db) {
-    const { withAuth } = await import("@workos-inc/authkit-nextjs");
-    const { user } = await withAuth();
-    if (!user?.email) return null;
-    const account = await ensureUser(db, { id: user.id, email: user.email });
-    return { userId: account.id, store: dbProfileStore(db, account.id) };
-  }
-  if (devSessionsEnabled()) return { userId: "dev", store: memoryProfileStore("dev") };
-  return null;
+  const store = viewer.persisted && db ? dbProfileStore(db, viewer.userId) : memoryProfileStore(viewer.userId);
+  return { userId: viewer.userId, store };
 }
 
 export async function POST(req: Request): Promise<Response> {

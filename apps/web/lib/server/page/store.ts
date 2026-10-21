@@ -1,3 +1,6 @@
+import type { Db } from "@focal-ai/db";
+import { getDb } from "../db";
+
 export const PAGE_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface StoredPageResult {
@@ -17,10 +20,7 @@ export interface PageResultStore {
   get(id: string, userId: string): Promise<StoredPageResult | null>;
 }
 
-/**
- * In-process store with the 24 h expiry; swapped for @focal-ai/db's
- * pageResults repo once the database is wired into the web app.
- */
+/** In-process store with the 24 h expiry, used when no database is configured. */
 export function createMemoryPageResultStore(ttlMs = PAGE_RESULT_TTL_MS, max = 5000): PageResultStore {
   const rows = new Map<string, StoredPageResult>();
   const live = (r: StoredPageResult) => Date.parse(r.expiresAt) > Date.now();
@@ -47,10 +47,20 @@ export function createMemoryPageResultStore(ttlMs = PAGE_RESULT_TTL_MS, max = 50
   };
 }
 
+/** Postgres-backed store, so results survive restarts and are shared across instances. */
+export function createDbPageResultStore(db: Db): PageResultStore {
+  return {
+    save: (r) => db.pageResults.save(r, PAGE_RESULT_TTL_MS),
+    get: (id, userId) => db.pageResults.get(id, userId),
+  };
+}
+
 let store: PageResultStore | undefined;
 
 export function getPageResultStore(): PageResultStore {
-  store ??= createMemoryPageResultStore();
+  if (store) return store;
+  const db = getDb();
+  store = db ? createDbPageResultStore(db) : createMemoryPageResultStore();
   return store;
 }
 

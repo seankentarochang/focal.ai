@@ -4,24 +4,57 @@
     <meta charset="utf-8" />
     <title>focal</title>
     <style>
-      body { width: 280px; margin: 0; padding: 14px; font: 14px/1.4 system-ui, sans-serif; color: #111827; }
-      h1 { font-size: 15px; margin: 0 0 10px; }
-      .row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
-      .muted { color: #6b7280; font-size: 12px; }
-      button, a.button { width: 100%; margin-top: 8px; padding: 6px 10px; border: 1px solid #c7d2fe; border-radius: 6px; background: #eef2ff; color: #1e3a8a; font: inherit; cursor: pointer; text-align: center; text-decoration: none; display: block; box-sizing: border-box; }
-      button:disabled { opacity: 0.5; cursor: default; }
+      :root {
+        color-scheme: dark;
+        --bg: #09090b; --card: #121216; --line: #27272a; --ink: #fafafa; --muted: #a1a1aa; --violet: #6e56cf;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { width: 300px; margin: 0; padding: 14px; background: var(--bg); color: var(--ink); font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+      header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+      .mark { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #8b74ff, var(--violet)); }
+      h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+      .muted { color: var(--muted); font-size: 12px; }
+      #account a { color: #c4b8ff; text-decoration: none; font-weight: 500; }
+      #account a:hover { text-decoration: underline; }
+      .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .row label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .switch { appearance: none; flex: none; width: 36px; height: 20px; margin: 0; border-radius: 999px; background: #3f3f46; position: relative; cursor: pointer; transition: background-color .15s ease; }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+      .switch:checked { background: var(--violet); }
+      .switch:checked::after { transform: translateX(16px); }
+      .switch:disabled { opacity: .45; cursor: not-allowed; }
+      .switch:focus-visible { outline: 2px solid rgba(110,86,207,.6); outline-offset: 2px; }
+      #site-status:empty { display: none; }
+      .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+      .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; font: 500 13px/1 inherit; font-family: inherit; text-decoration: none; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+      .btn.primary { background: var(--violet); color: #fff; border: 1px solid transparent; }
+      .btn.primary:hover:not(:disabled) { background: #7d67e0; }
+      .btn.outline { background: #18181b; color: var(--ink); border: 1px solid #3f3f46; }
+      .btn.outline:hover { background: #27272a; }
+      .btn:disabled { opacity: .45; cursor: default; }
     </style>
   </head>
   <body>
-    <h1>focal</h1>
-    <div id="account" class="muted">Checking sign-in…</div>
-    <div class="row">
-      <label for="site-toggle" id="site-label">This site</label>
-      <input type="checkbox" id="site-toggle" />
+    <header>
+      <span class="mark" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9z"/></svg>
+      </span>
+      <h1>focal</h1>
+    </header>
+    <div class="card">
+      <div id="account" class="muted">Checking sign-in…</div>
+      <div class="row">
+        <label for="site-toggle" id="site-label">This site</label>
+        <input type="checkbox" role="switch" class="switch" id="site-toggle" />
+      </div>
+      <div id="site-status" class="muted"></div>
     </div>
-    <div id="site-status" class="muted"></div>
-    <button id="why" type="button" disabled>Why this order?</button>
-    <a id="dashboard" class="button" target="_blank" rel="noopener">Open dashboard</a>
+    <div class="actions">
+      <button id="why" class="btn primary" type="button" disabled>Why this order?</button>
+      <a id="dashboard" class="btn outline" target="_blank" rel="noopener">Add likes in chat</a>
+    </div>
     <script type="module" src="popup.js"></script>
   </body>
 </html>
