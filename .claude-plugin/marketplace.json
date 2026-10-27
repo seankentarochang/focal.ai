@@ -1,0 +1,11 @@
+{
+  "name": "focal",
+  "owner": { "name": "focal.ai" },
+  "plugins": [
+    {
+      "name": "focal",
+      "source": "./plugins/focal",
+      "description": "Your focal taste profile in Claude Code: read it, save likes, and rank lists the way the focal extension does."
+    }
+  ]
+}

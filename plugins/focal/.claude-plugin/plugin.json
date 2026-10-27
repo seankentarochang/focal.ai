@@ -1,0 +1,9 @@
+{
+  "name": "focal",
+  "version": "0.1.0",
+  "description": "Connects Claude Code to your focal taste profile over focal's hosted MCP server (OAuth sign-in).",
+  "author": { "name": "focal.ai" },
+  "homepage": "https://github.com/tsangh5/focal.ai",
+  "repository": "https://github.com/tsangh5/focal.ai",
+  "keywords": ["mcp", "taste", "recommendations", "personalization"]
+}

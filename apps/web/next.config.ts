@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // Emits .next/standalone for the Docker runner stage. No effect on `next start`.
   output: "standalone",
-  transpilePackages: ["@focal-ai/core", "@focal-ai/qloo"],
+  transpilePackages: ["@focal-ai/core", "@focal-ai/qloo", "@focal-ai/mcp"],
   turbopack: {
     rules: {
       "*.css": {
@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  // OAuth discovery for the hosted MCP endpoint (RFC 9728 / RFC 8414).
+  async rewrites() {
+    return [
+      { source: "/.well-known/oauth-protected-resource", destination: "/api/oauth/protected-resource" },
+      { source: "/.well-known/oauth-protected-resource/mcp", destination: "/api/oauth/protected-resource" },
+      { source: "/.well-known/oauth-authorization-server", destination: "/api/oauth/authorization-server" },
+    ];
   },
   async headers() {
     return [
