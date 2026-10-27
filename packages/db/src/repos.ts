@@ -37,6 +37,11 @@ export function usersRepo(sql: Sql) {
       const [row] = await sql`SELECT * FROM users WHERE id = ${id}`;
       return row ? userFrom(row) : null;
     },
+    /** Finds the user linked to an identity provider's user id, e.g. ("workos", "user_…"). */
+    async byAuthId(provider: string, id: string): Promise<User | null> {
+      const [row] = await sql`SELECT * FROM users WHERE auth_ids->>${provider} = ${id} LIMIT 1`;
+      return row ? userFrom(row) : null;
+    },
     async byEmail(email: string): Promise<User | null> {
       const [row] = await sql`SELECT * FROM users WHERE lower(email) = lower(${email.trim()})`;
       return row ? userFrom(row) : null;

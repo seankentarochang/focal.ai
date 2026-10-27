@@ -220,6 +220,9 @@ importers:
       '@focal-ai/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@focal-ai/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@focal-ai/qloo':
         specifier: workspace:*
         version: link:../../packages/qloo
@@ -235,6 +238,9 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
+      jose:
+        specifier: 6.2.12
+        version: 6.2.12
       lucide-react:
         specifier: 1.47.0
         version: 1.47.0(react@19.3.0)

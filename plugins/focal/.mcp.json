@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "focal": {
+      "type": "http",
+      "url": "${FOCAL_MCP_URL:-http://localhost:3000/mcp}"
+    }
+  }
+}

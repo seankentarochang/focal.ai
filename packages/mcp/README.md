@@ -1,5 +1,18 @@
 # @focal-ai/mcp
 
+Two MCP servers live here:
+
+- **Hosted (`src/hosted.ts`)**: served by the website at `/mcp` over Streamable
+  HTTP, signed in with WorkOS AuthKit OAuth. It reads and writes the signed-in
+  user's profile with the same rules as the website chat (`src/profileTools.ts`):
+  `read_profile`, `taste_summary`, `search_entities`, `add_thing`, `add_vibe`,
+  `propose_rule`, `remove_entry`, `recommend`, `rank_list`. Ambiguous names return
+  choices instead of saving, proposed rules stay pending, every write is
+  attributed `mcp:<client>` and undoable, and settings are not exposed. Setup per
+  client is on the website's `/connect` page; the Claude Code plugin is in
+  `plugins/focal`.
+- **Local stdio (`src/index.ts`)**, described below.
+
 A local [Model Context Protocol](https://modelcontextprotocol.io) server (stdio) for
 focal.ai. It lets external agents (Claude Desktop, Claude Code, any MCP client) read
 the local taste profile and call Qloo-backed ranking tools on it.
