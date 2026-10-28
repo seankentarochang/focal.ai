@@ -26,14 +26,8 @@ export interface RenderPlan {
   };
 }
 
-export interface LinkRef {
-  host: string;
-  path: string;
-}
-
 /** What the extension extracts from one card. Never full HTML. */
 export interface CardSnapshot {
   clientId: string;
   snippets: string[];
-  links: LinkRef[];
 }

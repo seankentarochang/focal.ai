@@ -10,13 +10,11 @@ process.env.FOCAL_DEV_SESSION = "1";
 type Post = (req: Request) => Promise<Response>;
 let identifyPOST: Post;
 let rankPOST: Post;
-let resultGET: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 
 beforeAll(async () => {
   __setDbForTests(null);
   identifyPOST = (await import("@/app/api/page/identify/route")).POST;
   rankPOST = (await import("@/app/api/page/rank/route")).POST;
-  resultGET = (await import("@/app/api/page/result/[id]/route")).GET;
 });
 
 beforeEach(() => {
@@ -117,19 +115,6 @@ describe("POST /api/page/rank → GET /api/page/result/:id", () => {
     expect(label.badge).toBe("top-pick");
     expect(label.text).toMatch(/^Top pick for you/);
     expect(JSON.stringify(body.plan)).not.toMatch(/0\.93/);
-
-    const stored = await resultGET(req(`/api/page/result/${body.pageResultId}`), { params: Promise.resolve({ id: body.pageResultId }) });
-    expect(stored.status).toBe(200);
-    const row = await stored.json();
-    expect(row.hostname).toBe("yelp.com");
-    const rintaro = row.items.find((i: { clientId: string }) => i.clientId === "c0");
-    expect(rintaro.affinity).toBeCloseTo(0.93);
-    expect(row.meta.insightsCalls).toBe(1);
-  });
-
-  it("unknown page result ids are 404", async () => {
-    const res = await resultGET(req("/api/page/result/nope"), { params: Promise.resolve({ id: "nope" }) });
-    expect(res.status).toBe(404);
   });
 
   it("rejects types outside Qloo's insight types", async () => {

@@ -94,8 +94,8 @@ export async function POST(req: Request): Promise<Response> {
             },
             "page",
           );
-      await store.commit(write.profile, write.event);
-      return Response.json({ saved: true, entryId: write.event.entryId, eventId: write.event.id });
+      if (write.event) await store.commit(write.profile, write.event);
+      return Response.json({ saved: true, entryId: write.event?.entryId ?? null, eventId: write.event?.id ?? null });
     } catch (e) {
       if (e instanceof DbError && e.code === "CONFLICT") {
         if (attempt === 0) continue;

@@ -83,7 +83,7 @@ Defaults and behavior (all overridable via `createQlooClient` opts):
 | `timeoutMs` | `8000` | On timeout: exactly 1 retry, then `QlooError` code `TIMEOUT`. |
 | `cacheTtlMs` | `600000` (10 min) | In-process TTL cache keyed by full request URL (key excluded). |
 
-Endpoints used — and only these: `GET /search`, `GET /v2/insights`, `GET /v2/tags?filter.query=...`, `GET /v2/entities`. `/recs` and `/recommendations` are unsupported legacy; never call them.
+Endpoints used — and only these: `GET /search`, `GET /v2/insights`, `GET /v2/tags?filter.query=...`, `GET /entities`. `/recs` and `/recommendations` are unsupported legacy; never call them.
 
 Insights parameter mapping: `resultType` → `filter.type` (required, e.g. `urn:entity:place` / `brand` / `destination` / `artist` / `movie`); `signalEntityIds` → `signal.interests.entities` (comma-separated taste seed IDs, cross-domain explicitly supported); `resultEntityIds` → `filter.results.entities` (comma-separated candidate IDs to score/rank — this is the scoring primitive); `locationQuery` → `filter.location.query` (city); `explainability` → `feature.explainability=true`; `take` max 50, default 20; `page` for pagination.
 
@@ -128,10 +128,10 @@ export declare function rankCandidates(args: { candidates: ResolvedCandidate[]; 
 export type RenderOp =
   | { op: "reorder"; containerId: string; order: string[] }
   | { op: "collapse"; containerId: string; clientIds: string[]; label: string }
-  | { op: "annotate"; containerId: string; clientId: string; text: string }
+  | { op: "annotate"; containerId: string; clientId: string; text: string; badge?: "top-pick" | "good-match" | "because" }
   | { op: "emphasize"; containerId: string; clientId: string; level: "high" }
   | { op: "hide"; containerId: string; clientIds: string[]; label: string };
-export interface RenderPlan { id: string; pageId: string; createdAt: string; ops: RenderOp[]; summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number }; }
+export interface RenderPlan { id: string; pageId: string; createdAt: string; ops: RenderOp[]; summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number; lifted: number }; }
 export declare function planRender(args: { pageId: string; ranked: RankedCandidate[]; options?: { annotate?: boolean; emphasizeThreshold?: number; collapseSponsored?: boolean; containerId?: string } }): RenderPlan;
 export declare function validatePlan(plan: RenderPlan): { ok: true } | { ok: false; errors: string[] };
 export declare function buildReason(ranked: RankedCandidate, profile: TasteProfile): RankedCandidate["reason"];
@@ -143,7 +143,7 @@ Invariants (each enforced by tests):
 - Annotate text must be plain text, at most 140 characters, and must **reject** any string containing `<` (XSS guard). `validatePlan` enforces this plus op referential integrity (every `clientId`/`order` entry exists) and container-id shape.
 - `containerId` must match `/^focal:[a-z0-9-]+$/i`.
 - Explanations (`buildReason`, `contributions`, `tags`) may cite ONLY contributions/tags/entities actually present in the data handed to them. Never invent relationships, brands, or scores.
-- Profile persists in browser `localStorage` under `focal.profile.v1` (`PROFILE_STORAGE_KEY`). Server-side profile persistence is forbidden — the profile travels per request and is discarded.
+- The taste profile is server-side and persisted in Postgres (D-15). Requests carry identified items, never the raw profile blob; `localStorage` may hold only `/try` demo seeds, never the real profile.
 
 ## C. HTTP API — `apps/web`
 
@@ -157,6 +157,36 @@ Removed 2026-10-28 (D-17): POST /api/qloo/rank and the Studio /api/agent. The we
 ranking surface is POST /api/try/rank (anonymous, lift-only) and POST /api/page/rank
 (authenticated extension traffic); stdio MCP keeps the v1 pipeline until ported.
 ```
+
+v2 route table (cookie session or `Authorization: Bearer <extension token>`; try/rank is anonymous):
+
+```text
+POST /api/page/identify   { host, pathPattern, signature, cityHints[], cards[{clientId,snippets[]}] }
+                         → { ok:true, isList, pageType?, items:IdentifiedItem[], layout?, meta }
+POST /api/page/rank       { host, pageType, items:IdentifiedItem[] }
+                         → { status, pageResultId, plan?, resolvedCount }
+POST /api/feedback        { pageResultId, clientId, verdict:"more"|"less" }
+                         → { saved, entryId, eventId|null }  (null = no-op, nothing written)
+GET  /api/activity?before → { events:ActivityRecord[], nextBefore?:number }  (seq cursor)
+POST /api/activity/[id]/undo  → { undone:true, eventId } | 404 | 409 later-change
+GET  /api/settings        → { sites:[{hostname,mode:"skip"|"off"}], settings }
+PUT  /api/settings        { sites:[{hostname,mode:"skip"|"off"}] } → { sites }
+POST /api/settings        { hostname, mode:"skip"|"off"|null } → { sites }   (null removes)
+GET  /api/profile         → { version, entries }
+POST /api/profile         { action:add|remove|set_strength|approve_rule, ... }
+DELETE /api/profile       → deletes the account + data, then POST /sign-out
+GET  /api/profile/export  → JSON export incl. page_results
+POST /api/extension/session → { token, email, expiresAt }  (cookie-auth only)
+DELETE /api/extension/session → 204 (revokes the bearer token)
+POST /api/chat            { messages:[...] } → chat tool calls over the profile
+POST /api/try/rank        { pageType, items[{clientId?,name,city?}], seeds[] }
+                         → { items (clientId echoed), plan, meta:{durationMs,unresolved,qlooRequest,dataSource} }
+GET  /api/health          → { ok:true, hasQlooKey, dataSource:"live"|"mock" }
+POST /api/qloo/search     { query, types?[], location? } → { entities, meta }
+POST /mcp                 hosted MCP (Streamable HTTP); 401 without auth
+```
+
+Removed 2026-10-28 (round 2): `GET /api/page/result/[id]` — orphaned; `/why` reads the store directly.
 
 Data-flow rules (non-negotiable):
 
@@ -173,7 +203,7 @@ Data-flow rules (non-negotiable):
 - Missing affinity → the candidate is treated as unresolved for ranking purposes, never silently given a favorable score.
 - No fabricated scores or relationships anywhere — in code, fixtures, tests, copy, or demo data.
 - Mock fixtures are env-gated (`QLOO_MOCK=1`), carry `_fixture: "mock"`, derive from public Qloo documentation examples (for example the Balthazar place id `FCE8B172-4795-43E4-B222-3B550DC05FD9` from Qloo's public recipe), and are labeled in every UI surface that can render them.
-- LLM (Anthropic) features are OPTIONAL. Without `ANTHROPIC_API_KEY`, agent/narration features run degraded (deterministic explanations from real data) or are disabled with an honest message; nothing else may break.
+- LLM features are OPTIONAL and resolve through the Groq → Cerebras → OpenRouter provider chain (chat defaults to `openai/gpt-oss-120b:free` on OpenRouter). With no provider key, narration features are disabled with an honest message; nothing else may break.
 
 ## B-appendix. Rank pipeline (added 2026-10-18)
 

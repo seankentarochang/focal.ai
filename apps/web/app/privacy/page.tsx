@@ -23,7 +23,8 @@ export default function PrivacyPage() {
             <li>
               On a <strong>new site layout</strong>, the extension sends each list card's short text snippets (at most 6
               per card, 80 characters each, and at most 60 cards) plus the site's hostname, path pattern and up to 5
-              city hints to TypeSafe (Jev) for list identification. The card links (at most 4 per card) and the
+              city hints to TypeSafe (Jev) for list identification. Every rank request also carries the page's hostname,
+              which the server keeps for 24 hours with the stored page result. The page
               structure-only page signature go only to the focal server. Never full pages, form fields, or screenshots.
             </li>
             <li>

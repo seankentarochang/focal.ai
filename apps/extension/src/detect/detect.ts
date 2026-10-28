@@ -1,9 +1,8 @@
-import type { CardSnapshot, LinkRef } from "../types";
+import type { CardSnapshot } from "../types";
 
 export const MIN_CARDS = 3;
 export const MAX_SNIPPETS = 6;
 export const MAX_SNIPPET_LENGTH = 80;
-export const MAX_LINKS = 4;
 /** Server cap per identify call; cards past it keep their site order. */
 export const MAX_CARDS = 60;
 
@@ -105,31 +104,6 @@ export function extractSnippets(card: Element): string[] {
   return out;
 }
 
-/** Outbound link hosts and paths. Query strings and fragments never leave. */
-export function extractLinks(card: Element, base?: string): LinkRef[] {
-  const out: LinkRef[] = [];
-  const seen = new Set<string>();
-  const anchors = card.tagName === "A" ? [card, ...card.querySelectorAll("a[href]")] : [...card.querySelectorAll("a[href]")];
-  for (const a of anchors) {
-    const href = a.getAttribute("href");
-    if (!href) continue;
-    let url: URL;
-    try {
-      url = new URL(href, base ?? card.ownerDocument?.baseURI);
-    } catch {
-      continue;
-    }
-    if (url.protocol !== "https:" && url.protocol !== "http:") continue;
-    const ref = { host: url.hostname.replace(/^www\./, ""), path: url.pathname };
-    const key = `${ref.host}${ref.path}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(ref);
-    if (out.length >= MAX_LINKS) break;
-  }
-  return out;
-}
-
 function titleLike(snippets: string[]): boolean {
   return snippets.some((s) => s.length >= 2 && s.length <= MAX_SNIPPET_LENGTH && /\p{L}/u.test(s));
 }
@@ -206,7 +180,7 @@ export function snapshotCards(list: DetectedList, base?: string): CardSnapshot[]
   return [...list.cards].slice(0, MAX_CARDS).map(([clientId, el]) => ({
     clientId,
     snippets: extractSnippets(el),
-    links: extractLinks(el, base),
+
   }));
 }
 

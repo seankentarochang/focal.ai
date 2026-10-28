@@ -1,4 +1,5 @@
 import { authDisabledResponse, authEnabled } from "@/lib/server/auth/config";
+import { DbError } from "@focal-ai/db";
 import { ensureUser } from "@/lib/server/auth/users";
 import { getDb } from "@/lib/server/db";
 import { bearer } from "@/lib/server/page/session";
@@ -26,7 +27,15 @@ export async function POST(): Promise<Response> {
       { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } },
     );
   }
-  const account = await ensureUser(db, { id: user.id, email: user.email, emailVerified: user.emailVerified === true });
+  let account;
+  try {
+    account = await ensureUser(db, { id: user.id, email: user.email, emailVerified: user.emailVerified === true });
+  } catch (e) {
+    if (e instanceof DbError && e.code === "CONFLICT") {
+      return Response.json({ error: { code: "ACCOUNT_CONFLICT", message: "An account with this email already exists" } }, { status: 409 });
+    }
+    throw e;
+  }
   const { token, session } = await db.extensionSessions.issue(account.id);
   return Response.json({ token, email: account.email, expiresAt: session.expiresAt }, { headers: { "Cache-Control": "no-store" } });
 }

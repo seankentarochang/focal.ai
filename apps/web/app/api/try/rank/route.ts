@@ -91,7 +91,7 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     const result = await rankPage(
-      { host: "playground", pathPattern: "/try", pageType: pageType as never, items },
+      { host: "playground", pageType: pageType as never, items },
       toProfile(parsed.data.seeds, insightType),
       `try-${crypto.randomUUID()}`,
       { useResolutionCache: false },

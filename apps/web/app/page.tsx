@@ -1,8 +1,15 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { buttonVariants } from "@/components/ui/button";
 
-export default function LandingPage() {
+async function AccountConflictNotice({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  if (params.error !== "account") return null;
+  return <p className="text-sm text-red-400">An account with this email already exists. Sign in with the method you used before.</p>;
+}
+
+export default function LandingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   return (
     <>
       <SiteHeader />
@@ -18,6 +25,9 @@ export default function LandingPage() {
             browse, says why, and leaves the rest of the page exactly as the site made it.
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
+            <Suspense fallback={null}>
+              <AccountConflictNotice searchParams={searchParams} />
+            </Suspense>
             <Link className={buttonVariants({})} href="/sign-in">
               Sign in
             </Link>

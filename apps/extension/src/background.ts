@@ -23,7 +23,7 @@ async function post<T>(path: string, body: unknown): Promise<BackgroundReply<T>>
 
 interface WireSite {
   hostname: string;
-  mode: "skip" | "off" | "on";
+  mode: "skip" | "off";
 }
 
 /** Server owns site settings; the extension caches them (§4.1, §4.2). */
@@ -55,30 +55,37 @@ async function authed(path: string, init?: RequestInit): Promise<Response | null
   }
 }
 
-/** Writes started locally win over a refresh already in flight. */
-let lastLocalWrite = 0;
+/** All server settings traffic serialises through one queue — a write issued
+ * while a pull is in flight simply runs after it; no startedAt race. */
+let settingsQueue: Promise<unknown> = Promise.resolve();
+export function enqueueSettings<T>(work: () => Promise<T>): Promise<T> {
+  const next = settingsQueue.then(work, work);
+  settingsQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
 
 /** Pull /api/settings into the local cache; safe offline (cache stays). */
-export async function refreshSettingsFromServer(): Promise<void> {
-  const startedAt = Date.now();
-  const res = await authed("/api/settings");
-  if (!res || startedAt < lastLocalWrite) return;
-  const body = (await res.json().catch(() => null)) as { sites?: WireSite[] } | null;
-  if (startedAt < lastLocalWrite) return;
-  if (Array.isArray(body?.sites)) await applyWireSites(body.sites);
+export function refreshSettingsFromServer(): Promise<void> {
+  return enqueueSettings(async () => {
+    const res = await authed("/api/settings");
+    if (!res) return;
+    const body = (await res.json().catch(() => null)) as { sites?: WireSite[] } | null;
+    if (Array.isArray(body?.sites)) await applyWireSites(body.sites);
+  });
 }
 
 /** Toolbar per-site toggle writes back a single-site row; mode null removes it. */
-export async function setSiteOnServer(hostname: string, on: boolean): Promise<boolean> {
-  lastLocalWrite = Date.now();
-  const res = await authed("/api/settings", {
-    method: "POST",
-    body: JSON.stringify({ hostname, mode: on ? null : "off" }),
+export function setSiteOnServer(hostname: string, on: boolean): Promise<boolean> {
+  return enqueueSettings(async () => {
+    const res = await authed("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({ hostname, mode: on ? null : "off" }),
+    });
+    if (!res) return false;
+    const body = (await res.json().catch(() => null)) as { sites?: WireSite[] } | null;
+    if (Array.isArray(body?.sites)) await applyWireSites(body.sites);
+    return true;
   });
-  if (!res) return false;
-  const body = (await res.json().catch(() => null)) as { sites?: WireSite[] } | null;
-  if (Array.isArray(body?.sites)) await applyWireSites(body.sites);
-  return true;
 }
 
 void refreshSettingsFromServer();

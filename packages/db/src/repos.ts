@@ -89,6 +89,17 @@ export function profileRepo(sql: Sql) {
         if (expectedVersion !== undefined && user.profile_version !== expectedVersion) {
           throw new DbError("CONFLICT", `profile version is ${user.profile_version}, expected ${expectedVersion}`);
         }
+        if (event.undoes) {
+          // Undo TOCTOU: under the user row lock, a later non-undone write to the
+          // same entry must win — the route pre-check exists for the message only.
+          const later = await tx`
+            SELECT 1 FROM activity_events
+            WHERE user_id = ${userId} AND entry_id = ${event.entryId}
+              AND seq > (SELECT seq FROM activity_events WHERE id = ${event.undoes} AND user_id = ${userId})
+              AND undone_by IS NULL AND action <> 'undo'
+            LIMIT 1`;
+          if (later.length > 0) throw new DbError("CONFLICT", "a later change to this entry exists; undo that first");
+        }
         const after = event.after;
         if (after) {
           if (after.id !== event.entryId) throw new DbError("CONFLICT", "event.after.id must equal event.entryId");
@@ -174,16 +185,24 @@ export function sitesRepo(sql: Sql) {
       return rows.map((r) => ({ hostname: r.hostname as string, mode: r.mode as SiteMode }));
     },
     async set(userId: string, hostname: string, mode: SiteMode): Promise<void> {
-      await sql`
-        INSERT INTO site_settings (user_id, hostname, mode) VALUES (${userId}, ${hostname.toLowerCase()}, ${mode})
-        ON CONFLICT (user_id, hostname) DO UPDATE SET mode = EXCLUDED.mode, updated_at = now()`;
+      // serialize single writes with full replaces for the same user
+      await sql.begin(async (tx) => {
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+        await tx`
+          INSERT INTO site_settings (user_id, hostname, mode) VALUES (${userId}, ${hostname.toLowerCase()}, ${mode})
+          ON CONFLICT (user_id, hostname) DO UPDATE SET mode = EXCLUDED.mode, updated_at = now()`;
+      });
     },
     async remove(userId: string, hostname: string): Promise<void> {
-      await sql`DELETE FROM site_settings WHERE user_id = ${userId} AND hostname = ${hostname.toLowerCase()}`;
+      await sql.begin(async (tx) => {
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+        await tx`DELETE FROM site_settings WHERE user_id = ${userId} AND hostname = ${hostname.toLowerCase()}`;
+      });
     },
     /** Full replace in one transaction: drop what's not listed, upsert the rest. */
     async replace(userId: string, sites: SiteSetting[]): Promise<void> {
       await sql.begin(async (tx) => {
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
         const keep = sites.map((s) => s.hostname.toLowerCase());
         if (keep.length === 0) {
           await tx`DELETE FROM site_settings WHERE user_id = ${userId}`;

@@ -70,10 +70,10 @@ afterAll(async () => {
 describe("POST /api/activity/[id]/undo", () => {
   it.skipIf(!dbify)("cookie caller undoes a manual event; bearer gets 404 on it", async () => {
     const w = await writeEntry("Undo Me Cafe");
-    const bad = await undo(w.event.id, token);
+    const bad = await undo(w.event!.id, token);
     expect(bad.status).toBe(404);
     viewerUserId = userId;
-    const ok = await undo(w.event.id);
+    const ok = await undo(w.event!.id);
     expect(ok.status).toBe(200);
     expect((await ok.json()).undone).toBe(true);
   });
@@ -96,12 +96,12 @@ describe("POST /api/activity/[id]/undo", () => {
 
   it.skipIf(!dbify)("409s when a later not-undone event touched the entry", async () => {
     const w = await writeEntry("Later Change Bistro");
-    const entryId = w.event.entryId;
+    const entryId = w.event!.entryId;
     const p2 = await db.profile.load(userId);
     const w2 = changeStrength({ version: 2 as const, updatedAt: new Date().toISOString(), entries: p2.entries as never }, entryId, "like", "manual");
     await db.profile.commit(userId, w2.event as never, p2.version);
     viewerUserId = userId;
-    const res = await undo(w.event.id);
+    const res = await undo(w.event!.id);
     expect(res.status).toBe(409);
   });
 });

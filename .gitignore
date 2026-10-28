@@ -28,3 +28,6 @@ test-results/
 playwright-report/
 e2e/.session.json
 e2e/artifacts/
+
+# live e2e harness session token
+e2e/live/.live-session.json

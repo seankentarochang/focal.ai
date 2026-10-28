@@ -114,8 +114,8 @@ describe.skipIf(!url)("POST /api/feedback in Postgres", () => {
     const version = (await db.profile.load(userId)).version;
     await db.profile.commit(userId, write.event as never, version);
     const bad = await undoPOST(
-      new Request(`http://localhost/api/activity/${write.event.id}/undo`, { method: "POST", headers: { authorization: `Bearer ${token}` } }),
-      { params: Promise.resolve({ id: write.event.id }) },
+      new Request(`http://localhost/api/activity/${write.event!.id}/undo`, { method: "POST", headers: { authorization: `Bearer ${token}` } }),
+      { params: Promise.resolve({ id: write.event!.id }) },
     );
     expect(bad.status).toBe(404);
   });

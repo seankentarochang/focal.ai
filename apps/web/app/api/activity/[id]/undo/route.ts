@@ -42,6 +42,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   try {
     const profile = await store.load();
     const write = undoEvent(profile, record as ActivityEvent, who.via === "bearer" ? "page" : "manual");
+    if (!write.event) return Response.json({ undone: true, eventId: null });
     await store.commit(write.profile, write.event);
     return Response.json({ undone: true, eventId: write.event.id });
   } catch (e) {

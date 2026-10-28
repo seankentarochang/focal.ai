@@ -34,7 +34,7 @@ Requires a free focal.ai account and a Chromium-based browser.
 | `externally_connectable` (localhost dev / focal.ai origin) | Receives the signed-in session token from the focal website when the user connects their account; the token is stored locally for API calls. |
 
 ## Data use disclosures (mirrors focal.ai/privacy)
-- On a new site layout, list-card text snippets (≤6 per card, ≤80 chars, ≤60 cards) plus the site's hostname, path pattern and city hints go to TypeSafe (list identification); card links (≤4 per card) and the structure-only page signature go only to the focal server. On known layouts, only item names, type and city go to the server. Item names go to Qloo for entity resolution.
+- On a new site layout, list-card text snippets (≤6 per card, ≤80 chars, ≤60 cards) plus the site's hostname, path pattern and city hints go to TypeSafe (list identification); the structure-only page signature goes only to the focal server. On known layouts, only item names, type and city go to the server — every rank request also carries the page's hostname, kept 24 h with the page result. Card links are not extracted or sent. Item names go to Qloo for entity resolution.
 - Stored server-side: account, profile, activity, site settings, a shared resolution cache of normalized item names (resolved entries do not expire), and page results (24 h). Learned layouts live only in extension storage. No browsing history, no passive tracking.
 - Never collected: full pages, form fields, screenshots, passwords, payment data.
 - Data is never sold. Users can export and delete their profile and account at any time from Settings.

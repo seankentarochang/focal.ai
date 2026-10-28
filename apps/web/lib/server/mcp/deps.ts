@@ -18,7 +18,7 @@ export function mcpDeps(db: Db, userId: string, client: string, profileUrl: stri
       const result = await rankPage(
         {
           host: "mcp",
-          pathPattern: "/",
+          
           pageType: type,
           items: items.map((name, i) => ({ clientId: `c${i}`, name, type, ...(city ? { city } : {}) })),
         },

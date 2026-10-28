@@ -38,6 +38,10 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     await db.sql`delete from resolution_cache`;
   }
   const { token } = await db.extensionSessions.issue(user.id);
+  // Known state each run: previous runs' feedback writes would otherwise make
+  // the "more" verdict a no-op (eventId:null → "Saved" without Undo).
+  await db.sql`delete from activity_events where user_id = ${user.id}`;
+  await db.sql`delete from profile_entries where user_id = ${user.id}`;
   let profile: ProfileV2 = await db.profile.load(user.id);
   let seedList: readonly { qlooId: string; name: string; type: string; strength: string }[];
   if (live) {
@@ -63,7 +67,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   } else {
     seedList = [
       { qlooId: "7F2A9C05-4E81-4D3B-9A6F-B2C7E013D948", name: "Fugazi", type: "urn:entity:artist", strength: "love" },
-      { qlooId: "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01", name: "Rintaro", type: "urn:entity:place", strength: "like" },
+      { qlooId: "3A8F2C41-7B6D-4E92-8A55-1F0C9D2E6A01", name: "Rintaro", type: "urn:entity:place", strength: "love" },
     ];
   }
   for (const seed of seedList) {

@@ -6,7 +6,9 @@ import { safeReturnTo } from "@/lib/server/auth/returnTo";
 export async function GET(req: Request): Promise<Response> {
   await connection();
   if (!authEnabled()) return authDisabledResponse();
-  const returnTo = safeReturnTo(new URL(req.url).searchParams.get("returnTo"));
+  const url = new URL(req.url);
+  if (url.searchParams.get("error") === "account") redirect("/?error=account");
+  const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
   const { getSignInUrl } = await import("@workos-inc/authkit-nextjs");
   redirect(await getSignInUrl({ returnTo }));
 }

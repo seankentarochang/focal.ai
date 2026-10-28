@@ -102,31 +102,31 @@ describe.skipIf(!url)("profile route in Postgres", () => {
     const rule = addEntry(empty, { kind: "rule", qlooId: "urn:tag:chain", name: "chain", source: "mcp:chatgpt" }, "mcp:chatgpt");
     await db.profile.commit(userId, rule.event as never, 0);
     const add = addEntry(
-      { ...empty, entries: [rule.event.after!] },
+      { ...empty, entries: [rule.event!.after!] },
       { kind: "thing", qlooId: "Q-rin", name: "Rintaro", type: "urn:entity:place", strength: "love", source: "mcp:chatgpt" },
       "mcp:chatgpt",
     );
     await db.profile.commit(userId, add.event as never, 1);
 
-    const approved = await post({ action: "approve_rule", entry_id: rule.event.entryId });
+    const approved = await post({ action: "approve_rule", entry_id: rule.event!.entryId });
     expect(approved.status).toBe(200);
     const body = (await approved.json()) as { entries: { id: string; status?: string }[] };
-    expect(body.entries.find((e) => e.id === rule.event.entryId)?.status).toBe("active");
+    expect(body.entries.find((e) => e.id === rule.event!.entryId)?.status).toBe("active");
     expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ actor: "manual", action: "approve" });
-    expect((await post({ action: "approve_rule", entry_id: rule.event.entryId })).status).toBe(404);
+    expect((await post({ action: "approve_rule", entry_id: rule.event!.entryId })).status).toBe(404);
 
     const undone = await undoPOST(
-      new Request(`http://localhost/api/activity/${add.event.id}/undo`, { method: "POST" }),
-      { params: Promise.resolve({ id: add.event.id }) },
+      new Request(`http://localhost/api/activity/${add.event!.id}/undo`, { method: "POST" }),
+      { params: Promise.resolve({ id: add.event!.id }) },
     );
     expect(undone.status).toBe(200);
     expect((await db.profile.load(userId)).entries.some((e) => e.name === "Rintaro")).toBe(false);
-    expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ action: "undo", actor: "manual", undoes: add.event.id });
+    expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ action: "undo", actor: "manual", undoes: add.event!.id });
 
     expect(
       (
-        await undoPOST(new Request(`http://localhost/api/activity/${add.event.id}/undo`, { method: "POST" }), {
-          params: Promise.resolve({ id: add.event.id }),
+        await undoPOST(new Request(`http://localhost/api/activity/${add.event!.id}/undo`, { method: "POST" }), {
+          params: Promise.resolve({ id: add.event!.id }),
         })
       ).status,
     ).toBe(404);
@@ -165,25 +165,25 @@ describe.skipIf(!url)("profile route in Postgres", () => {
     const version = (await db.profile.load(userId)).version;
     await db.profile.commit(userId, add.event as never, version);
 
-    const changed = await post({ action: "set_strength", entry_id: add.event.entryId, strength: "love" });
+    const changed = await post({ action: "set_strength", entry_id: add.event!.entryId, strength: "love" });
     expect(changed.status).toBe(200);
     let body = (await changed.json()) as { entries: { id: string; strength?: string }[] };
-    expect(body.entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
+    expect(body.entries.find((e) => e.id === add.event!.entryId)?.strength).toBe("love");
     expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ actor: "manual", action: "change" });
 
-    const removed = await post({ action: "remove", entry_id: add.event.entryId });
+    const removed = await post({ action: "remove", entry_id: add.event!.entryId });
     expect(removed.status).toBe(200);
     body = (await removed.json()) as typeof body;
-    expect(body.entries.some((e) => e.id === add.event.entryId)).toBe(false);
+    expect(body.entries.some((e) => e.id === add.event!.entryId)).toBe(false);
     const [removeEvent] = await db.profile.activity(userId, { limit: 1 });
     expect(removeEvent).toMatchObject({ actor: "manual", action: "remove" });
 
-    expect((await post({ action: "set_strength", entry_id: add.event.entryId, strength: "like" })).status).toBe(404);
+    expect((await post({ action: "set_strength", entry_id: add.event!.entryId, strength: "like" })).status).toBe(404);
     const undo = await undoPOST(new Request(`http://localhost/api/activity/${removeEvent!.id}/undo`, { method: "POST" }), {
       params: Promise.resolve({ id: removeEvent!.id }),
     });
     expect(undo.status).toBe(200);
-    expect((await db.profile.load(userId)).entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
+    expect((await db.profile.load(userId)).entries.find((e) => e.id === add.event!.entryId)?.strength).toBe("love");
   });
 
   it("delete removes the account and its rows", async () => {
@@ -211,7 +211,7 @@ describe.skipIf(!url)("profile route in Postgres", () => {
     await db.profile.commit(userId, rule.event as never, version);
     const orig = db.profile.load;
     db.profile.load = async (u: string) => ({ ...(await orig(u)), version: version - 1 });
-    const res = await post({ action: "approve_rule", entry_id: rule.event.entryId });
+    const res = await post({ action: "approve_rule", entry_id: rule.event!.entryId });
     db.profile.load = orig;
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: { code: "CONFLICT", message: expect.stringContaining("reload") } });

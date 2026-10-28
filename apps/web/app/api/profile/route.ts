@@ -67,21 +67,21 @@ export async function POST(req: Request): Promise<Response> {
         return notFound("No pending rule with that id");
       }
       const write = approveRule(profile, target.id);
-      await store.commit(write.profile, write.event);
+      if (write.event) await store.commit(write.profile, write.event);
     } else if (parsed.data.action === "set_strength") {
       const { entry_id, strength } = parsed.data;
       const profile = await store.load();
       const target = profile.entries.find((e) => e.id === entry_id);
       if (!target || target.kind === "rule") return notFound("No editable entry with that id");
       const write = changeStrength(profile, target.id, strength, "manual");
-      await store.commit(write.profile, write.event);
+      if (write.event) await store.commit(write.profile, write.event);
     } else if (parsed.data.action === "remove") {
       const { entry_id } = parsed.data;
       const profile = await store.load();
       const target = profile.entries.find((e) => e.id === entry_id);
       if (!target) return notFound("No entry with that id");
       const write = removeEntry(profile, target.id, "manual");
-      await store.commit(write.profile, write.event);
+      if (write.event) await store.commit(write.profile, write.event);
     }
   } catch (e) {
     if (e instanceof DbError && e.code === "CONFLICT") {

@@ -8,7 +8,7 @@ import type { SiteMode, SiteSetting } from "@focal-ai/db";
 const MAX_SITES = 500;
 const host = z.string().trim().toLowerCase().min(1).max(253).regex(/^[a-z0-9.-]+$/);
 const putSchema = z.object({
-  sites: z.array(z.object({ hostname: host, mode: z.enum(["skip", "off", "on"]) })).max(MAX_SITES),
+  sites: z.array(z.object({ hostname: host, mode: z.enum(["skip", "off"]) })).max(MAX_SITES),
 });
 
 const memory = new Map<string, SiteSetting[]>();
@@ -36,7 +36,7 @@ export async function GET(req: Request): Promise<Response> {
 /** Replaces the full site list (§4.2): skip / off / on per hostname. */
 const postSchema = z.object({
   hostname: host,
-  mode: z.enum(["skip", "off", "on"]).nullable(),
+  mode: z.enum(["skip", "off"]).nullable(),
 });
 
 /** Single-site write (extension toolbar toggle): mode null removes the row. */

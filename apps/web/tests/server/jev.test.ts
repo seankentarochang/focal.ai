@@ -9,9 +9,9 @@ const body: IdentifyBody = {
   signature: "DIV.card",
   cityHints: ["San Francisco, CA", "ramen"],
   cards: [
-    { clientId: "c0", snippets: ["Sponsored", "Rintaro", "Izakaya · $$"], links: [{ host: "resy.com", path: "/x" }] },
-    { clientId: "c1", snippets: ["Zuni Café", "Californian"], links: [] },
-    { clientId: "c2", snippets: ["Sign up for deals"], links: [] },
+    { clientId: "c0", snippets: ["Sponsored", "Rintaro", "Izakaya · $$"] },
+    { clientId: "c1", snippets: ["Zuni Café", "Californian"] },
+    { clientId: "c2", snippets: ["Sign up for deals"] },
   ],
 };
 

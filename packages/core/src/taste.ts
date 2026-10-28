@@ -89,7 +89,8 @@ export interface ActivityEvent {
 
 export interface ProfileWrite {
   profile: ProfileV2;
-  event: ActivityEvent;
+  /** Null when the write changed nothing — callers skip the commit. */
+  event: ActivityEvent | null;
 }
 
 export class ProfileError extends Error {
@@ -231,6 +232,10 @@ export function addEntry(
     throw new ProfileError("INVALID", `Invalid entry: ${checked.error.issues[0]?.message ?? "unknown"}`);
   }
 
+  if (existing && JSON.stringify(existing) === JSON.stringify(next)) {
+    return { profile, event: null };
+  }
+
   const entries = existing
     ? profile.entries.map((e) => (e.id === existing.id ? next : e))
     : [...profile.entries, next];
@@ -278,6 +283,7 @@ export function changeStrength(
   if (existing.kind === "rule") {
     throw new ProfileError("INVALID", "Rules have no strength; remove the rule instead");
   }
+  if (existing.strength === strength) return { profile, event: null };
   const at = now();
   const next: ProfileEntry = { ...existing, strength };
   return {

@@ -24,7 +24,6 @@ export const identifyBodySchema = z.object({
       z.object({
         clientId: text(16),
         snippets: z.array(text(80)).max(6),
-        links: z.array(z.object({ host: z.string().max(253), path: z.string().max(500) })).max(4),
       }),
     )
     .min(1)
@@ -42,7 +41,6 @@ export type IdentifiedItem = z.infer<typeof identifiedItemSchema>;
 
 export const pageRankBodySchema = z.object({
   host,
-  pathPattern: z.string().max(300),
   pageType: z.enum(SHORT_TYPES),
   items: z.array(identifiedItemSchema).min(1).max(60),
 });

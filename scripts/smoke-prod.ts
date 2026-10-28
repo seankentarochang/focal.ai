@@ -90,6 +90,36 @@ function tryRankBody() {
   };
 }
 
+async function checkHealth(): Promise<void> {
+  const name = "health";
+  try {
+    const { status, body } = await request("/api/health");
+    const b = asRecord(body);
+    if (status !== 200 || !b) return fail(name, `GET /api/health — HTTP ${status}`);
+    if (b.ok !== true) return fail(name, `ok=${JSON.stringify(b.ok)}`);
+    if (b.hasQlooKey !== true) return fail(name, `hasQlooKey=${JSON.stringify(b.hasQlooKey)}`);
+    mockMode = b.dataSource === "mock";
+    pass(name, `dataSource=${JSON.stringify(b.dataSource)} hasQlooKey=true`);
+  } catch (error) {
+    fail(name, errorMessage(error));
+  }
+}
+
+async function checkSearch(): Promise<void> {
+  const name = "qloo search";
+  try {
+    const { status, body } = await postJson("/api/qloo/search", { query: "Fugazi", types: ["urn:entity:artist"] });
+    const b = asRecord(body);
+    const entities = Array.isArray(b?.entities) ? (b.entities as Record<string, unknown>[]) : [];
+    if (status !== 200) return fail(name, `POST /api/qloo/search — HTTP ${status}`);
+    if (entities.length === 0) return fail(name, "no entities returned");
+    const meta = asRecord(b.meta);
+    pass(name, `${entities.length} entities, dataSource=${JSON.stringify(meta?.dataSource)}`);
+  } catch (error) {
+    fail(name, errorMessage(error));
+  }
+}
+
 async function checkRank(): Promise<void> {
   const name = "try rank";
   try {

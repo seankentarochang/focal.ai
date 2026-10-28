@@ -15,7 +15,7 @@ export async function ensureUser(db: Db, user: AuthUser) {
   // attacker someone else's profile.
   const byEmail = await db.users.byEmail(user.email);
   if (byEmail && user.emailVerified !== true) {
-    throw new DbError("CONFLICT", `account exists for ${user.email} but the email is not verified`);
+    throw new DbError("CONFLICT", "ACCOUNT_CONFLICT: an account with this email already exists and is not verified");
   }
   return db.users.upsert(user.email, { workos: user.id });
 }

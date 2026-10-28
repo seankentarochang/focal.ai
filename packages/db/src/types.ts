@@ -40,7 +40,7 @@ export interface User {
   createdAt: string;
 }
 
-export type SiteMode = "skip" | "off" | "on";
+export type SiteMode = "skip" | "off";
 
 export interface SiteSetting {
   hostname: string;

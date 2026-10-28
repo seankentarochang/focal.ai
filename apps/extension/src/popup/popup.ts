@@ -40,16 +40,24 @@ async function main(): Promise<void> {
   } else {
     toggle.checked = !settings.siteOff.includes(host);
     toggle.addEventListener("change", async () => {
-      await setSettings(toggleSite(await getSettings(), host, toggle.checked));
-      const res = (await chrome.runtime.sendMessage({ type: "set-site", hostname: host, on: toggle.checked })) as { ok?: boolean } | undefined;
-      if (!res?.ok) {
-        // Server write failed: revert the local toggle so state stays honest.
-        await setSettings(toggleSite(await getSettings(), host, !toggle.checked));
-        toggle.checked = !toggle.checked;
-        $("site-status").textContent = "Couldn't save to your account — change kept local only.";
-        return;
+      const on = toggle.checked;
+      const revert = async (copy: string) => {
+        await setSettings(toggleSite(await getSettings(), host, !on));
+        toggle.checked = !on;
+        $("site-status").textContent = copy;
+      };
+      await setSettings(toggleSite(await getSettings(), host, on));
+      try {
+        const res = (await chrome.runtime.sendMessage({ type: "set-site", hostname: host, on })) as { ok?: boolean } | undefined;
+        if (!res?.ok) {
+          // Server write failed: revert the local toggle so state stays honest.
+          await revert("Couldn't save — change reverted");
+          return;
+        }
+        if (tab?.id !== undefined) await chrome.tabs.reload(tab.id);
+      } catch {
+        await revert("Couldn't save — change reverted");
       }
-      if (tab?.id !== undefined) await chrome.tabs.reload(tab.id);
     });
   }
 

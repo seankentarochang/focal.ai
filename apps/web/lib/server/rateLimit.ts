@@ -1,6 +1,7 @@
 const DEFAULT_LIMIT = 30;
 const DEFAULT_WINDOW_MS = 60000;
 
+let maxWindowSeen = 0;
 const hits = new Map<string, number[]>();
 
 export function checkRateLimit(
@@ -14,10 +15,21 @@ export function checkRateLimit(
   if (hits.size > 10000) {
     // Evict keys whose newest hit is outside every window we use.
     const maxWindow = DEFAULT_WINDOW_MS * 60;
+    maxWindowSeen = Math.max(maxWindowSeen, windowMs);
     for (const [k, ats] of hits) {
       if (ats.every((at) => now - at > maxWindow)) hits.delete(k);
     }
-    if (hits.size > 10000) hits.clear();
+    if (hits.size > 10000) {
+      // Evict stale keys first (older than the largest window ever requested),
+      // then the oldest-touched keys — never a blanket clear.
+      for (const [k, ats] of hits) {
+        if (ats.every((at) => now - at > maxWindowSeen)) hits.delete(k);
+      }
+      if (hits.size > 10000) {
+        const byLastHit = [...hits.entries()].sort((a, b) => (a[1][a[1].length - 1] ?? 0) - (b[1][b[1].length - 1] ?? 0));
+        for (const [k] of byLastHit.slice(0, hits.size - 10000)) hits.delete(k);
+      }
+    }
   }
   const recent = (hits.get(key) ?? []).filter((at) => now - at < windowMs);
   if (recent.length >= limit) {

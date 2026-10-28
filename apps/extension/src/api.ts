@@ -44,7 +44,6 @@ export interface IdentifyResponse {
 /** Known layouts send only names, type and city (§6). */
 export interface RankRequest {
   host: string;
-  pathPattern: string;
   pageType: InsightType;
   items: IdentifiedItem[];
 }

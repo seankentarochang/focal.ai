@@ -50,8 +50,10 @@ const withProfilePage = <T extends Record<string, unknown>>(ctx: ProfileToolCont
 
 async function save(ctx: ProfileToolContext, input: Parameters<typeof addEntry>[1]) {
   const { profile, event } = addEntry(ctx.getProfile(), input, ctx.actor);
-  await ctx.commit(profile, event);
-  ctx.events.push(event);
+  if (event) {
+    await ctx.commit(profile, event);
+    ctx.events.push(event);
+  }
   return event;
 }
 
@@ -146,7 +148,7 @@ export async function runProfileTool(ctx: ProfileToolContext, name: string, args
         source: ctx.actor,
         ...(e.disambiguation ? { disambiguation: e.disambiguation } : {}),
       });
-      return withProfilePage(ctx, { saved: true, name: e.name, disambiguation: e.disambiguation, strength, event_id: event.id });
+      return withProfilePage(ctx, { saved: true, name: e.name, disambiguation: e.disambiguation, strength, event_id: event?.id ?? null });
     }
     case "add_vibe":
     case "propose_rule": {
@@ -175,13 +177,13 @@ export async function runProfileTool(ctx: ProfileToolContext, name: string, args
           ? await save(ctx, { kind: "vibe", qlooId: tag.id, name: tag.name, strength: strength as (typeof STRENGTHS)[number], source: ctx.actor })
           : await save(ctx, { kind: "rule", qlooId: tag.id, name: tag.name, source: ctx.actor });
       return name === "add_vibe"
-        ? withProfilePage(ctx, { saved: true, vibe: tag.name, strength, event_id: event.id })
+        ? withProfilePage(ctx, { saved: true, vibe: tag.name, strength, event_id: event?.id ?? null })
         : withProfilePage(ctx, {
             saved: true,
             rule: tag.name,
             status: "pending",
             note: "The user must approve this rule on their focal profile page.",
-            event_id: event.id,
+            event_id: event?.id ?? null,
           });
     }
     case "remove_entry": {
@@ -190,9 +192,11 @@ export async function runProfileTool(ctx: ProfileToolContext, name: string, args
       const matches = ctx.getProfile().entries.filter((e) => normalizeName(e.name) === normalizeName(target));
       if (matches.length !== 1) return { removed: false, choices: matches.map((m) => ({ name: m.name, kind: m.kind })) };
       const { profile, event } = removeEntry(ctx.getProfile(), matches[0]!.id, ctx.actor);
-      await ctx.commit(profile, event);
-      ctx.events.push(event);
-      return withProfilePage(ctx, { removed: true, name: matches[0]!.name, event_id: event.id });
+      if (event) {
+        await ctx.commit(profile, event);
+        ctx.events.push(event);
+      }
+      return withProfilePage(ctx, { removed: true, name: matches[0]!.name, event_id: event?.id ?? null });
     }
     case "read_profile":
       return { profile: summarizeProfile(ctx.getProfile()) || "empty" };

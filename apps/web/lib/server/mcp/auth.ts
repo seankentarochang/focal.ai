@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import type { Db } from "@focal-ai/db";
+import { DbError } from "@focal-ai/db";
 import { ensureUser } from "../auth/users";
 
 /** OAuth access tokens are JWTs, longer than the extension's session tokens. */
@@ -67,7 +68,7 @@ export async function verifyAccessToken(req: Request, token: string): Promise<JW
   try {
     const { payload } = await jwtVerify(token, jwksFor(issuer), { issuer });
     const aud = typeof payload.aud === "string" ? [payload.aud] : (payload.aud ?? []);
-    if (aud.length > 0 && !aud.some((a) => allowedAudiences(req).includes(a))) return null;
+    if (aud.length === 0 || !aud.some((a) => allowedAudiences(req).includes(a))) return null;
     return payload.sub ? payload : null;
   } catch (e) {
     if (process.env.MCP_AUTH_DEBUG) console.error(e);
@@ -121,7 +122,14 @@ async function userForWorkosId(db: Db, workosId: string): Promise<string | null>
   if (!user && process.env.WORKOS_API_KEY) {
     const { WorkOS } = await import("@workos-inc/node");
     const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(workosId).catch(() => null);
-    if (remote?.email) user = await ensureUser(db, { id: workosId, email: remote.email, emailVerified: remote.emailVerified === true });
+    if (remote?.email) {
+      try {
+        user = await ensureUser(db, { id: workosId, email: remote.email, emailVerified: remote.emailVerified === true });
+      } catch (e) {
+        if (e instanceof DbError && e.code === "CONFLICT") return null; // invalid token for MCP purposes
+        throw e;
+      }
+    }
   }
   if (user) userIds.set(workosId, user.id);
   return user?.id ?? null;

@@ -107,7 +107,7 @@ describe.skipIf(!url)("/api/settings in Postgres", () => {
         { hostname: "off.me", mode: "off" },
       ]),
     );
-    await put({ sites: [{ hostname: "off.me", mode: "on" }] });
-    expect(await db.sites.list(userId)).toEqual([{ hostname: "off.me", mode: "on" }]);
+    await put({ sites: [{ hostname: "off.me", mode: "off" }] });
+    expect(await db.sites.list(userId)).toEqual([{ hostname: "off.me", mode: "off" }]);
   });
 });

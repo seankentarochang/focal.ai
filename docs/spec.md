@@ -81,6 +81,9 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 | `GET /api/activity`, `POST /api/activity/:id/undo` | Activity feed and undo |
 | `POST /api/feedback` | More like this / Not for me from a page |
 | `GET/PUT/POST /api/settings` | Sites to skip, preferences; POST writes one site (extension toolbar) |
+| `GET/DELETE /api/profile`, `GET /api/profile/export` | Account deletion and full export (profile, activity, page results) |
+| `POST/DELETE /api/extension/session` | Issue or revoke the extension's bearer token (cookie-auth only) |
+| `POST /api/try/rank` | Anonymous lift-only demo rank for the /try pages; no profile, no cache |
 | `POST /api/chat` | Website chat agent (§5.9) |
 | `/mcp` | Hosted MCP endpoint with OAuth (§5.10) |
 
@@ -103,7 +106,7 @@ Moves from local stdio to a hosted HTTP endpoint with OAuth so ChatGPT and claud
 | User | id, email, auth provider ids, created | |
 | ProfileEntry | id, user, kind (`thing` / `vibe` / `rule`), qloo id (entity or tag URN), name, type, strength (`love` / `like` / `dislike`; rules are `never`), source (`chat` / `mcp:<client>` / `page` / `manual`), created | Rules start `pending` when proposed by an agent and become active on approval |
 | ActivityEvent | id, user, actor, action (add / remove / change / approve / undo), entry snapshot, at, undone | Feeds the activity page and undo |
-| SiteSetting | user, hostname, mode (`skip` / `off` / `on`) | Built-in never-run list is code, not data |
+| SiteSetting | user, hostname, mode (`skip` / `off`) | Built-in never-run list is code, not data |
 | Layout | card fingerprint, name position, type, city source | Derived by identify and stored only in the extension (D-18); structure only, never page content |
 | ResolutionCache | normalized name, type, city → entity id + match status | Shared across users |
 | PageResult | id, user, hostname, items with status/affinity/reasons, plan, created | Deleted after 24 h; backs `/why/<id>` |
@@ -121,7 +124,7 @@ Pages with no detected list are left alone, and nothing is sent anywhere.
 
 ### 5.2 Finding the list
 
-Automatic detection on any site, no per-site adapters: find the dominant group of repeated sibling elements with similar structure (cards), at least 3 of them, containing short title-like text. For each card, extract up to 6 text snippets (title, subtitle, address line, badge; each at most 80 characters) and any outbound link hosts and paths. Detection and extraction run locally.
+Automatic detection on any site, no per-site adapters: find the dominant group of repeated sibling elements with similar structure (cards), at least 3 of them, containing short title-like text. For each card, extract up to 6 text snippets (title, subtitle, address line, badge; each at most 80 characters). Detection and extraction run locally — card links are not extracted or sent (they return with X-05 outside-ID confirmation).
 
 ### 5.3 Identifying each item (Jev)
 
@@ -184,7 +187,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 
 ## 6. Privacy and security
 
-- **What leaves the browser:** on a new site layout, the text snippets of list cards (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server. Item names go to Qloo.
+- **What leaves the browser:** on a new site layout, the text snippets of list cards (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and settings. Item names go to Qloo. Card links are not sent (they return with X-05).
 - **Stored on the server:** account, profile, activity, settings, the shared resolution cache, and page results for 24 h. Learned layouts stay in the extension (structure only, D-18). No browsing history.
 - **Chat text** is processed by the free LLM providers, some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.

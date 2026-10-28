@@ -1,4 +1,5 @@
 import { QlooError, type QlooErrorCode } from "@focal-ai/qloo";
+import { DbError } from "@focal-ai/db";
 import { ZodError } from "zod";
 
 const STATUS_BY_CODE: Record<QlooErrorCode, number> = {
@@ -24,6 +25,18 @@ export function errorResponse(e: unknown): Response {
       { error: { code: e.code, message: e.code === "AUTH" ? AUTH_MESSAGE : e.message } },
       { status, headers },
     );
+  }
+
+  if (e instanceof DbError) {
+    if (e.code === "CONFLICT") {
+      return Response.json(
+        { error: { code: "CONFLICT", message: "Your profile changed; try again" } },
+        { status: 409 },
+      );
+    }
+    if (e.code === "NOT_FOUND") {
+      return Response.json({ error: { code: "NOT_FOUND", message: e.message } }, { status: 404 });
+    }
   }
 
   if (e instanceof ZodError) {

@@ -99,19 +99,29 @@ async function main() {
   const tryChecks: Record<string, unknown> = {};
   for (const id of ["tables", "atlas", "verve"] as const) {
     const page = PAGES[id];
-    const items = page.candidates.map((c: { name: string; locationText?: string }) => ({ name: c.name, city: c.locationText }));
+    const items = page.candidates.map((c: { name: string; locationText?: string }, i: number) => ({ clientId: `tc${i}`, name: c.name, city: c.locationText }));
     const r = await post("/api/try/rank", { pageType: page.type, items, seeds: trySeeds });
+    const returned = (r.json?.items ?? []) as { clientId?: string }[];
+    const meta = (r.json?.meta ?? {}) as Record<string, unknown>;
     tryChecks[id] = {
       status: r.status,
       ms: r.ms,
       nItems: items.length,
-      plan: r.json?.plan ? checkLiftOnly(r.json.plan, items.map((_c: unknown, i: number) => `c${i}`)) : "no plan",
+      clientIdEcho: returned.length === items.length && returned.every((it, i) => it.clientId === `tc${i}`),
+      metaFields: ["durationMs", "unresolved", "qlooRequest", "dataSource"].every((k) => k in meta),
+      plan: r.json?.plan ? checkLiftOnly(r.json.plan, items.map((_c: unknown, i: number) => `tc${i}`)) : "no plan",
       summaryLifted: r.json?.plan?.summary?.lifted,
     };
   }
   const pasted = ["Rintaro", "Lazy Bear", "State Bird Provisions", "Kokkari Estiatorio", "House of Prime Rib", "Zuni Café", "Saison", "Che Fico", "Nopa", "Foreign Cinema"];
-  const rp = await post("/api/try/rank", { pageType: "urn:entity:place", items: pasted.map((name) => ({ name, city: "San Francisco" })), seeds: trySeeds });
-  tryChecks["pasted"] = { status: rp.status, ms: rp.ms, plan: rp.json?.plan ? checkLiftOnly(rp.json.plan, pasted.map((_n, i) => `c${i}`)) : "no plan", summaryLifted: rp.json?.plan?.summary?.lifted };
+  const rp = await post("/api/try/rank", { pageType: "urn:entity:place", items: pasted.map((name, i) => ({ clientId: `pc${i}`, name, city: "San Francisco" })), seeds: trySeeds });
+  tryChecks["pasted"] = { status: rp.status, ms: rp.ms, plan: rp.json?.plan ? checkLiftOnly(rp.json.plan, pasted.map((_n, i) => `pc${i}`)) : "no plan", summaryLifted: rp.json?.plan?.summary?.lifted };
+
+  // Removed round-1 routes must 404.
+  tryChecks["removed-routes"] = {
+    "/api/qloo/rank": (await post("/api/qloo/rank", {})).status,
+    "/api/agent": (await post("/api/agent", {})).status,
+  };
   note("c.tryRank", tryChecks);
 
   // ---- d: seed DB user + token, /api/page/rank twice ----
@@ -153,7 +163,7 @@ async function main() {
   };
   const items1 = (((prRows as { id: string; items: { status: string }[] }[]).find((x) => x.id === r1.json?.pageResultId))?.items ?? []);
   note("d.pageRank", {
-    run1: { status: r1.status, ms: r1.ms, resolved: items1.filter((i) => i.status === "resolved" || i.status === "ambiguous").length, total: items1.length, lifted: r1.json?.plan?.summary?.lifted ?? r1.json?.result?.plan?.summary?.lifted },
+    run1: { status: r1.status, ms: r1.ms, resolvedCount: r1.json?.resolvedCount, resolved: items1.filter((i) => i.status === "resolved" || i.status === "ambiguous").length, total: items1.length, lifted: r1.json?.plan?.summary?.lifted ?? r1.json?.result?.plan?.summary?.lifted },
     run2: { status: r2.status, ms: r2.ms },
     cacheUnchanged: cacheBefore.n === cacheAfter.n && String(cacheBefore.mx) === String(cacheAfter.mx),
     cache: { before: cacheBefore.n, after: cacheAfter.n },
@@ -170,8 +180,8 @@ async function main() {
   let undo: { status: number } = { status: 0 };
   let actRow: Record<string, unknown> | null = null;
   if (fb.status === 200 && fb.json?.eventId) {
-    undo = await post("/api/feedback", { action: "undo", eventId: fb.json.eventId }, token);
-    const rows = await db.sql`select actor, action, undoes, undone_by from activity_events where user_id = ${user.id} order by at desc limit 5`;
+    undo = await post(`/api/activity/${encodeURIComponent(fb.json.eventId)}/undo`, {}, token);
+    const rows = await db.sql`select actor, action, undoes, undone_by from activity_events where user_id = ${user.id} order by seq desc limit 5`;
     actRow = (rows as Record<string, unknown>[]).find((r) => r.actor === "page") ?? null;
   }
   note("e.feedback", { fb: fb.status, saved: fb.json?.saved, undo: undo.status, actor: actRow?.actor, action: actRow?.action, undoneBy: !!actRow?.undone_by, resultIdUsed: !!resultId, clientId: liftedClientId });
@@ -179,9 +189,11 @@ async function main() {
   // ---- f: settings round-trip ----
   const before = await get("/api/settings", token);
   const put1 = await put("/api/settings", { sites: [{ hostname: "example.com", mode: "skip" }] }, token);
+  const postSite = await post("/api/settings", { hostname: "second.example", mode: "off" }, token);
   const after = await get("/api/settings", token);
+  const removed = await post("/api/settings", { hostname: "second.example", mode: null }, token);
   await put("/api/settings", before.json ?? { sites: [] }, token); // restore
-  note("f.settings", { put: put1.status, get: after.status, sites: after.json?.sites?.length, restored: true });
+  note("f.settings", { put: put1.status, postSite: postSite.status, removeSite: removed.status, get: after.status, sites: after.json?.sites?.length, restored: true });
 
   // ---- g: unauth 401s ----
   const unauth: Record<string, number> = {};
