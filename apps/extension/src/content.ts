@@ -63,6 +63,7 @@ function scheduleRerun(): void {
     if (runTimes.length >= MAX_RUNS_PER_MINUTE) return scheduleRerun();
     const list = detectList(document);
     if (!list) {
+      clearApplied(); // R8-2: the list is gone — stand down too
       bodyBackoffMs = Math.min(bodyBackoffMs * 2, 30000);
       return watchPage();
     }
@@ -157,11 +158,22 @@ function reject(list: DetectedList): void {
 let activeGate: ReturnType<typeof createGate> | null = null;
 
 async function run(gateMs?: number): Promise<void> {
+  if (running) {
+    rerunQueued = true; // fold the newer DOM state into one more pass (R8-1)
+    return;
+  }
+  running = true;
   try {
-    await runInner(gateMs);
-  } catch {
-    // runInner cancels the gate it created on failure — activeGate may belong
-    // to a newer run by now, so never touch it here.
+    do {
+      rerunQueued = false;
+      try {
+        await runInner(gateMs);
+      } catch {
+        // runInner cancels only the gate it created on failure.
+      }
+    } while (rerunQueued);
+  } finally {
+    running = false;
   }
 }
 
@@ -186,8 +198,7 @@ async function runInner(gateMs?: number): Promise<void> {
   const list = detectList(document);
   if (!list) {
     lastList = null;
-    current?.undo(); // R5-6: no focal UI outliving its list
-    drainRecords();
+    clearApplied(); // R8-2: no focal UI outliving its list
     return watchPage();
   }
   if (userUndidFor === list.container) {
@@ -206,8 +217,6 @@ async function runInner(gateMs?: number): Promise<void> {
 
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
-  activeGate?.cancel();
-  drainRecords();
   const gate = createGate(list.container as HTMLElement, gateMs, {
     offerOnly: runCount > 0 && onScreen(list.container),
   });
@@ -229,7 +238,13 @@ function scheduleRetry(container: Element): void {
   if (entry.count >= 3) return;
   entry.count += 1;
   clearTimeout(entry.timer); // a second failure while queued never double-books a run
-  entry.timer = setTimeout(() => void run(0), 60000);
+  entry.timer = setTimeout(() => {
+    if (!container.isConnected) {
+      retryBudget.delete(container); // R8-3: the list is gone — stop retrying it
+      return;
+    }
+    void run(0);
+  }, 60000);
   retryBudget.set(container, entry);
 }
 
@@ -263,6 +278,7 @@ async function runWithGate(
       else scheduleRetry(list.container); // failure, null type or empty items: retry budget (R4-14)
       return;
     }
+    retryBudget.delete(list.container); // R8-3: a usable identify ends the failure episode
     pageType = identified.data.pageType;
     items = identified.data.items;
     if (identified.data.layout) void saveLayout(storageKey, identified.data.layout).catch(() => {});
@@ -383,7 +399,7 @@ async function runWithGate(
   // the pass is idempotent, never touches `current`, and sends no page-result.
   // The chip's deferred apply does the full reorder.
   const outcome = gate.ready(() => applyNow(plan));
-  if (outcome === "late-offered") {
+  if (outcome === "late-offered" && userUndidFor !== list.container) {
     labelHandle?.undo();
     const ops = plan.ops.filter(
       (o): o is Extract<RenderOp, { op: "annotate" }> =>
@@ -411,6 +427,8 @@ const hrefTimer = setInterval(() => {
   bodyBackoffMs = 1000;
   lastList = null;
   userUndidFor = null;
+  activeGate?.cancel(); // R8-6: retire the old page's chip
+  activeGate = null;
   clearApplied();
   scheduleRerun();
 }, 1000);
@@ -423,9 +441,12 @@ let labelHandle: ApplyHandle | null = null;
 
 /** One teardown path: drop the label pass and the live arrangement (R7-3). */
 function clearApplied(): void {
-  labelHandle?.undo();
+  const labels = labelHandle;
+  const live = current;
   labelHandle = null;
-  current?.undo();
+  current = null; // null out first: undo() mutates the DOM and can re-enter (R8-2)
+  labels?.undo();
+  live?.undo();
   drainRecords();
 }
 
@@ -436,7 +457,7 @@ function liftInPlace(list: DetectedList, handle: ApplyHandle): boolean {
   const reorder = handle.plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder");
   const lifted = handle.plan.summary.lifted ?? handle.plan.summary.moved;
   const ids = reorder?.order.slice(0, lifted) ?? [];
-  const kids = [...list.container.children];
+  const kids = [...list.cards.values()]; // detected cards — promo children don't count (R8-5)
   return ids.every((id, i) => kids[i] === handle.applied.get(id));
 }
 

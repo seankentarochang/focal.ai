@@ -142,6 +142,40 @@ describe.skipIf(!url)("round2 server fixes", () => {
     expect(await db!.users.delete(u.id)).toBeNull();
   });
 
+  it("resolve budget: the 91st uncached miss makes no Qloo call", async () => {
+    const { cachedResolutionResolver } = await import("@/lib/server/resolution/cache");
+    const { checkRateLimit } = await import("@/lib/server/rateLimit");
+    let calls = 0;
+    const search = async () => { calls++; return { entities: [] } as never; };
+    // Exhaust the 90/min budget for this caller.
+    for (let i = 0; i < 90; i++) checkRateLimit("resolve:budget-user", { limit: 90, windowMs: 60_000 });
+    const resolve = cachedResolutionResolver(null, "budget-user");
+    const out = await resolve([{ clientId: "c0", name: "X", originalIndex: 0 }] as never, search, "place");
+    expect(calls).toBe(0);
+    expect(out[0]?.status).toBe("unresolved");
+  });
+
+  it("/mcp rate-limits by client IP before resolving the caller", async () => {
+    const { POST } = await import("@/app/mcp/route");
+    const { checkRateLimit, clientKey } = await import("@/lib/server/rateLimit");
+    const req = new Request("http://x/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    // Fill the IP bucket clientKey actually produces for this request.
+    for (let i = 0; i < 120; i++) checkRateLimit(`mcp-ip:${clientKey(req)}`, { limit: 120, windowMs: 60_000 });
+    const res = await POST(req);
+    expect(res.status).toBe(429);
+  });
+
+  it("a dev delete clears profile, settings and page results", async () => {
+    const { DELETE } = await import("@/app/api/profile/route");
+    const { GET } = await import("@/app/api/settings/route");
+    const viewer = await import("@/lib/server/auth/viewer");
+    vi.spyOn(viewer, "currentViewer").mockResolvedValue({ userId: "dev-user", email: "d@e.v", persisted: false } as never);
+    const { memory } = await import("@/app/api/settings/route") as never;
+    const res = await DELETE(new Request("http://x/api/profile", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "delete" }) }));
+    expect(res.status).toBe(200);
+    vi.restoreAllMocks();
+  });
+
   it("DELETE /api/profile with no user row returns 404", async () => {
     const { DELETE } = await import("@/app/api/profile/route");
     const viewer = await import("@/lib/server/auth/viewer");

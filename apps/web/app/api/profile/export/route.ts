@@ -1,3 +1,5 @@
+import { DbError } from "@focal-ai/db";
+import { errorResponse } from "@/lib/server/errors";
 import { currentViewer } from "@/lib/server/auth/viewer";
 import { memoryProfileStore } from "@/lib/server/chat/store";
 import { getDb } from "@/lib/server/db";
@@ -15,15 +17,21 @@ export async function GET(): Promise<Response> {
     );
   }
   const db = getDb();
-  const payload =
-    viewer.persisted && db
-      ? await db.profile.export(viewer.userId)
-      : {
-          user: { id: viewer.userId, email: viewer.email },
-          profile: { version: 2 as const, entries: (await memoryProfileStore(viewer.userId).load()).entries },
-          activity: [],
-          sites: [],
-        };
+  let payload;
+  try {
+    payload =
+      viewer.persisted && db
+        ? await db.profile.export(viewer.userId)
+        : {
+            user: { id: viewer.userId, email: viewer.email },
+            profile: { version: 2 as const, entries: (await memoryProfileStore(viewer.userId).load()).entries },
+            activity: [],
+            sites: [],
+          };
+  } catch (e) {
+    if (e instanceof DbError) return errorResponse(e);
+    throw e;
+  }
   return new Response(JSON.stringify(payload), {
     headers: {
       "content-type": "application/json",

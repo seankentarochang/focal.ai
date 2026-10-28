@@ -79,6 +79,8 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 | `GET/POST /api/profile` | Read and write things, vibes and rules (§4.5); every write produces an activity event |
 
 | `GET /api/activity`, `POST /api/activity/:id/undo` | Activity feed and undo |
+| `GET /api/me` | Signed-in status for the website header |
+| `GET /api/oauth/authorization-server`, `GET /api/oauth/protected-resource` | OAuth metadata for MCP clients (served at the `/.well-known/` paths) |
 | `POST /api/feedback` | More like this / Not for me from a page |
 | `GET/PUT/POST /api/settings` | Sites to skip, preferences; POST writes one site (extension toolbar) |
 | `GET/DELETE /api/profile`, `GET /api/profile/export` | Account deletion and full export (profile, activity, page results) |
@@ -154,7 +156,7 @@ Automatic detection on any site, no per-site adapters: find the dominant group o
 ### 5.6 Changing the page
 
 - **Lift only.** Items that score clearly above this page's average move to the top, best first. Initial rule, to be tuned: at least 3 scored items on the page; lift items whose affinity is at least one standard deviation above the page mean, at most 5. Everything else, including unmatched items, keeps the site's order. Scores are compared within the page because Qloo's levels differ by type (places around 0.7, destinations around 0.9).
-- **Reorder in place.** Prefer CSS ordering when the container is flex or grid (no nodes move); otherwise move nodes; re-apply when the site re-renders its list. Rewriting the list is a last-resort fallback for layouts where neither works.
+- **Reorder in place.** Prefer CSS ordering when the container is flex or grid (no nodes move); otherwise move nodes; re-apply when the site re-renders its list. (Later: rewriting the list as a last-resort fallback for layouts where neither works.) CSS ordering changes the visual order only: keyboard and screen-reader order still follow the site's DOM, a deliberate trade-off so focal never moves nodes a framework owns; the labels sit inside the lifted cards, so assistive tech still hears them in place.
 - **Labels:** "Top pick for you" for the one or two clearest matches, "Good match" for the rest, followed by "because you like X and Y" only when Qloo's explainability names likes from the profile. No reason text is ever invented. Exact Qloo affinity appears only in "Why this order?".
 - **Dislikes** (things and vibes) are never lifted and stay where the site put them.
 - **Hard rules** fold matching items into one line in place, e.g. "2 hidden by your rules (chain) · Show", only when Qloo has the item tagged with the rule's tag.
@@ -187,7 +189,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 
 ## 6. Privacy and security
 
-- **What leaves the browser:** on a new site layout, the text snippets of list cards, the hostname, path pattern and city hints go to the focal server and to TypeSafe (Jev); the structure-only page signature goes only to the focal server (never full pages, screenshots, or form field contents — except a city taken from a location box or an "in <city>" phrase in a search box). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and settings. Item names and the page's city go to Qloo. Card links are not sent (they return with X-05).
+- **What leaves the browser:** on a new site layout, the text snippets of list cards, the hostname, path pattern and city hints go to the focal server and to TypeSafe (Jev); the structure-only page signature goes only to the focal server (never full pages, screenshots, or form field contents — except a city taken from a location box or an "in <city>" phrase in a search box). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and on-page feedback. Item names and the page's city go to Qloo. Card links are not sent (they return with X-05).
 - **Stored on the server:** account, profile, activity, settings, the shared resolution cache, and page results for 24 h. Learned layouts stay in the extension (structure only, D-18). No browsing history.
 - **Chat text and a summary of your taste profile** are sent to the configured LLM providers (Groq → Cerebras → OpenRouter), some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.

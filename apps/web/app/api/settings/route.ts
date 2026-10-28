@@ -12,6 +12,11 @@ const putSchema = z.object({
 });
 
 const memory = new Map<string, SiteSetting[]>();
+
+/** Dev delete: drop the in-memory site settings for a user (R8-4). */
+export function clearMemorySites(userId: string): void {
+  memory.delete(userId);
+}
 const RATE_LIMIT = { limit: 30, windowMs: 60000 };
 
 function limited(retryAfterMs: number): Response {

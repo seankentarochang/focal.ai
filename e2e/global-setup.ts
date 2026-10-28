@@ -42,6 +42,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   // the "more" verdict a no-op (eventId:null → "Saved" without Undo).
   await db.sql`delete from activity_events where user_id = ${user.id}`;
   await db.sql`delete from profile_entries where user_id = ${user.id}`;
+  await db.sql`update users set profile_version = 0 where id = ${user.id}`;
   let profile: ProfileV2 = await db.profile.load(user.id);
   let seedList: readonly { qlooId: string; name: string; type: string; strength: string }[];
   if (live) {

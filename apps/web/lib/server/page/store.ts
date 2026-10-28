@@ -20,9 +20,16 @@ export interface PageResultStore {
   get(id: string, userId: string): Promise<StoredPageResult | null>;
 }
 
+const memoryRows = new Map<string, StoredPageResult>();
+
+/** Dev delete: drop this user's in-memory page results (R8-4). */
+export function clearMemoryPageResults(userId: string): void {
+  for (const [id, row] of memoryRows) if (row.userId === userId) memoryRows.delete(id);
+}
+
 /** In-process store with the 24 h expiry, used when no database is configured. */
 export function createMemoryPageResultStore(ttlMs = PAGE_RESULT_TTL_MS, max = 5000): PageResultStore {
-  const rows = new Map<string, StoredPageResult>();
+  const rows = memoryRows;
   const live = (r: StoredPageResult) => Date.parse(r.expiresAt) > Date.now();
   return {
     async save(r) {

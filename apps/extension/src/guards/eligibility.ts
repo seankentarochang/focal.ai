@@ -32,6 +32,7 @@ export function checkEligibility(input: EligibilityInput): Eligibility {
   if (url.protocol !== "https:" && url.protocol !== "http:") {
     return { eligible: false, reason: { kind: "scheme" } };
   }
+  if (!/^[a-z0-9.-]+$/.test(url.hostname)) return { eligible: false, reason: { kind: "scheme" } };
   const category = matchNeverRun(url, input.focalHosts);
   if (category) return { eligible: false, reason: { kind: "never-run", category } };
   const skipped = input.settings.skipSites.find((s) => hostMatches(url.hostname, s));

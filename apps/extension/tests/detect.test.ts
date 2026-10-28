@@ -117,3 +117,15 @@ describe("pathPattern", () => {
     expect(pathPattern("/")).toBe("/");
   });
 });
+
+describe("R8-10 payment iframe host matching", () => {
+  it("matches PSP hosts at a domain boundary and not substrings", async () => {
+    const { hasSensitiveField } = await import("../src/guards/fields");
+    const d = page('<iframe src="https://js.klarna.com/web"></iframe>');
+    expect(hasSensitiveField(d)).toBe(true);
+    const d2 = page('<iframe src="https://notpaypal.com/x"></iframe>');
+    expect(hasSensitiveField(d2)).toBe(false);
+    const d3 = page('<iframe src="https://evilp.paypal.com.evil.com/x"></iframe>');
+    expect(hasSensitiveField(d3)).toBe(false);
+  });
+});

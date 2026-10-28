@@ -1,6 +1,19 @@
 const PAYMENT_AUTOCOMPLETE = /\bcc-(number|csc|exp|exp-month|exp-year|name|type)\b/;
 const PAYMENT_NAME = /(card.?(number|num|no\b)|(credit|debit).?card|ccnum|cc-?num|cvv|cvc|csc\b|expir(y|ation)|security.?code|iban|routing.?number|account.?number)/i;
-const PAYMENT_FRAME = /(js\.stripe\.com|checkout\.stripe\.com|braintreegateway\.com|adyen\.com|checkout\.com|paypal\.com|squareup\.com|recurly\.com|worldpay\.com|authorize\.net)/i;
+const PAYMENT_HOSTS = [
+  "js.stripe.com", "checkout.stripe.com", "braintreegateway.com", "adyen.com",
+  "checkout.com", "paypal.com", "squareup.com", "recurly.com", "worldpay.com",
+  "authorize.net", "pay.google.com", "js.klarna.com", "klarnacdn.net", "connect.bolt.com", "shop.app",
+];
+/** Hostname match at a domain boundary — "notpaypal.com" never matches (R8-10). */
+const paymentFrame = (src: string): boolean => {
+  try {
+    const host = new URL(src).hostname.toLowerCase();
+    return PAYMENT_HOSTS.some((d) => host === d || host.endsWith(`.${d}`));
+  } catch {
+    return false;
+  }
+};
 
 /** False for fields the user can't see, like a closed sign-in dialog. */
 function rendered(el: HTMLElement): boolean {
@@ -27,7 +40,7 @@ export function hasSensitiveField(root: ParentNode): boolean {
     if (PAYMENT_NAME.test(key)) return true;
   }
   for (const frame of root.querySelectorAll<HTMLIFrameElement>("iframe[src]")) {
-    if (PAYMENT_FRAME.test(frame.getAttribute("src") ?? "")) return true;
+    if (paymentFrame(frame.getAttribute("src") ?? "")) return true;
   }
   return false;
 }

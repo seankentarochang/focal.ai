@@ -426,3 +426,42 @@ describe("R2-15h: settings traffic serialises through one queue", () => {
     expect(order).toEqual(["a", "b", "c"]);
   });
 });
+
+describe("R8-1/5: run serialization and move-mode skip", () => {
+  const CARDS = `<main><div class="results">
+    <div class="promo">Sponsored</div>
+    <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+    <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+    <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+    <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+  </div></main>`;
+
+  it("overlapping runs coalesce — the later state is applied, nothing dropped", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = CARDS;
+    prevMod = await import("../src/content");
+    // Two rapid mutations while the first run may be in flight.
+    const c = document.createElement("div");
+    c.className = "card"; c.innerHTML = "<a href='/e'><h3>E</h3></a><p>X</p>";
+    document.querySelector(".results")!.appendChild(c);
+    const c2 = c.cloneNode(true) as HTMLElement;
+    c2.innerHTML = "<a href='/f'><h3>F</h3></a><p>Y</p>";
+    document.querySelector(".results")!.appendChild(c2);
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "identify").length).toBeGreaterThanOrEqual(1), { timeout: 4000 });
+    await new Promise((r) => setTimeout(r, 2200));
+    expect(document.querySelectorAll("[data-focal='gate']").length).toBeLessThanOrEqual(1);
+    expect(sent.filter((m) => m.type === "rank").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a move-mode list with a leading promo child still takes the skip path", async () => {
+    const rect = { width: 800, height: 400, top: 0, left: 0, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) };
+    Element.prototype.getBoundingClientRect = () => rect as DOMRect;
+    const { sent } = stubChrome();
+    document.body.innerHTML = CARDS; // first child is .promo, not a card
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 4000 });
+    await new Promise((r) => setTimeout(r, 1200));
+    // A rerun over the same cards must skip re-apply even with the promo child.
+    expect(sent.filter((m) => m.type === "identify").length).toBeLessThanOrEqual(2);
+  });
+});

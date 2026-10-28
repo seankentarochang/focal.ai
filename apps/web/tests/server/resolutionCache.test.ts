@@ -68,7 +68,7 @@ describe("cachedResolutionResolver", () => {
   it("serves a second resolve of the same item from cache with no search call", async () => {
     const store = fakeStore();
     const search = vi.fn<CoreSearchFn>(async () => [RINTARO]);
-    const resolve = cachedResolutionResolver(store);
+    const resolve = cachedResolutionResolver(store, "u1");
 
     const first = await resolve([candidate], search, PLACE);
     expect(first[0]).toMatchObject({ status: "resolved", entity: { entityId: RINTARO.entityId } });
@@ -82,7 +82,7 @@ describe("cachedResolutionResolver", () => {
   it("keeps cached ambiguous outcomes without re-searching", async () => {
     const store = fakeStore([{ ...resolvedRow, status: "ambiguous" }]);
     const search = vi.fn<CoreSearchFn>(async () => []);
-    const resolved = await cachedResolutionResolver(store)([candidate], search, PLACE);
+    const resolved = await cachedResolutionResolver(store, "u1")([candidate], search, PLACE);
     expect(resolved[0]).toMatchObject({ status: "ambiguous", entity: { entityId: RINTARO.entityId } });
     expect(search).not.toHaveBeenCalled();
   });
@@ -92,7 +92,7 @@ describe("cachedResolutionResolver", () => {
     const store = fakeStore([{ ...resolvedRow, status: "unresolved", entityId: null, entity: null, updatedAt: stale }]);
     const search = vi.fn<CoreSearchFn>(async () => [RINTARO]);
 
-    const resolved = await cachedResolutionResolver(store)([candidate], search, PLACE);
+    const resolved = await cachedResolutionResolver(store, "u1")([candidate], search, PLACE);
     expect(resolved[0]).toMatchObject({ status: "resolved" });
     expect(search).toHaveBeenCalledTimes(1);
     const row = [...store.rows.values()][0]!;
@@ -103,7 +103,7 @@ describe("cachedResolutionResolver", () => {
   it("reuses an unresolved entry that is still fresh", async () => {
     const store = fakeStore([{ ...resolvedRow, status: "unresolved", entityId: null, entity: null }]);
     const search = vi.fn<CoreSearchFn>(async () => [RINTARO]);
-    const resolved = await cachedResolutionResolver(store)([candidate], search, PLACE);
+    const resolved = await cachedResolutionResolver(store, "u1")([candidate], search, PLACE);
     expect(resolved[0]).toMatchObject({ status: "unresolved" });
     expect(resolved[0]!.entity).toBeUndefined();
     expect(search).not.toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe("cachedResolutionResolver", () => {
     const failing = vi.fn<CoreSearchFn>(async () => {
       throw new QlooError("RATE_LIMIT", "too many requests");
     });
-    const resolve = cachedResolutionResolver(store);
+    const resolve = cachedResolutionResolver(store, "u1");
     await expect(resolve([candidate], failing, PLACE)).rejects.toBeInstanceOf(QlooError);
     expect(store.rows.size).toBe(0);
 
@@ -130,7 +130,7 @@ describe("cachedResolutionResolver", () => {
       throw new Error("db down");
     };
     const search = vi.fn<CoreSearchFn>(async () => [RINTARO]);
-    const resolved = await cachedResolutionResolver(store)([candidate], search, PLACE);
+    const resolved = await cachedResolutionResolver(store, "u1")([candidate], search, PLACE);
     expect(resolved[0]).toMatchObject({ status: "resolved" });
     expect(search).toHaveBeenCalledTimes(1);
   });
@@ -168,7 +168,7 @@ describe("cached resolution through the page rank pipeline", () => {
     const store = fakeStore();
     const search = vi.fn<CoreSearchFn>(async () => [RINTARO]);
     const insights = vi.fn(async () => ({ scores: [] }));
-    const deps = { search, insights, resolve: cachedResolutionResolver(store) };
+    const deps = { search, insights, resolve: cachedResolutionResolver(store, "u1") };
     const items: PageItem[] = [{ clientId: "c0", name: "Rintaro", originalIndex: 0, type: PLACE, city: "San Francisco" }];
 
     const first = await runPageRank({ pageId: "p1", pageType: PLACE, items, profile: PROFILE, deps });

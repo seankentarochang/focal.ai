@@ -94,7 +94,7 @@ export async function POST(req: Request): Promise<Response> {
       { host: "playground", pageType: pageType as never, items },
       toProfile(parsed.data.seeds, insightType),
       `try-${crypto.randomUUID()}`,
-      { useResolutionCache: false },
+      { useResolutionCache: false, callerKey: clientKey(req) },
     );
     return Response.json({
       status: result.status,

@@ -3,6 +3,8 @@ import { approveRule, changeStrength, removeEntry, ProfileError } from "@focal-a
 import { DbError } from "@focal-ai/db";
 import { currentViewer } from "@/lib/server/auth/viewer";
 import { clearMemoryProfile, dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
+import { clearMemorySites } from "@/app/api/settings/route";
+import { clearMemoryPageResults } from "@/lib/server/page/store";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";
 import { workosGone } from "@/lib/server/auth/users";
@@ -40,7 +42,12 @@ async function state(userId: string, persisted: boolean): Promise<Response> {
 export async function GET(): Promise<Response> {
   const viewer = await currentViewer();
   if (!viewer) return Response.json({ error: { code: "UNAUTHORIZED", message: "sign in to focal" } }, { status: 401 });
-  return state(viewer.userId, viewer.persisted);
+  try {
+    return await state(viewer.userId, viewer.persisted);
+  } catch (e) {
+    if (e instanceof DbError) return errorResponse(e);
+    throw e;
+  }
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -119,8 +126,10 @@ export async function DELETE(req: Request): Promise<Response> {
   }
   const db = getDb();
   if (!viewer.persisted) {
-    // Dev sessions hold profile state in process memory — clear it too (C7-1).
+    // Dev sessions keep all state in process memory — clear every store (R8-4).
     clearMemoryProfile(viewer.userId);
+    clearMemorySites(viewer.userId);
+    clearMemoryPageResults(viewer.userId);
   }
   if (viewer.persisted && db) {
     // Single delete-with-return: local data goes first (its cascade is

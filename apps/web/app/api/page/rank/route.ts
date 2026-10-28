@@ -30,7 +30,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const pageResultId = crypto.randomUUID();
   try {
-    const result = await rankPage(parsed.data, session.profile, pageResultId);
+    const result = await rankPage(parsed.data, session.profile, pageResultId, { callerKey: session.userId });
     let savedId: string | null = pageResultId;
     try {
       await getPageResultStore().save({

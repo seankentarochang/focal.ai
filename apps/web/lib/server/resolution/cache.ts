@@ -1,3 +1,4 @@
+import { checkRateLimit } from "../rateLimit";
 /**
  * Shared resolution cache (P-04): resolver-OUTCOME cache over the core
  * resolver, keyed by (normalized name, type URN, normalized city). Hits skip
@@ -73,7 +74,7 @@ function stillValid(row: CachedResolution): boolean {
  * time so a thrown search error is never cached. Cache read/write failures
  * fall back to plain resolution rather than failing the rank.
  */
-export function cachedResolutionResolver(store: ResolutionStore): CoreResolveFn {
+export function cachedResolutionResolver(store: ResolutionStore | null, callerKey: string): CoreResolveFn {
   return async (candidates, search, expectedType, defaults) => {
     const keys = candidates.map((candidate) => ({
       normalizedName: normalizeName(candidate.name),
@@ -82,10 +83,12 @@ export function cachedResolutionResolver(store: ResolutionStore): CoreResolveFn 
     }));
 
     let rows: CachedResolution[] = [];
-    try {
-      rows = await store.getMany(keys);
-    } catch {
-      rows = [];
+    if (store) {
+      try {
+        rows = await store.getMany(keys);
+      } catch {
+        rows = [];
+      }
     }
     const hits = new Map(rows.filter(stillValid).map((row) => [keyOf(row), row]));
 
@@ -105,8 +108,15 @@ export function cachedResolutionResolver(store: ResolutionStore): CoreResolveFn 
     });
 
     for (const index of misses) {
+      // Per-caller uncached budget: a 60-item rank fans out to paced Qloo
+      // searches — cap them so one caller can't starve the queue (R8-8).
+      if (!checkRateLimit(`resolve:${callerKey}`, { limit: 90, windowMs: 60_000 }).ok) {
+        resolved[index] = { ...candidates[index]!, status: "unresolved" as ResolutionStatus };
+        continue;
+      }
       const [outcome] = await resolveCandidates([candidates[index]!], search, expectedType, defaults);
       resolved[index] = outcome;
+      if (!store) continue;
       try {
         await store.put([
           {
