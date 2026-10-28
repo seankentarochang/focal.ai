@@ -51,4 +51,24 @@ export const test = base.extend<{ focal: Focal }>({
 export { expect } from "@playwright/test";
 
 export const cards = (page: import("@playwright/test").Page) => page.locator("#results > article");
-export const cardNames = (page: import("@playwright/test").Page) => page.locator("#results > article h3").allTextContents();
+
+/**
+ * Card names in VISUAL order. Lifted cards are reordered with the CSS `order`
+ * property on flex containers (their DOM order never changes), so reading the
+ * DOM sequence would not see the lift. Names take the h3's own text nodes —
+ * focal's label is slotted inside it and must not leak into the name.
+ */
+export const cardNames = (page: import("@playwright/test").Page) =>
+  page.locator("#results > article").evaluateAll((els) =>
+    els
+      .map((el) => ({
+        top: el.getBoundingClientRect().top,
+        name: [...(el.querySelector("h3")?.childNodes ?? [])]
+          .filter((n) => n.nodeType === 3)
+          .map((n) => n.textContent ?? "")
+          .join("")
+          .trim(),
+      }))
+      .sort((a, b) => a.top - b.top)
+      .map((c) => c.name),
+  );

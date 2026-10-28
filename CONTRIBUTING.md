@@ -6,43 +6,62 @@ Thanks for being here. focal.ai is early, so almost everything is still open.
 
 The highest leverage contributions, in order:
 
-1. **Render policies.** A policy for a site you use every day is worth more than almost any code change. Add it to `policies/` and open a PR with a before and after screenshot.
-2. **Extraction adapters.** The generic DOM walker misses on some frameworks and layouts. If a site extracts badly, a targeted adapter in `packages/core` fixes it for everyone.
-3. **MCP tools.** New tools in `packages/mcp` that make the taste graph more useful to agents.
-4. **Bugs and performance.** The render path has a 40 ms budget. Regressions there are treated as bugs.
+1. **Detection and identification quality.** The generic sibling-card detector
+   (`apps/extension/src/detect`) misses on some layouts, and learned layouts
+   (`apps/web/lib/server/page/layout.ts`, `apps/extension/src/layouts/`) are
+   only as good as the cards they were trained on. A failing site you use
+   every day is the best possible bug report — include the page URL and a
+   redacted copy of its list markup.
+2. **The lift rule.** Tuning `decideLift` (`packages/core/src/lift.ts`) —
+   thresholds, min-scored, top-pick rules — changes what every page feels
+   like. Proposals need before/after evidence on real lists.
+3. **MCP tools and website UX.** `packages/mcp` and `apps/web` — the profile,
+   activity, settings and onboarding surfaces all have room to grow.
+4. **Performance.** Identify and rank are the slow path. The resolution
+   cache, the shared 5 req/s Qloo pacer and layout learning exist to keep
+   them off it; regressions there are treated as bugs.
 
 ## Setup
 
 ```bash
 pnpm install
-cp .env.example .env                            # add your Qloo key
-cp apps/web/.env.example apps/web/.env.local    # web app secrets (Qloo key, Anthropic key)
-pnpm dev                                        # web app (apps/web)
-pnpm dev:all                                    # web app + MCP server
-pnpm probe                                      # live Qloo contract probe (needs QLOO_API_KEY)
+cp apps/web/.env.example apps/web/.env.local    # see README for the variables
+cd apps/web && QLOO_MOCK=1 FOCAL_DEV_SESSION=1 pnpm dev   # web app, zero keys
+cd apps/extension && FOCAL_ORIGIN=http://localhost:3000 pnpm build
 ```
+
+The e2e harness needs a Postgres (`DATABASE_URL`); see `e2e/` for the fixture
+server and spec layout.
 
 ## Before you open a PR
 
 ```bash
-pnpm check                          # typecheck + tests across all packages
-pnpm --filter @focal-ai/web build   # production build of the web app
-pnpm lint
+pnpm -r typecheck && pnpm -r test   # DB suites need DATABASE_URL
+pnpm e2e                            # Playwright, fully offline
+pnpm --filter @focal-ai/web build
+pnpm --filter @focal-ai/extension build
 ```
 
-Packages (`packages/core`, `packages/qloo`, `packages/mcp`) are consumed as TypeScript source — there is no `dist` build step, which is a deliberate simplification. `docs/tickets.md` is the work backlog.
+Packages (`packages/{core,qloo,db,mcp}`) are consumed as TypeScript source —
+there is no `dist` build step. `docs/tickets.md` is the work backlog.
 
 - Keep PRs focused on one thing.
-- Include a before and after for anything that changes rendering.
-- New policies need at least one extraction test fixture.
-- Anything that touches what leaves the browser needs a note in the PR describing exactly what is sent and why.
+- Anything that changes what a page looks like needs a before/after.
+- Anything that changes what leaves the browser needs a note in the PR
+  describing exactly what is sent and why, and a matching `/privacy` update.
 
 ## Ground rules
 
-- Page HTML, screenshots, and form contents never leave the client. PRs that change this will be closed.
-- Blocked origins (banking, health, government, auth) stay blocked. This is not configurable.
-- Every MCP write stays attributable and reversible.
+- Page HTML, screenshots and form contents never leave the client. PRs that
+  change this will be closed.
+- Never-run categories (banking, health, government, sign-in, adult,
+  gambling) stay blocked. This is not configurable.
+- The lift rule only reorders. It never hides site content and never injects
+  content the site did not already have.
+- Every profile write stays attributed and reversible.
 
 ## Reporting bugs
 
-Open an issue with the URL, the policy that was active, and the output of `⌥F` on the page. Security issues should go to the maintainers privately rather than into a public issue.
+Open an issue with the URL, what focal did, and what you expected. Security
+issues should go to the maintainers privately rather than into a public
+issue.

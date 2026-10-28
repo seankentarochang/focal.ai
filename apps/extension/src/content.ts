@@ -159,9 +159,15 @@ async function run(gateMs?: number): Promise<void> {
               label.querySelectorAll("button[data-focal-action]").forEach((b) => b.remove());
               const saved = document.createElement("span");
               saved.textContent = "Saved · ";
+              saved.style.cssText =
+                "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#52525b!important;align-self:center";
               const undo = document.createElement("button");
               undo.setAttribute("type", "button");
               undo.textContent = "Undo";
+              undo.style.cssText =
+                "display:inline-flex!important;align-items:center;height:20px!important;padding:0 8px!important;border-radius:999px;cursor:pointer;" +
+                "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
+                "background:#18181b!important;border:1px solid #3f3f46!important";
               undo.addEventListener("click", (ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();

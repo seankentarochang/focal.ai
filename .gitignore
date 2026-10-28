@@ -27,3 +27,4 @@ scripts/probe-output/
 test-results/
 playwright-report/
 e2e/.session.json
+e2e/artifacts/

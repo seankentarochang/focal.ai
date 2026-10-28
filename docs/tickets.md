@@ -47,12 +47,12 @@ Google and email-link sign-in on the website; an endpoint that issues the extens
 **Acceptance:** signed-in website session; the extension receives and refreshes a token without its own login screen.
 
 ### P-03 · Profile v2 and activity
-Status: [ ] — **Partial** (#2 / #6 / #9: things, vibes and rules with strength and source, pending rules, activity events, approve and undo; export and delete-account routes missing) · **P0** · Deps: P-01, P-02 · Owns: `packages/core/src/profile.ts`, `apps/web/app/api/profile/**`, `apps/web/app/api/activity/**`
+Status: [x] (#9 and stage 2/3: export and delete routes, add/remove/change/approve/undo tests) · **P0** · Deps: P-01, P-02 · Owns: `packages/core/src/profile.ts`, `apps/web/app/api/profile/**`, `apps/web/app/api/activity/**`
 Things, vibes and rules with strength (love / like / dislike / never) and source; pending rules; every write produces an ActivityEvent; undo restores the previous state. Export and delete account.
 **Acceptance:** API tests for add / remove / change / approve / undo and attribution; export returns the full profile JSON.
 
 ### P-04 · Shared resolution cache and Qloo queue
-Status: [ ] — **Partial** (pacing in `packages/qloo/src/pace.ts`; the Postgres `resolution_cache` repo exists but nothing calls it) · **P0** · Deps: P-01 · Owns: `packages/qloo/src/pace.ts`, `apps/web/lib/server/qloo.ts`, `apps/web/lib/server/resolution/**`
+Status: [x] (stage 2: Postgres resolution cache at the resolver-outcome level, one process-wide 5 req/s gate) · **P0** · Deps: P-01 · Owns: `packages/qloo/src/pace.ts`, `apps/web/lib/server/qloo.ts`, `apps/web/lib/server/resolution/**`
 One server-wide Qloo queue under 5 req/s; resolution results cached in ResolutionCache keyed by normalized name, type and city; cache hits skip `/search`.
 **Acceptance:** tests show a second resolve of the same item makes no Qloo call; queue never exceeds the pace under concurrent ranks.
 
@@ -66,7 +66,7 @@ Chromium MV3 build; background service worker owns all server calls; toolbar men
 **Acceptance:** loads unpacked in Chrome, Edge and Brave; signs in through the website; CI builds the zip.
 
 ### X-02 · Eligibility guards
-Status: [ ] — **Code merged** (#3, unit tests in `apps/extension/tests/guards.test.ts`); the "no request on a blocked page" end-to-end check lands with S-02 · **P0** · Deps: X-01 · Owns: `apps/extension/src/guards/**`
+Status: [x] (unit tests plus e2e: no request on blocked pages) · **P0** · Deps: X-01 · Owns: `apps/extension/src/guards/**`
 Built-in never-run list (§5.1), user skip list and per-site off from settings, password / payment field detection, incognito off by default.
 **Acceptance:** unit tests per rule; on a blocked page nothing is extracted and no request is sent.
 
@@ -76,7 +76,7 @@ Find the dominant group of 3+ repeated cards with title-like text; extract up to
 **Acceptance:** fixtures saved from 10 real sites detect the right list; non-list pages (inbox-like, news) detect nothing or are rejected by X-04.
 
 ### X-04 · Identify endpoint and layout learning
-Status: [ ] — **Partial** (#5: identify route, Jev client, 0.8 threshold, per-user limit; layout learning not built, so every page calls identify) · **P0** · Deps: V-02, X-03, P-01 · Owns: `apps/web/app/api/page/identify/**`, `apps/web/lib/server/jev/**`, `apps/extension/src/layouts/**`
+Status: [x] (stage 2: learned layouts server-side and in the extension; e2e: no identify call on the second visit) · **P0** · Deps: V-02, X-03, P-01 · Owns: `apps/web/app/api/page/identify/**`, `apps/web/lib/server/jev/**`, `apps/extension/src/layouts/**`
 One Jev call per new layout (name / type / city per card, page-level "is this a list of things"); confidence threshold; derive and save the Layout; the extension identifies matching layouts locally with no Jev call. Per-user Jev rate limit.
 **Acceptance:** second visit to the same layout makes no identify call; low-confidence cards are excluded; TypeSafe key never leaves the server.
 
@@ -86,17 +86,17 @@ Signal selection (§5.5), one insights call, lift-only rule (§5.6), dislikes ne
 **Acceptance:** core tests for the lift rule, signal selection, folds and labels; route returns a valid plan; outside-ID confirmation covered where present.
 
 ### X-06 · Apply engine and render gate
-Status: [ ] — **Code merged** (#3 / #7, apply and gate unit tests); browser-level acceptance lands with S-02 · **P0** · Deps: X-05 · Owns: `apps/extension/src/apply/**`
+Status: [x] (unit tests plus e2e apply and undo) · **P0** · Deps: X-05 · Owns: `apps/extension/src/apply/**`
 CSS order for flex / grid containers, node moves otherwise, re-apply on re-render; 300 ms gate; "ranking…" chip with Apply when the user has interacted; strip with Undo; fold lines with Show.
 **Acceptance:** fixture pages for flex, grid and block lists reorder correctly; Undo restores the original DOM order; site click handlers still work after reordering.
 
 ### X-07 · Dynamic content
-Status: [ ] — **Partial** (#7: MutationObserver re-runs, SPA URL changes, stale runs dropped; top-ups without Jev depend on X-04) · **P0** · Deps: X-06 · Owns: `apps/extension/src/watch/**`
+Status: [ ] — **Partial** (re-runs and top-ups now skip Jev via learned layouts and the resolution cache; the "only update off screen" rule is unverified) · **P0** · Deps: X-06 · Owns: `apps/extension/src/watch/**`
 Infinite-scroll top-ups through the cache without Jev; labels in place for late matches; lifted section updates only off screen; SPA navigation and new searches treated as new pages.
 **Acceptance:** fixture with appended items never moves seen items; SPA route change triggers a fresh rank.
 
 ### X-08 · Labels and on-page feedback
-Status: [ ] — **Partial** (labels with grounded reasons shipped in #2 / #7; More like this, Not for me and `/api/feedback` missing) · **P0** · Deps: X-06, P-03 · Owns: `apps/extension/src/labels/**`, `apps/web/app/api/feedback/**`
+Status: [x] (stage 3 feedback route and buttons; e2e) · **P0** · Deps: X-06, P-03 · Owns: `apps/extension/src/labels/**`, `apps/web/app/api/feedback/**`
 "Top pick for you" / "Good match" with "because you like …"; More like this / Not for me write likes and dislikes with activity events.
 **Acceptance:** labels never show invented reasons; a tap appears in the activity feed with undo.
 
@@ -105,7 +105,7 @@ Status: [ ] — **Partial** (labels with grounded reasons shipped in #2 / #7; Mo
 ## Wave W — website
 
 ### W-01 · Shell, onboarding flow
-Status: [ ] — **Not started** (the sign-in menu exists from #7; `/` is still the Studio) · **P0** · Deps: P-02 · Owns: `apps/web/app/(site)/**`
+Status: [ ] — **Code done** (stage 4: landing, onboarding, post-sign-in routing); the sign-in-to-ranked-page walkthrough needs a deployed AuthKit · **P0** · Deps: P-02 · Owns: `apps/web/app/(site)/**`
 Landing, sign-in, onboarding (chat → sites to skip → install or confirm extension → "Try it now" links).
 **Acceptance:** a new account completes onboarding end to end; the extension shows as connected.
 
@@ -115,12 +115,12 @@ OpenAI-compatible provider chain with fallback on rate limits; lean context; too
 **Acceptance:** scripted chats produce correct entries; ambiguous names return choices; rules are created pending; provider failover tested.
 
 ### W-03 · Profile, activity and settings pages
-Status: [ ] — **Partial** (`/profile` approve and undo slice via M-06; `/activity`, `/settings` and `/api/settings` missing) · **P0** · Deps: P-03 · Owns: `apps/web/app/(site)/{profile,activity,settings}/**`
+Status: [x] (stage 3: /activity, /settings, /api/settings with extension sync, profile strength and remove) · **P0** · Deps: P-03 · Owns: `apps/web/app/(site)/{profile,activity,settings}/**`
 View and edit things, vibes and rules with strength; approve pending rules; activity with attribution and undo; sites to skip; export and delete.
 **Acceptance:** every action round-trips through the API and shows in the feed.
 
 ### W-04 · "Why this order?" and playground
-Status: [ ] — **Partial** (`/why/<id>` shipped in #7; `/try` not built, the Studio still lives at `/`) · **P1** · Deps: X-05 · Owns: `apps/web/app/(site)/{why,try}/**`, `apps/web/components/{inspector,surface,paste}/**`
+Status: [x] (stage 4: /try on the shared lift-only rank, parity test) · **P1** · Deps: X-05 · Owns: `apps/web/app/(site)/{why,try}/**`, `apps/web/components/{inspector,surface,paste}/**`
 `/why/<id>` renders a PageResult with the Inspector; `/try` keeps the Studio demo and paste pages on the lift-only rules without an account.
 **Acceptance:** toolbar link opens the right result; playground output matches the rank endpoint for the same input.
 
@@ -163,12 +163,12 @@ Signed-in `/profile` with pending rules (Approve), recent activity with who made
 ## Wave S — ship
 
 ### S-01 · Privacy policy and Web Store listing
-Status: [ ] — **Not started** (the CI zip artifact exists as the judges' fallback) · **P0** · Deps: X-02, W-02 · Owns: `apps/web/app/(site)/privacy/**`, `apps/extension/store/**`
+Status: [ ] — **Partial** (stage 4: /privacy and apps/extension/store/listing.md; store submission is the owner's action) · **P0** · Deps: X-02, W-02 · Owns: `apps/web/app/(site)/privacy/**`, `apps/extension/store/**`
 Policy matching §6 (what is sent when, third parties, retention, deletion); store listing with the `<all_urls>` justification; submit early, since broad permissions get an in-depth review. A downloadable zip is the fallback for judges.
 **Acceptance:** listing submitted; policy linked from the site and the listing.
 
 ### S-02 · End-to-end tests
-Status: [ ] — **Not started** · **P0** · Deps: X-06, W-01 · Owns: `e2e/**`
+Status: [x] (stage 5: 6 specs, offline; CI job added, first CI run pending push) · **P0** · Deps: X-06, W-01 · Owns: `e2e/**`
 Playwright loads the unpacked extension against saved fixture pages with the server's Qloo and Jev calls mocked; covers guard, detect, identify, rank, apply, undo, feedback.
 **Acceptance:** green in CI with no network access.
 
@@ -178,7 +178,7 @@ Website and API on Vercel with database, sign-in and server-only keys; live smok
 **Acceptance:** `pnpm smoke` passes against production with live Qloo and Jev.
 
 ### S-04 · README and submission
-Status: [ ] — **Not started** · **P0** · Deps: S-01, S-03 · Owns: `README.md`, `docs/submission.md`, `docs/demo-script.md`
+Status: [ ] — **Partial** (stage 6 rewrite; hosted URL and extension link wait on S-03) · **P0** · Deps: S-01, S-03 · Owns: `README.md`, `docs/submission.md`, `docs/demo-script.md`
 Rewrite README and Devpost text for the extension; demo script on real sites; disclose limits honestly.
 **Acceptance:** submitted by Oct 29 with hosted URL, extension link or zip, and repo.
 

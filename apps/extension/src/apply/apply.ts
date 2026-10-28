@@ -125,18 +125,27 @@ function labelElement(doc: Document, text: string, badge: string | undefined, co
   const span = doc.createElement("span");
   span.setAttribute(
     "style",
-    "display:inline-flex;align-items:center;gap:5px;max-width:100%;margin:6px 0;padding:3px 9px 3px 7px;border-radius:999px;" +
+    "display:inline-flex;align-items:center;gap:5px;flex:none;margin:2px 0;padding:3px 9px 3px 7px;border-radius:999px;" +
       'font:500 12px/16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:0;' +
-      "box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:normal;text-align:left;" +
+      "box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:nowrap;" +
       LABEL_STYLE[kind],
   );
   if (kind === "top-pick") span.insertAdjacentHTML("afterbegin", sparkleSvg());
   // Narrow tiles (poster grids) get the short form; the full reason stays in the tooltip.
   span.append(doc.createTextNode(compact ? (text.split(" · ")[0] ?? text) : text));
   if (compact) span.title = text;
-  root.append(span);
-  // width:0 + min-width:100% fills the card without letting the label's text widen it.
-  host.setAttribute("style", "all:initial;display:block;width:0;min-width:100%");
+  // Feedback buttons are appended as light-DOM children; they render through
+  // this slot, which is the second flex item in the host's row. On narrow
+  // cards the whole button group wraps under the pill instead of squeezing it.
+  const slot = doc.createElement("slot");
+  slot.style.cssText = "display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center";
+  root.append(span, slot);
+  // One inline-flex row (pill + buttons) with !important where host page CSS
+  // could restyle the focal-label element or the slotted light-DOM buttons.
+  host.setAttribute(
+    "style",
+    "all:initial;display:inline-flex!important;flex-wrap:wrap;gap:4px;align-items:center;vertical-align:middle;margin-inline-end:8px!important",
+  );
   popIn(span);
   return host;
 }
@@ -205,17 +214,23 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         if (!card) continue;
         const slot = labelSlot(card);
         const width = slot.getBoundingClientRect().width;
-        const label = labelElement(doc, op.text, op.badge, width > 0 && width < 160);
+        const compact = width > 0 && width < 160;
+        const label = labelElement(doc, op.text, op.badge, compact);
         slot.prepend(label);
         inserted.push(label);
         if (opts.onFeedback) {
-          for (const [verdict, text] of [
-            ["more", "More like this"],
-            ["less", "Not for me"],
-          ] as const) {
+          for (const [verdict, text] of (
+            compact
+              ? ([["more", "More"], ["less", "Less"]] as const)
+              : ([["more", "More like this"], ["less", "Not for me"]] as const)
+          )) {
             const btn = make(doc, "button", `fb-${verdict}`, text);
             btn.setAttribute("type", "button");
             btn.setAttribute("data-focal-action", verdict);
+            btn.style.cssText =
+              "display:inline-flex!important;align-items:center;height:20px!important;padding:0 8px!important;border-radius:999px;cursor:pointer;" +
+              "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
+              "background:#18181b!important;border:1px solid #3f3f46!important";
             btn.addEventListener("click", (ev) => {
               ev.preventDefault();
               ev.stopPropagation();

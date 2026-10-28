@@ -36,7 +36,7 @@ describe("feedback buttons on lifted labels", () => {
     pageId: "pg1",
     createdAt: new Date().toISOString(),
     summary: { moved: 0, collapsed: 0, unresolved: 0, avgMovement: 0, lifted: 1 },
-    ops: [{ op: "annotate", clientId: "c0", text: "Top pick for you" }],
+    ops: [{ op: "annotate", containerId: "focal:results", clientId: "c0", text: "Top pick for you" }],
   };
 
   it("a tap on More like this / Not for me fires onFeedback with the verdict", () => {

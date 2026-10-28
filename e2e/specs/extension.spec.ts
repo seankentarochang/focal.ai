@@ -42,7 +42,10 @@ test.describe("detect → identify → rank → apply", () => {
     await page.locator('[data-focal="strip"]').waitFor({ timeout: 20000 });
     await page.locator('[data-focal="undo"]').click();
     await expect(page.locator('[data-focal="strip"]')).toHaveCount(0);
-    expect(await cardNames(page)).toEqual(["House of Prime Rib", "Zuni Café", "Rintaro", "State Bird Provisions", "Che Fico"]);
+    // The FLIP animation slides the card back over ~700ms; poll until it lands.
+    await expect
+      .poll(() => cardNames(page), { timeout: 5000 })
+      .toEqual(["House of Prime Rib", "Zuni Café", "Rintaro", "State Bird Provisions", "Che Fico"]);
     await page.close();
   });
 });
@@ -52,16 +55,21 @@ test.describe("feedback", () => {
     const page = await focal.context.newPage();
     await page.goto(`${FIXTURES}/search?find_desc=restaurants&find_loc=San+Francisco`);
     await page.locator('[data-focal="strip"]').waitFor({ timeout: 20000 });
-    // The label buttons render through a shadow slot; on a styleless fixture
-    // they have no box for a real click, so dispatch it directly.
-    await page.locator("button[data-focal-action='more']").first().dispatchEvent("click");
+    // The lifted card carries the feedback buttons; CSS `order` lifted it, so
+    // DOM position says nothing — find the card that has them.
+    const lifted = await page
+      .locator("#results > article", { has: page.locator("button[data-focal-action='more']") })
+      .first()
+      .elementHandle();
+    await lifted!.screenshot({ path: "e2e/artifacts/feedback.png" });
+    await page.locator("button[data-focal-action='more']").first().click();
     await expect
       .poll(() => apiCalls(focal.api, "/api/feedback"), { timeout: 15000 })
       .toBeGreaterThanOrEqual(1);
     expect(focal.api.find((u) => u.includes("/api/feedback"))).toMatch(/^200 /);
-    // The saved marker sits in a shadow-slot label; textContent sees it even
-    // though the styleless fixture leaves it without a rendered box.
-    await page.waitForFunction(() => document.body.textContent?.includes("Saved"), { timeout: 15000 });
+    await expect(page.locator("text=Saved ·")).toBeVisible({ timeout: 15000 });
+    // The click removes the feedback buttons — the handle keeps the card.
+    await lifted!.screenshot({ path: "e2e/artifacts/feedback-saved.png" });
     await page.close();
   });
 });

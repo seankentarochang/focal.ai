@@ -1,151 +1,86 @@
 # Development — focal.ai
 
-How to run and work on this repo. Architecture (as built): [architecture.md](./architecture.md). Frozen interfaces: [contracts.md](./contracts.md). Verification and the wave gate: [testing.md](./testing.md).
+How to run and work on this repo. Architecture: [architecture.md](./architecture.md). Testing: [testing.md](./testing.md). Backlog: [tickets.md](./tickets.md).
 
 ## 1. Prerequisites
 
 | Tool | Version | Notes |
 | --- | --- | --- |
-| Node | `>=22` (`engines` in root `package.json`); `.nvmrc` pins `24` | Verified with Node v24.1.0 |
-| pnpm | `12.4.2` (`packageManager` field) | With corepack enabled (`corepack enable`), pnpm commands use the pinned version automatically. Alternatively install pnpm 12.4.2 directly |
-| git | any recent version | |
+| Node | `>=22` (`engines`); `.nvmrc` pins `24` | |
+| pnpm | `12.4.2` (`packageManager`) | `corepack enable` picks it up automatically |
+| Postgres | 17 | Any local instance or `postgres:17-alpine` in Docker; needed for DB tests and the e2e feedback spec |
+| Chromium | via Playwright | `pnpm exec playwright install chromium` for `pnpm e2e` |
 
-Nothing else is required globally — `tsx`, `next`, `vitest`, and `eslint` are devDependencies. Workspace packages are consumed as TypeScript source (no `dist` build step).
+Windows note: the global `pnpm.cmd` shim can be broken on some machines — call `pnpm -r <script>` directly rather than the root `pnpm test`/`pnpm lint`/`pnpm check` wrappers, and see `e2e/playwright.config.ts` for how spawned processes avoid `pnpm` entirely.
 
-## 2. First-time setup
+## 2. Setup
 
 ```bash
 pnpm install
-cp .env.example .env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-- Root `.env` is read by `pnpm probe` (the probe script loads root `.env`, then `apps/web/.env.local`) and is reserved for the future MCP server (T-20). Next.js does **not** read the root `.env`.
-- `apps/web/.env.local` is the web server's env (Next loads it in `dev`/`start`). Server-only.
-- `.env` and `.env.*` are gitignored except `.env.example`. Never commit real keys, and never reference a key anywhere in client code — only server modules (`apps/web/lib/server/`, `packages/qloo/src/`) and `scripts/probe-qloo.ts` read them.
+`.env` / `.env.*` are gitignored except the `.example` files. Keys are read only by server modules under `apps/web/lib/server/` and `packages/` — never by client or extension code.
 
-| Variable | Used by | Required? | Notes |
-| --- | --- | --- | --- |
-| `QLOO_API_KEY` | web server (`@focal-ai/qloo` client), `pnpm probe` | Required for live data; not needed in mock mode | Server-only; sent upstream as `X-Api-Key`. Hackathon keys work only against the hackathon host. |
-| `QLOO_API_BASE` | same | No (default `https://hackathon.api.qloo.com`) | Override only if Qloo says otherwise. |
-| `QLOO_MOCK` | `@focal-ai/qloo` client and web `dataSource()` (`/api/health`) | No | Set `1` for labeled fixture data (local only). Never set in production. |
-| `FOCAL_DEV_SESSION` | `/api/page/{identify,rank,result}` | No | Set `1` locally: any bearer token resolves to a demo user and profile, and identification uses the mock identifier. Ignored when `NODE_ENV=production` (those routes return 401 until accounts land). |
-| `DATABASE_URL` | `@focal-ai/db` (migrations via `pnpm --filter @focal-ai/db migrate`, tests) | Needed for DB tests; they skip when unset. CI runs a Postgres 17 service | Server-only. Local: Postgres 17 in Docker |
-| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD` (≥32 chars), `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | sign-in (`/sign-in`, `/auth/callback`, `/connect`, `/api/extension/session`, `/api/chat`) | For accounts | Server-only except the redirect URI. Auth routes return 404 until client id, cookie password and redirect URI are set. |
-| `NEXT_PUBLIC_FOCAL_EXTENSION_ID` | `/connect` | For the session handoff | The extension id (`chrome://extensions`) that receives the session token. |
-| `GROQ_API_KEY` (then `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY`) | `/api/chat` provider chain | For chat | Server-only. Tried in order; fails over on 429 or 5xx. |
-| `ANTHROPIC_API_KEY` | nothing today | No | Reserved for LLM-assisted features (T-19); no code path reads it yet. |
-| `FOCAL_API_KEY`, `FOCAL_MODEL_PROVIDER`, `FOCAL_MCP_TRANSPORT`, `FOCAL_MCP_PORT` | nothing today | No | Declared in root `.env.example` for the future MCP server (T-20 — currently a stub). |
-
-## 3. Run the Studio locally
-
-Three modes, all verified:
-
-**Mock demo — zero keys.**
-
-```bash
-QLOO_MOCK=1 pnpm dev   # http://localhost:3000
-```
-
-- The status badge shows **MOCK DATA**, and the Inspector "source" pill reads `mock`.
-- Mock search substring-matches names inside hand-authored fixtures only (`packages/qloo/src/mock.ts`). Names that resolve: **Rintaro, State Bird Provisions, Zuni Café, House of Prime Rib, Che Fico** (places) and **Fugazi** (artist). Everything else stays `unresolved` and keeps its original position.
-- On the demo pages this means: Tables resolves the five fixture places; Atlas (hotels) and Verve (brands) resolve nothing in mock — they render unchanged and the rank response still returns 200 with `meta.unresolved` counts.
-
-**Live.**
-
-```bash
-# put QLOO_API_KEY in apps/web/.env.local (cp from .env.example), or export it in the shell
-pnpm dev
-```
-
-Badge reads "Qloo connected"; Inspector source reads `live`. Without a key the badge says "Qloo key not configured" and requests fail with a server error explaining it.
-
-**Production preview.**
-
-```bash
-pnpm build
-pnpm --filter @focal-ai/web start        # add -p 3210 if port 3000 is busy
-```
-
-**Try the product** (works in mock or live):
-
-1. Open http://localhost:3000.
-2. In the "Your taste" panel, search `Rintaro` (or `Fugazi`) and click **Add**; add 2–3 seeds. The picker hint offers "Try: Rintaro · Fugazi · Zuni Café".
-3. Click **Focus N results** on the Tables page.
-4. Toggle **Original / Focal / Diff** — Diff shows the moved/collapsed/avg strip and per-card delta arrows.
-5. Read the Inspector (right column): the exact Qloo request (path + params), source/duration/unresolved, the plan op summary, and top-3 evidence.
-6. Switch to the **Atlas** and **Verve** pages and focus each (mock: mostly unresolved; live: real scorings).
-7. **Export JSON** downloads `focal-profile.json`; **Clear** wipes the profile (confirmation dialog). The profile persists in `localStorage` under `focal.profile.v1` across reloads.
-
-## 4. What leaves the browser
-
-Only entity name strings, city strings, Qloo entity IDs, and the taste profile (JSON) are sent — to **this app's** server, per request. The server holds the Qloo key, calls Qloo (which additionally sees only names/city/IDs), and is otherwise stateless: the profile is used for the request and discarded — no database, no accounts, nothing persisted or logged. Page HTML/DOM, form values, and the stored local copy of the profile never leave the browser. `meta.qlooRequest` in rank responses records the upstream path/params with the key excluded (asserted in tests).
-
-## 5. Command reference
-
-Root scripts (quoted exactly from `package.json`):
-
-| Command | Runs | When to use |
+| Variable | Used by | Required? |
 | --- | --- | --- |
-| `pnpm dev` | `pnpm --filter @focal-ai/web dev` (`next dev`) | Studio with hot reload |
-| `pnpm dev:all` | `pnpm --parallel --filter @focal-ai/web --filter @focal-ai/mcp dev` | Studio plus the MCP dev watcher (MCP is a stub today — it logs a notice) |
-| `pnpm build` | `pnpm --filter @focal-ai/web build` | Production build of the Studio |
-| `pnpm --filter @focal-ai/web start` | `next start` (no root `start` script exists) | Serve the built Studio |
-| `pnpm test` | `pnpm -r test` | All package test suites |
-| `pnpm typecheck` | `pnpm -r typecheck` | TypeScript across all packages |
-| `pnpm lint` | `pnpm -r lint` | ESLint for web; `tsc --noEmit` for core/qloo/mcp |
-| `pnpm check` | `pnpm -r typecheck && pnpm -r test` | Pre-PR gate for types + tests (does not lint or build) |
-| `pnpm probe` | `tsx scripts/probe-qloo.ts` | Live Qloo contract probe (needs a key) |
+| `QLOO_API_KEY`, `QLOO_API_BASE` | `@focal-ai/qloo` (page rank, chat tools, MCP) | Live taste data; `QLOO_MOCK=1` runs offline fixtures |
+| `QLOO_MOCK` | qloo client + identify route | Local/CI only — never set in production |
+| `TYPESAFE_API_KEY` | `/api/page/identify` (Jev identifier) | Live identification; falls back to the mock identifier |
+| `DATABASE_URL` | `@focal-ai/db`, all persisted routes | Yes in production; unset → limited no-DB/dev mode |
+| `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, `WORKOS_AUTHKIT_DOMAIN` | Sign-in + MCP OAuth | For accounts; `FOCAL_DEV_SESSION=1` skips auth in dev |
+| `NEXT_PUBLIC_FOCAL_EXTENSION_ID` | `/connect` session hand-off | Needed for the website→extension token hand-off |
+| `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENROUTER_API_KEY` | `/api/chat` provider chain | One needed for chat; tried in order, fails over on 429/5xx |
+| `FOCAL_PUBLIC_URL` | `/mcp` OAuth metadata | Production only |
+| `FOCAL_ORIGIN` | extension `build.mjs` | Build-time only — the API base baked into `dist/` |
 
-Per-package variants: `pnpm --filter @focal-ai/core test` (also `@focal-ai/qloo`, `@focal-ai/web`, `@focal-ai/mcp`), same for `typecheck`/`lint`. `pnpm -r <script>` runs the script across every workspace package that defines it (web + the three packages; the MCP test script exits 0 with no tests).
+## 3. Run
 
-## 6. The Qloo contract probe
+```bash
+# web app — zero keys needed with mock + dev session
+cd apps/web && QLOO_MOCK=1 FOCAL_DEV_SESSION=1 pnpm dev     # http://localhost:3000
 
-Purpose: freeze the live Qloo response shapes — affinity field path, explainability JSON, ID limits, latency, 429 behavior — into [qloo-contract.md](./qloo-contract.md) (ticket T-01). Requires `QLOO_API_KEY`; the probe loads root `.env` then `apps/web/.env.local`.
+# extension — build against the local app, load dist/ unpacked (chrome://extensions, dev mode)
+cd apps/extension && FOCAL_ORIGIN=http://localhost:3000 pnpm build
 
-| Exit code | Meaning |
+# zip for sharing/CI artifact
+pnpm --filter @focal-ai/extension zip
+
+# database migrations (when DATABASE_URL is set)
+pnpm --filter @focal-ai/db migrate
+```
+
+The dev session resolves any bearer token to a demo profile (Fugazi + Rintaro seeds), so the extension works locally without signing in. Sign-in itself needs the WorkOS variables; an empty signed-in profile is routed to `/onboarding` after `/auth/callback` → `/post-sign-in`.
+
+## 4. Command reference
+
+| Command | Runs |
 | --- | --- |
-| `0` | All requests returned 2xx |
-| `1` | At least one request failed (non-2xx) |
-| `2` | No key found — prints setup instructions |
+| `pnpm -r typecheck` / `pnpm -r test` / `pnpm -r lint` | Across all packages (DB tests skip without `DATABASE_URL`) |
+| `pnpm e2e` | Playwright suite — starts the web app + HTTPS fixtures, loads the extension, 6 specs |
+| `pnpm --filter @focal-ai/web build` / `dev` / `start` | Web app |
+| `pnpm --filter @focal-ai/extension build` / `zip` | Extension (`build.mjs` via esbuild) |
+| `pnpm --filter @focal-ai/db migrate` | Migrations |
+| `pnpm probe` | Live Qloo contract probe (needs `QLOO_API_KEY`) |
 
-With a key it probes `GET /search` (Rintaro place + Fugazi artist), `GET /v2/insights`, and `GET /v2/tags`, saving raw JSON to `scripts/probe-output/` (created on run, gitignored). The key value is never printed.
-
-**Getting a hackathon key:** request one via the form at https://forms.gle/zz12orkLHTAneLGz6. Keys are issued within a few business days — check your spam folder. When it arrives:
-
-1. Put it in `.env` (`cp .env.example .env` if you have not already).
-2. Run `pnpm probe` until it exits 0.
-3. Transcribe the (redacted) outcomes into `docs/qloo-contract.md` and tick T-01 in [tickets.md](./tickets.md). If any mapping changes, edit [contracts.md](./contracts.md) first.
-4. Switch the demo to live (stop setting `QLOO_MOCK=1`) and keep mock as a labeled fallback only.
-
-## 7. Where to edit what
+## 5. Where to edit what
 
 | Change | Edit |
 | --- | --- |
-| Demo page content (candidates, blurbs, sponsored flags) | `apps/web/lib/pages/{tables,atlas,verve}.ts` (plus `index.ts`) |
-| Ranking / resolver / plan / evidence rules | `packages/core/src/` — keep `packages/core/tests/` in sync |
-| Qloo HTTP behavior (params, parsing, errors, cache, mock) | `packages/qloo/src/` (fixtures in `packages/qloo/fixtures/`) |
-| API routes | `apps/web/app/api/` (`health`, `qloo/search`, `qloo/rank`) |
-| UI components | `apps/web/components/` |
-| Client store / fetch wrappers / demo-page types | `apps/web/lib/client/` |
-| Frozen interfaces | `docs/contracts.md` — **edit it first** when a contract changes, then the code |
-| Backlog and statuses | `docs/tickets.md` |
+| Extension: guards/detect/apply/layouts/settings | `apps/extension/src/{guards,detect,apply,layouts}/`, `content.ts`, `background.ts` |
+| Page pipeline: lift rule, labels, plan, resolution | `packages/core/src/{lift,pagePipeline,plan,evidence,resolver}.ts` |
+| Qloo client/pacer/mock | `packages/qloo/src/` |
+| Postgres repos/migrations | `packages/db/` |
+| API routes | `apps/web/app/api/` — page, feedback, profile, settings, activity, chat, mcp |
+| Shared server logic | `apps/web/lib/server/` — `page/{rank,identify,session,layout,schemas}.ts`, `resolution/cache.ts`, `auth/` |
+| Website pages/components | `apps/web/app/`, `apps/web/components/` — follow `apps/web/AGENTS.md` (check `node_modules/next/dist/docs` first) |
+| MCP tools | `packages/mcp/src/` + `apps/web/app/mcp/` |
+| Demo page seeds for `/try` | `apps/web/lib/pages/` |
+| e2e | `e2e/` — config, fixtures, specs |
 
-## 8. Troubleshooting
+## 6. Troubleshooting
 
-- **"QLOO_API_KEY is not configured" style failures:** the banner under the error reads "Check that QLOO_API_KEY is set (or QLOO_MOCK=1 for local demo data)." Fix by adding the key to `apps/web/.env.local`, or run with `QLOO_MOCK=1`.
-- **429:** per-IP limits are 30 req/min on `/api/qloo/search` and 20 req/min on `/api/qloo/rank` (responses carry `Retry-After`). Upstream Qloo 429s surface as `RATE_LIMIT` with `retryAfterMs`.
-- **`pnpm probe` exits 2:** no key found — expected until the hackathon key arrives. It prints the exact setup steps.
-- **Web build fails on imports inside packages:** package source files must use extensionless imports (`./cache`, not `./cache.js`) — Turbopack resolves the TS source. Test files are vitest-only and may use `.js` suffixes.
-- **Next 16 render-time `new Date()` errors:** do not call `new Date()` during render of a client component; use constants or create timestamps in handlers/effects (see the SSR-safe pattern in `apps/web/lib/client/store.ts`).
-- **ESLint `react-hooks/set-state-in-effect` in `store.ts`:** intentional — the one-time hydration-safe `localStorage` load carries a documented `eslint-disable-next-line` with a reason. Do not "fix" it by moving the load into render.
-- **Vitest config warning (`ESM syntax in a file loaded as CommonJS`) for `apps/web/vitest.config.ts`:** benign; tests pass.
-- **MCP prints "not implemented yet" and exits:** expected (stub for T-20).
-
-## 9. Working agreements
-
-- Keep a wave log in `docs/status.md` and update it after each wave.
-- Keep `docs/tickets.md` statuses current (`Status: [x]` only when acceptance criteria pass and tests run in CI).
-- One wave = one parallel agent batch; a wave ends with a single verifier pass over the gate in [testing.md §5](./testing.md) — a wave is not done until that gate passes.
-- No pushes without confirming remote access; commit only when asked.
-- Contract changes edit `docs/contracts.md` first; never silently deviate.
+- **`/api/feedback` 404 "no matched thing to rate":** the stored PageResult item lacks `type` — results saved before the type field was added carry no type; new results do.
+- **Extension does nothing on a page:** check the toolbar state first — guards (scheme, never-run, skip/off, incognito, password/payment fields) and detection both silently pass. The page result, if any, is inspectable at `/why/<id>`.
+- **Auth routes 404 locally:** WorkOS variables unset — expected; use `FOCAL_DEV_SESSION=1`.
+- **`pnpm e2e` "another next dev server is already running":** a stray dev server holds `apps/web`; stop it (the error prints the PID).

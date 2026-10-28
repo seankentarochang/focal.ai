@@ -2,61 +2,54 @@
 
 ## 1. Project name + tagline
 
-**focal.ai** — "The web, rendered for you."
+**focal.ai** — "Every site, sorted by your taste."
 
 ## 2. Elevator pitch
 
-Paste your taste once — the food, music, places, and brands you love. focal.ai resolves those seeds to Qloo entity IDs and re-ranks any list against them: the built-in demo directories or a list you paste yourself. You get a before/after diff, per-item evidence, and one-click revert. The ranking is Qloo's cross-domain affinity — no invented scores, no fabricated reasons. It is taste personalization for lists that no site ever built a recommender for.
+You tell a chat agent what you like. It builds your taste profile. Every list you visit after that shows what you care about most first, automatically. focal.ai is a Chromium extension plus a small web app: it detects the list on a page, identifies the items, scores them against your Qloo profile in one batched call, and lifts the clear matches to the top of the site's own order — labelled with why, undoable in one click, and teachable with "More like this" / "Not for me" buttons. The same profile is writable from ChatGPT and Claude over a hosted MCP endpoint.
 
 ## 3. What it does
 
-- **Taste profile with Qloo resolution.** Search-and-disambiguate entities against Qloo's graph, add them as seeds (likes), remove them, export the profile as JSON, clear it. Stored in the browser only.
-- **Three demo directories + paste-any-list.** Tables (SF restaurants), Atlas (Lisbon hotels), Verve (brands) — plus a Paste tab that takes up to 50 names, one per line, with an entity type and optional city.
-- **Original / Focal / Diff views.** Original is the site order; Focal is the Qloo-ranked order; Diff adds the moved/collapsed/avgMovement strip and per-card delta arrows.
-- **Match badges + grounded reasons.** Percent badges are Qloo affinity (`round(affinity*1000)/10`); reason lines cite only contributions present in the response and mapped to your seeds — otherwise no reason text rather than an invented one.
-- **Inspector.** The exact upstream Qloo request (path + params, key excluded), source/duration/unresolved counts, the compiled plan ops, and the top-3 evidence.
-- **Ask focal (agent panel).** Quick prompts ("Rank this page", "Find me something similar", "Explain the top results", "Hide sponsored"), a visible tool timeline, and approval cards — policy changes are previewed and apply only on "Apply to profile".
-- **MCP server.** Local stdio, 6 read-only tools (`get_taste_profile`, `search_entities`, `score_candidates`, `discover_cross_domain`, `explain_ranking`, `create_render_plan`) so external agents can run the same grounded pipeline.
-- **Reversible by design.** Original view, Reset, and Clear restore the site order at any time — nothing about your profile or a ranking is locked in.
+- **Lift-only re-ranking on live sites.** The extension finds repeated sibling cards, identifies them, and moves clear matches to the top with a grounded label ("Top pick for you · because you like Fugazi"). Everything else keeps the site's original order — nothing is hidden and no DOM nodes are recreated.
+- **Taste profile, yours.** Built through the website chat (free-tier LLM provider chain), through on-page feedback, or through ChatGPT/Claude. Viewable and editable on `/profile`; every write is attributed, listed on `/activity`, and undoable.
+- **Privacy guards first.** Never-run categories (banking, health, government, sign-in), your skip list, and password/payment-field checks run locally before anything is extracted; blocked pages send nothing. Only bounded card snippets leave the page — never HTML, forms, or screenshots. Full account on `/privacy`.
+- **Learned layouts + resolution cache.** After a first visit, the structure-only layout identifies the same page type locally with zero requests; entity resolutions are cached server-side so repeat items skip `/search` entirely.
+- **On-page feedback.** "More like this" / "Not for me" write likes/dislikes through `/api/feedback`, sourced from the saved page result — never a client-supplied entity — and undoable.
+- **MCP for ChatGPT and Claude.** Nine profile tools on `/mcp` with OAuth via WorkOS AuthKit; writes are attributed and rules stay pending until approved on `/profile`.
+- **`/try` playground.** The same lift-only ranking on demo lists or a pasted list, no account or install needed; results are transient and mock mode is labelled.
 
 ## 4. How Qloo is used
 
-- `GET /search` — resolves every candidate name to a Qloo entity, with type and location filters and disambiguation awareness. Anything that does not resolve stays unresolved.
-- `GET /v2/insights` — **one batched call per page**: `signal.interests.entities` (your liked seed IDs — the taste vector), `filter.results.entities` (the resolved candidate set being ranked), `filter.location.query` (city context), `feature.explainability=true`.
-- `GET /v2/tags` — compiles agent policy rules (e.g. "hide sponsored", "boost natural wine") into tag-based rules.
-- `GET /v2/entities` — wrapped by the client and available for entity enrichment.
-
-All four endpoints are wrapped by one typed client with an error taxonomy, timeout/retry, and a TTL cache; the key stays server-side and is excluded from anything the UI can see.
-
-The ranking **is** Qloo's cross-domain affinity: the result order and each candidate's affinity come from that one insights call. Affinity is always labeled as Qloo affinity; `popularity` is never blended in; a missing affinity never produces a favorable score or a badge.
+- `GET /search` — resolves each identified item name (+type, +city hints) to a Qloo entity; unresolvable items stay in place.
+- `GET /v2/insights` — one batched call per page: profile signal entities/tags as `signal.interests`, resolved candidates as `filter.results.entities`, `filter.location.query`, `feature.explainability=true`. The returned affinities drive the lift decision and the label reasons.
+- `GET /v2/tags` / `GET /v2/entities` — signal selection and entity enrichment.
+- A single process-wide 5 req/s pacer guards every call; resolutions are cached in Postgres so a repeated item never re-queries.
 
 ## 5. What makes it agentic
 
-Ask focal runs a full agentic loop: intent → tool calls → structured plan → preview → approval → apply, with a visible tool timeline (tool, summary, duration per step). Four intents ship today: rank, explain, discovery, and policy. Policy changes land in your profile's rules only after you press "Apply to profile"; "Dismiss" leaves the profile untouched. The same pipeline is exposed over MCP, so an external agent gets the identical grounded tools.
-
-The design is LLM-optional: the agent is deterministic today and needs no LLM key, and ranking, permissions, and DOM-visible changes are deterministic and validated — every compiled render plan is re-validated before it reaches the surface. The MCP server calls the same shared rank pipeline as the web app, so an external agent's results match the Studio's.
+The profile is the agent surface: the website chat agent writes it through tool calls with attribution and undo; the hosted MCP endpoint gives ChatGPT and Claude the same nine tools over OAuth; and the extension turns each page visit into an implicit agent action — identify, rank, apply — plus explicit "More like this" / "Not for me" feedback that writes back into the same profile. Every agent write is an activity event, reversible from the page or `/activity`.
 
 ## 6. Why cultural intelligence matters
 
-- **The demo contrast.** Same candidates, two orderings: the site's default order, with two sponsored chain entries placed in the list and flagged "Sponsored", versus the Qloo order (your taste first; the sponsored placements are collapsed by the plan).
-- **Cross-domain transfer.** A music seed plus a restaurant seed (Fugazi, Rintaro-class) re-rank a Lisbon hotel list and a brand directory you have never visited, because affinity is computed across Qloo's cultural domains, not within one catalog.
-- **Grounded reasons.** Evidence comes from Qloo explainability mapped back to your seeds. A generic LLM can produce plausible-sounding reasons, but it cannot produce cross-domain affinity it does not have — and we refuse to fabricate either.
+Cross-domain affinity is the product: a Fugazi seed and a Rintaro seed together lift a Lisbon hotel or a brand the user never searched for, because Qloo scores across cultural domains rather than within one catalog. Labels cite real explainability contributions only — never fabricated reasons.
 
 ## 7. Target user + impact
 
-People with strong taste who are tired of pay-to-play rankings: restaurant, hotel, and brand directories where placement is bought. One profile, portable across every list, readable and editable as JSON, cold-started from a handful of seeds. The browser extension that applies the same decisions to live pages is the roadmap; the MCP server already lets external agents drive the same pipeline today.
+People with strong taste who read list-heavy sites — restaurants, films, hotels, books — where the default order is optimized for the site, not for them. One portable profile, seeded in a sentence or two, reorders every list to fit.
 
 ## 8. Tech stack + repo links
 
-Next.js 16.4.2 / React 19 / TypeScript (strict), pnpm monorepo (`apps/web` + `packages/{qloo,core,mcp}`), zod, Tailwind 4, vitest (209 tests: core 82, qloo 46, mcp 13, web 68), MCP SDK.
+Next.js 16.4.2 (App Router, Turbopack), Chrome MV3 extension (TypeScript, esbuild), Postgres via `postgres` + typed repos, WorkOS AuthKit, Qloo Taste AI, TypeSafe Jev, MCP SDK, Playwright. pnpm monorepo: `apps/{web,extension}` + `packages/{core,qloo,db,mcp}` + `e2e/`. Tests: web 153, extension 73, core 120, qloo 63, db 14, mcp 24, e2e 6 — all offline except the Postgres-backed suites.
 
-- Repo: `<URL — TBD; push to tsangh5/focal.ai pending access>`
-- Live demo: `<URL — TBD; not deployed yet>`
-- Run it locally with zero keys: `pnpm install && QLOO_MOCK=1 pnpm dev` (mock mode is labeled in the UI). Live mode reads `QLOO_API_KEY` from the server environment.
+- Repo: `<URL — TBD>`
+- Live demo: `<URL — TBD; not deployed yet (S-03)>`
+- Extension: `<Web Store URL — TBD; install via CI zip until the listing lands>`
 
 ## 9. Known limitations
 
-- The hosted Studio ranks its built-in demo directories and lists you paste — it is not a browser extension yet and does not touch arbitrary live sites.
-- Demo directory copy and metadata are fictionalized (venue names are real; blurbs, prices, and ratings are demo copy).
-- Live Qloo verification is pending the hackathon key; until it arrives everything runs on labeled fixture data (the UI badges it as MOCK DATA).
-- Reasons appear when Qloo returns explainability for the request; otherwise items rank by affinity with no reason text instead of a fabricated one.
+- **Chromium only** (MV3); no Firefox/Safari build.
+- **Not deployed yet** — the hosted URL and the sign-in-to-ranked-page walkthrough need the AuthKit/Neon/Vercel steps in `docs/deployment.md`.
+- **Web Store review pending** — `<all_urls>` triggers an in-depth review; the CI zip is the install path until it lands.
+- **Mock mode is labelled** — offline runs use fixture data and say so; live needs Qloo and TypeSafe keys.
+- **No sponsored detection** — lifts are taste-based only.
+- **Chat needs one free LLM key** (Groq / Cerebras / OpenRouter).
