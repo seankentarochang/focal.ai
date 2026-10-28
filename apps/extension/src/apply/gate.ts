@@ -2,6 +2,12 @@ import { blockAnchor, decorate } from "./ui";
 
 export const GATE_MS = 300;
 
+let trusted: (ev: Event) => boolean = (ev) => (ev as MouseEvent).isTrusted !== false;
+/** Test seam — same contract as apply.ts's injected buttons (R9-8). */
+export function __setGateTrustCheckForTests(fn: ((ev: Event) => boolean) | undefined): void {
+  trusted = fn ?? ((ev) => (ev as MouseEvent).isTrusted !== false);
+}
+
 export type GateOutcome = "before-reveal" | "late-applied" | "late-offered" | "cancelled";
 
 export interface RenderGate {
@@ -88,7 +94,8 @@ export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOn
         button.type = "button";
         button.setAttribute("data-focal", "apply");
         button.textContent = "Apply";
-        button.addEventListener("click", () => {
+        button.addEventListener("click", (ev) => {
+          if (!trusted(ev)) return;
           chip?.remove();
           apply();
         });

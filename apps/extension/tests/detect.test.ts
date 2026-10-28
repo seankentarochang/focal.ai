@@ -122,6 +122,7 @@ describe("R8-10 payment iframe host matching", () => {
   it("matches PSP hosts at a domain boundary and not substrings", async () => {
     const { hasSensitiveField } = await import("../src/guards/fields");
     const d = page('<iframe src="https://js.klarna.com/web"></iframe>');
+    d.querySelector("iframe")!.getBoundingClientRect = () => ({ width: 300, height: 60, top: 0, left: 0, right: 300, bottom: 60, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
     expect(hasSensitiveField(d)).toBe(true);
     const d2 = page('<iframe src="https://notpaypal.com/x"></iframe>');
     expect(hasSensitiveField(d2)).toBe(false);

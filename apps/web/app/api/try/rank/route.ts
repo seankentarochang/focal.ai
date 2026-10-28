@@ -61,7 +61,7 @@ function toProfile(seeds: z.infer<typeof bodySchema>["seeds"], fallbackType: Ins
  */
 export async function POST(req: Request): Promise<Response> {
   const startedAt = Date.now();
-  const limit = checkRateLimit(clientKey(req), RATE_LIMIT);
+  const limit = checkRateLimit(`try:${clientKey(req)}`, RATE_LIMIT);
   if (!limit.ok) {
     return Response.json(
       { error: { code: "RATE_LIMIT", message: "Too many requests" } },

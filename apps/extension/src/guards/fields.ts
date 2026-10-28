@@ -3,12 +3,13 @@ const PAYMENT_NAME = /(card.?(number|num|no\b)|(credit|debit).?card|ccnum|cc-?nu
 const PAYMENT_HOSTS = [
   "js.stripe.com", "checkout.stripe.com", "braintreegateway.com", "adyen.com",
   "checkout.com", "paypal.com", "squareup.com", "recurly.com", "worldpay.com",
-  "authorize.net", "pay.google.com", "js.klarna.com", "klarnacdn.net", "connect.bolt.com", "shop.app",
+  "authorize.net", "pay.google.com", "js.klarna.com",
 ];
 /** Hostname match at a domain boundary — "notpaypal.com" never matches (R8-10). */
 const paymentFrame = (src: string): boolean => {
   try {
-    const host = new URL(src).hostname.toLowerCase();
+    // Minor: relative src resolves against the page, not "about:blank".
+    const host = new URL(src, location.href).hostname.toLowerCase();
     return PAYMENT_HOSTS.some((d) => host === d || host.endsWith(`.${d}`));
   } catch {
     return false;
@@ -34,13 +35,15 @@ export function hasSensitiveField(root: ParentNode): boolean {
   }
   for (const input of root.querySelectorAll<HTMLInputElement>("input, select")) {
     const ac = input.getAttribute("autocomplete") ?? "";
-    if (PAYMENT_AUTOCOMPLETE.test(ac)) return true;
+    if (PAYMENT_AUTOCOMPLETE.test(ac) && rendered(input)) return true;
     if ((ac.includes("current-password") || ac.includes("new-password")) && rendered(input)) return true;
     const key = `${input.getAttribute("name") ?? ""} ${input.id} ${input.getAttribute("data-elements-stable-field-name") ?? ""} ${input.placeholder ?? ""} ${input.getAttribute("aria-label") ?? ""}`;
-    if (PAYMENT_NAME.test(key)) return true;
+    if (PAYMENT_NAME.test(key) && rendered(input)) return true;
   }
   for (const frame of root.querySelectorAll<HTMLIFrameElement>("iframe[src]")) {
-    if (paymentFrame(frame.getAttribute("src") ?? "")) return true;
+    // Only a rendered, nonzero-box frame counts — a hidden <iframe src=...> is
+    // not a payment field the user can see (R9-9).
+    if (rendered(frame) && frame.getBoundingClientRect().width > 0 && paymentFrame(frame.getAttribute("src") ?? "")) return true;
   }
   return false;
 }

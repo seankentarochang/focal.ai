@@ -80,6 +80,8 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 
 | `GET /api/activity`, `POST /api/activity/:id/undo` | Activity feed and undo |
 | `GET /api/me` | Signed-in status for the website header |
+| `GET /api/health` | Readiness and data source (smoke checks) |
+| `POST /api/qloo/search` | Anonymous entity search for the playground and inspector (IP rate-limited) |
 | `GET /api/oauth/authorization-server`, `GET /api/oauth/protected-resource` | OAuth metadata for MCP clients (served at the `/.well-known/` paths) |
 | `POST /api/feedback` | More like this / Not for me from a page |
 | `GET/PUT/POST /api/settings` | Sites to skip, preferences; POST writes one site (extension toolbar) |
@@ -91,7 +93,7 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 
 Manual adds (things a user names outside onboarding, chat or a page) go through the website chat or an MCP assistant — there is no ad-hoc add form.
 
-Server-wide concerns: one Qloo request queue paced under 5 req/s; a shared resolution cache keyed by (normalized name, type, city) → entity, kept indefinitely (Qloo's hackathon guide allows private server-side caching with no time limit); per-user limits on Jev calls, rank calls and chat messages.
+Server-wide concerns: one Qloo request queue paced under 5 req/s; a shared resolution cache keyed by (normalized name, type, city) → entity, resolved entries kept indefinitely (Qloo's hackathon guide allows private server-side caching with no time limit) and unresolved entries for 7 days; per-user limits on Jev calls, rank calls and chat messages; a per-caller budget of 90 uncached name lookups a minute (items over budget stay unresolved for that request); `/mcp` is limited per IP before auth and per user after.
 
 ### 4.3 Website (`apps/web` pages)
 

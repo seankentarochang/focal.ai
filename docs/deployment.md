@@ -21,7 +21,7 @@
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | **Yes** | `/api/feedback`, `/api/settings`, `/mcp`, saved profiles all need it; returns 503 without it |
+| `DATABASE_URL` | **Yes** | Accounts, saved profiles, feedback, settings and `/mcp` need it; without it `/mcp` and `/api/extension/session` return 503 and the account routes return 401 |
 | `DATABASE_URL_UNPOOLED` | For migrations | Neon direct connection |
 | `QLOO_API_KEY`, `QLOO_API_BASE` | **Yes** | Live taste data. `QLOO_MOCK` must **not** be set in production |
 | `TYPESAFE_API_KEY` | **Yes** | The Jev page identifier; without it identification falls back to the mock — unacceptable in prod |
@@ -66,6 +66,6 @@ Same env table and health check as Vercel. Without Docker: `pnpm --filter @focal
 
 ## 6. Operational notes
 
-- **Rate limits** are in-process, per instance (page routes per bearer user; `/api/try/rank` per IP). Fine at demo scale; a shared store only matters for multi-instance fairness.
+- **Rate limits** are in-process, per instance: page routes per bearer user; `/api/try/rank` and `/api/qloo/search` per IP; `/mcp` per IP before auth (120/min) and per user after; plus a per-caller budget of 90 uncached Qloo name lookups a minute inside the resolver (over-budget items stay unresolved). Fine at demo scale; a shared store only matters for multi-instance fairness.
 - **No browsing history is stored.** `page_results` rows expire in 24 h; logs carry no taste data and no keys (`meta.qlooRequest` excludes the key, asserted in tests).
 - **Extension builds** must set `FOCAL_ORIGIN=https://<host>` at build time — the Web Store zip should be built with the production origin.

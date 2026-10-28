@@ -31,6 +31,7 @@ export async function POST(req: Request): Promise<Response> {
   const pageResultId = crypto.randomUUID();
   try {
     const result = await rankPage(parsed.data, session.profile, pageResultId, { callerKey: session.userId });
+    const { resolutionLimited } = result;
     let savedId: string | null = pageResultId;
     try {
       await getPageResultStore().save({
@@ -52,6 +53,7 @@ export async function POST(req: Request): Promise<Response> {
       status: result.status,
       plan: result.plan,
       resolvedCount: result.meta.resolved,
+      resolutionLimited,
     });
   } catch (e) {
     if (e instanceof PagePipelineError) {

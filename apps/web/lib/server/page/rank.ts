@@ -48,8 +48,8 @@ export async function rankPage(
   body: PageRankBody,
   profile: ProfileV2,
   pageId: string,
-  opts?: { useResolutionCache?: boolean; callerKey?: string },
-): Promise<PageRankResult> {
+  opts: { useResolutionCache?: boolean; callerKey: string },
+): Promise<PageRankResult & { resolutionLimited: boolean }> {
   const pageType = toInsightType(body.pageType);
   const items: PageItem[] = body.items.map((item, i) => {
     const located = item.type === "place" || item.type === "destination";
@@ -62,9 +62,9 @@ export async function rankPage(
     };
   });
   const locationQuery = body.pageType === "place" || body.pageType === "destination" ? mostCommonCity(body) : undefined;
-  const store = opts?.useResolutionCache === false ? null : getResolutionStore();
-  const callerKey = opts?.callerKey ?? "anon";
-  return runCorePageRank({
+  const store = opts.useResolutionCache === false ? null : getResolutionStore();
+  let resolutionLimited = false;
+  const result = await runCorePageRank({
     pageId,
     pageType,
     items,
@@ -73,7 +73,10 @@ export async function rankPage(
     deps: {
       search: toCoreSearchFn(getQlooClient(), RESOLVE_SEARCH_TAKE),
       insights: pageInsights(),
-      resolve: cachedResolutionResolver(store, callerKey),
+      resolve: cachedResolutionResolver(store, opts.callerKey, () => {
+        resolutionLimited = true;
+      }),
     },
   });
+  return { ...result, resolutionLimited };
 }

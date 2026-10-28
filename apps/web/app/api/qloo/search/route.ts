@@ -28,7 +28,7 @@ function rateLimitedResponse(retryAfterMs: number): Response {
 export async function POST(req: Request): Promise<Response> {
   const startedAt = Date.now();
 
-  const limit = checkRateLimit(clientKey(req), RATE_LIMIT);
+  const limit = checkRateLimit(`search:${clientKey(req)}`, RATE_LIMIT);
   if (!limit.ok) return rateLimitedResponse(limit.retryAfterMs);
 
   let payload: unknown;

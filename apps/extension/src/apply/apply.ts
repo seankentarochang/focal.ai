@@ -19,6 +19,16 @@ export interface ApplyOptions {
   mode?: "css-order" | "move";
 }
 
+let trusted: (ev: Event) => boolean = (ev) => (ev as MouseEvent).isTrusted !== false;
+/** Test seam: synthetic .click() is untrusted in jsdom — handlers bail (R9-8). */
+export function __setTrustCheckForTests(fn: ((ev: Event) => boolean) | undefined): void {
+  trusted = fn ?? ((ev) => (ev as MouseEvent).isTrusted !== false);
+}
+/** Shared check — content.ts handlers use the same seam (R9-8). */
+export function isFocalTrusted(ev: Event): boolean {
+  return trusted(ev);
+}
+
 export interface ApplyHandle {
   mode: "css-order" | "move";
   lifted: number;
@@ -255,6 +265,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
               "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
               "background:#18181b!important;border:1px solid #3f3f46!important";
             btn.addEventListener("click", (ev) => {
+              if (!trusted(ev)) return;
               ev.preventDefault();
               ev.stopPropagation();
               opts.onFeedback?.(op.clientId, verdict, label);
@@ -292,8 +303,15 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         if (op.op === "collapse") {
           const show = make(doc, "button", "show", "Show");
           show.setAttribute("type", "button");
-          show.addEventListener("click", () => {
-            for (const el of els) { el.removeAttribute("data-focal-hidden"); el.style.removeProperty("display"); }
+          show.addEventListener("click", (ev) => {
+            if (!trusted(ev)) return;
+            for (const el of els) {
+              el.removeAttribute("data-focal-hidden");
+              // Restore the site's own display value, same as undo() (F9-5).
+              const prior = savedStyles.get(el);
+              if (prior === undefined || prior === null) el.style.removeProperty("display");
+              else el.style.setProperty("display", prior);
+            }
             holder.remove();
           });
           fold.append(show);
@@ -315,12 +333,16 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
     if (opts.onWhy) {
       const why = make(doc, "button", "why", "Why this order?");
       why.setAttribute("type", "button");
-      why.addEventListener("click", () => opts.onWhy?.());
+      why.addEventListener("click", (ev) => {
+        if (!trusted(ev)) return;
+        opts.onWhy?.();
+      });
       el.append(why);
     }
     const undo = make(doc, "button", "undo", "Undo");
     undo.setAttribute("type", "button");
-    undo.addEventListener("click", () => {
+    undo.addEventListener("click", (ev) => {
+      if (!trusted(ev)) return;
       handle.undo();
       opts.onUserUndo?.();
     });

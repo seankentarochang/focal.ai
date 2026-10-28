@@ -57,7 +57,10 @@ describe("sensitive fields", () => {
   it("detects payment autocomplete, names and frames", () => {
     expect(hasSensitiveField(doc('<input autocomplete="cc-number">'))).toBe(true);
     expect(hasSensitiveField(doc('<input name="cvc">'))).toBe(true);
-    expect(hasSensitiveField(doc('<iframe src="https://js.stripe.com/v3/elements"></iframe>'))).toBe(true);
+    const framed = doc('<iframe src="https://js.stripe.com/v3/elements"></iframe>');
+    const frame = framed.querySelector("iframe")!;
+    frame.getBoundingClientRect = () => ({ width: 300, height: 60, top: 0, left: 0, right: 300, bottom: 60, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    expect(hasSensitiveField(framed)).toBe(true);
   });
   it("ignores search boxes", () => {
     expect(hasSensitiveField(doc('<input type="search" name="q"><input name="find_loc">'))).toBe(false);

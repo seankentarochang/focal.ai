@@ -1,7 +1,8 @@
 import type { BackgroundReply, ContentMessage, FeedbackResponse, IdentifiedItem, IdentifyResponse, InsightType, RankResponse } from "./api";
 import { pathPattern } from "./api";
 import { applyPlan, type ApplyHandle } from "./apply/apply";
-import { createGate } from "./apply/gate";
+import { createGate, GATE_MS } from "./apply/gate";
+import { isFocalTrusted } from "./apply/apply";
 import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
 import type { CardSnapshot, RenderOp, RenderPlan } from "./types";
@@ -21,7 +22,7 @@ let firstScheduledAt = 0;
 const runTimes: number[] = [];
 let running = false;
 let rerunQueued = false;
-let runCount = 0; // reruns offer (chip) rather than apply when the list is on-screen
+let hasGated = false; // after the first gate, reruns offer (chip) rather than apply
 let lastList: { container: Element; cards: Element[]; fp: string } | null = null;
 let retryBudget = new Map<Element, { count: number; timer: ReturnType<typeof setTimeout> }>();
 /** Records we mutate ourselves queue MutationObserver records; drain them
@@ -76,7 +77,7 @@ function scheduleRerun(): void {
     bodyBackoffMs = 1000;
     // R4-11: no eager undo — the applied DOM is a valid input (marked hidden
     // cards still detect). The next run's gate.ready un- undoes before apply.
-    void run(0);
+    void run();
   }, RERUN_DELAY_MS);
 }
 
@@ -121,7 +122,8 @@ function watch(container: Element, cards: Iterable<Element>): void {
 }
 
 /** A stored layout that resolves nothing is stale — drop it (G2). */
-export function shouldInvalidateLayout(ranked: { ok: boolean; data?: { resolvedCount?: number; status?: string } }): boolean {
+export function shouldInvalidateLayout(ranked: { ok: boolean; data?: { resolvedCount?: number; resolutionLimited?: boolean; status?: string } }): boolean {
+  if (ranked.data?.resolutionLimited) return false; // budget skip isn't a stale layout (R9-7)
   // "no_signals" means resolution never ran — the layout may still be fine.
   return ranked.ok && ranked.data?.status !== "no_signals" && (ranked.data?.resolvedCount ?? 0) === 0;
 }
@@ -137,7 +139,7 @@ function watchPage(): void {
   watcher?.disconnect();
   watcher = new MutationObserver((records) => {
     if (document.hidden) { droppedRecords = true; return; }
-    if (records.some((r) => [...r.addedNodes].some((n) => n instanceof Element && !inFocal(n)))) {
+    if (records.some((r) => [...r.addedNodes, ...r.removedNodes].some((n) => n instanceof Element && !inFocal(n)))) {
       if (rerunTimer === undefined) {
         rerunTimer = setTimeout(() => { rerunTimer = undefined; scheduleRerun(); }, bodyBackoffMs);
       }
@@ -148,6 +150,7 @@ function watchPage(): void {
 
 function reject(list: DetectedList): void {
   rejected.set(list.container, list.cards.size);
+  dropRetry(list.container); // R9-3: a permanent no kills a queued retry
   clearApplied(); // R7-3
   // R4-10: keep the baseline so the body watcher's same-list check stays cheap.
   baseline(list);
@@ -157,7 +160,7 @@ function reject(list: DetectedList): void {
 /** guards → list detection → identify → rank → apply (§4.1). */
 let activeGate: ReturnType<typeof createGate> | null = null;
 
-async function run(gateMs?: number): Promise<void> {
+async function run(): Promise<void> {
   if (running) {
     rerunQueued = true; // fold the newer DOM state into one more pass (R8-1)
     return;
@@ -167,7 +170,7 @@ async function run(gateMs?: number): Promise<void> {
     do {
       rerunQueued = false;
       try {
-        await runInner(gateMs);
+        await runInner();
       } catch {
         // runInner cancels only the gate it created on failure.
       }
@@ -177,7 +180,7 @@ async function run(gateMs?: number): Promise<void> {
   }
 }
 
-async function runInner(gateMs?: number): Promise<void> {
+async function runInner(): Promise<void> {
   runTimes.push(Date.now());
   activeGate?.cancel(); // R6-7: any rerun retires the previous chip
   drainRecords();
@@ -217,10 +220,10 @@ async function runInner(gateMs?: number): Promise<void> {
 
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
-  const gate = createGate(list.container as HTMLElement, gateMs, {
-    offerOnly: runCount > 0 && onScreen(list.container),
+  const gate = createGate(list.container as HTMLElement, hasGated ? 0 : GATE_MS, {
+    offerOnly: hasGated && onScreen(list.container),
   });
-  runCount++;
+  hasGated = true;
   activeGate = gate;
   try {
     return await runWithGate(list, cards, gate, hints, pattern, host);
@@ -231,19 +234,25 @@ async function runInner(gateMs?: number): Promise<void> {
   }
 }
 
+function dropRetry(container: Element): void {
+  const e = retryBudget.get(container);
+  if (e) clearTimeout(e.timer);
+  retryBudget.delete(container);
+}
+
 /** (f) A failed identify/rank gets up to 3 retries per container, 60 s apart.
  *  Permanent rejections (not-a-list) still go through reject(). */
 function scheduleRetry(container: Element): void {
   const entry = retryBudget.get(container) ?? { count: 0, timer: undefined as unknown as ReturnType<typeof setTimeout> };
-  if (entry.count >= 3) return;
+  if (entry.count >= 3) { dropRetry(container); return; }
   entry.count += 1;
   clearTimeout(entry.timer); // a second failure while queued never double-books a run
   entry.timer = setTimeout(() => {
     if (!container.isConnected) {
-      retryBudget.delete(container); // R8-3: the list is gone — stop retrying it
+      dropRetry(container); // R8-3: the list is gone — stop retrying it
       return;
     }
-    void run(0);
+    void run();
   }, 60000);
   retryBudget.set(container, entry);
 }
@@ -278,7 +287,7 @@ async function runWithGate(
       else scheduleRetry(list.container); // failure, null type or empty items: retry budget (R4-14)
       return;
     }
-    retryBudget.delete(list.container); // R8-3: a usable identify ends the failure episode
+    dropRetry(list.container); // R8-3/R9-6: a usable identify disarms the retry
     pageType = identified.data.pageType;
     items = identified.data.items;
     if (identified.data.layout) void saveLayout(storageKey, identified.data.layout).catch(() => {});
@@ -350,6 +359,7 @@ async function runWithGate(
             "background:#18181b!important;border:1px solid #3f3f46!important";
           const id = eventId ?? "";
           undo.addEventListener("click", (ev) => {
+            if (!isFocalTrusted(ev)) return;
             ev.preventDefault();
             ev.stopPropagation();
             undo.disabled = true;
@@ -427,6 +437,8 @@ const hrefTimer = setInterval(() => {
   bodyBackoffMs = 1000;
   lastList = null;
   userUndidFor = null;
+  hasGated = false;
+  runTimes.length = 0; // R9-4/F9-1: per-page state — a new URL is a new page
   activeGate?.cancel(); // R8-6: retire the old page's chip
   activeGate = null;
   clearApplied();
@@ -506,7 +518,7 @@ document.addEventListener("visibilitychange", () => {
 export function __stopForTests(): void {
   running = false;
   rerunQueued = false;
-  runCount = 0;
+  hasGated = false;
   watcher?.disconnect();
   watcher = null;
   clearTimeout(rerunTimer);

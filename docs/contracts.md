@@ -165,7 +165,9 @@ v2 route table. Auth: `bearer` = `Authorization: Bearer <extension token>`, `coo
 POST /api/page/identify   bearer | { host, pathPattern, signature, cityHints[], cards[{clientId,snippets[]}] }
                          → { isList:boolean, pageType:InsightType|null, items:IdentifiedItem[], layout? }
 POST /api/page/rank       bearer | { host, pageType, items:IdentifiedItem[] }
-                         → { status, pageResultId:string|null, plan:RenderPlan|null, resolvedCount }
+                         → { status, pageResultId:string|null, plan:RenderPlan|null, resolvedCount, resolutionLimited:boolean }
+                           resolutionLimited = the caller's uncached-lookup budget left some items unresolved;
+                           the extension must not treat such a result as a stale learned layout
 POST /api/feedback        bearer | { pageResultId, clientId, verdict:"more"|"less" }
                          → { saved:true, eventId:null } on no-op | { saved:true, entryId, eventId } on write
 GET  /api/me              cookie | → { signedIn:false } | { signedIn:true, email }
@@ -185,7 +187,7 @@ POST /api/try/rank        anon | { pageType, items[{clientId?,name,city?}], seed
                          → { status, items (clientId echoed), plan, mock?, meta:{durationMs,unresolved,qlooRequest,dataSource} }
 GET  /api/health          anon | → { ok:true, hasQlooKey, dataSource:"live"|"mock" }
 POST /api/qloo/search     anon | { query, types?[], location? } → { entities, meta }
-GET|POST|DELETE /mcp      hosted MCP (Streamable HTTP); 401 without auth
+GET|POST|DELETE /mcp      hosted MCP (Streamable HTTP), OAuth bearer only; 401 without auth · 429 per IP before auth (120/min) · 503 + Retry-After: 30 when the identity provider fails
 GET  /api/oauth/authorization-server  anon | OAuth metadata (hosted MCP discovery)
 GET  /api/oauth/protected-resource    anon | OAuth metadata (hosted MCP discovery)
 ```

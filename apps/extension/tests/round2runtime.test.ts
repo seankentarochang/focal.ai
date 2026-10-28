@@ -58,6 +58,8 @@ describe("R2-2: no_signals keeps the stored layout", () => {
   it("does not invalidate when resolution never ran", async () => {
     stubChrome();
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     const { shouldInvalidateLayout } = prevMod;
     expect(shouldInvalidateLayout({ ok: true, data: { resolvedCount: 0, status: "no_signals" } })).toBe(false);
     expect(shouldInvalidateLayout({ ok: true, data: { resolvedCount: 0, status: "nothing_scored" } })).toBe(true);
@@ -70,6 +72,8 @@ describe("R2-15: rerun suppression and fresh detection", () => {
     const { sent } = stubChrome();
     document.body.innerHTML = RESTAURANT_GRID;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
     // Simulate the site re-sorting: move a known card to the end.
     const container = document.querySelector(".results")!;
@@ -82,6 +86,8 @@ describe("R2-15: rerun suppression and fresh detection", () => {
     const { sent } = stubChrome();
     document.body.innerHTML = RESTAURANT_GRID;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
     const injected = document.createElement("span");
     injected.setAttribute("data-focal", "label");
@@ -98,6 +104,8 @@ describe("R2-15f: retry budget for failed identify", () => {
     const { sent } = stubChrome(async (msg) => ({ ok: false } as never));
     document.body.innerHTML = RESTAURANT_GRID;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(61000);
     const identifies = sent.filter((m) => m.type === "identify").length;
     expect(identifies).toBeLessThanOrEqual(4); // initial + 3 retries
@@ -116,6 +124,8 @@ describe("R3-4: strip Undo does not schedule a rerun (move mode)", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     const undo = document.querySelector<HTMLElement>("[data-focal='undo']");
@@ -136,6 +146,8 @@ describe("R4-11: no eager undo on rerun", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     // Infinite scroll appends a fifth card — seen items must not be re-lifted.
@@ -161,6 +173,8 @@ describe("R5-6/R5-10: rerun lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     // Whole-sale swap: same items, brand-new container.
@@ -181,6 +195,8 @@ describe("R5-6/R5-10: rerun lifecycle", () => {
       `<div class="card"><a href="/c${i}"><h3>Card ${i}</h3></a><p>Type ${i}</p></div>`).join("");
     document.body.innerHTML = `<main><div class="results">${cards}</div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 5000 });
     const extra = document.createElement("div");
     extra.className = "card";
@@ -198,6 +214,8 @@ describe("R5-6/R5-10: rerun lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     const container = document.querySelector(".results")!;
     const extra = document.createElement("div");
@@ -219,6 +237,8 @@ describe("R5-6/R5-10: rerun lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='undo']")).not.toBeNull(), { timeout: 3000 });
     (document.querySelector<HTMLElement>("[data-focal='undo']"))!.click();
     const container = document.querySelector(".results")!;
@@ -241,6 +261,8 @@ describe("R5-6/R5-10: rerun lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     // jsdom rects are zero — pretend the container is visible so gen>1 plans
     // become late-offered.
@@ -266,6 +288,8 @@ describe("R6-4/5/7/8: apply lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='undo']")).not.toBeNull(), { timeout: 3000 });
     // Undo, then immediately trigger a rerun — the new apply must not re-lift.
     (document.querySelector<HTMLElement>("[data-focal='undo']"))!.click();
@@ -288,6 +312,8 @@ describe("R6-4/5/7/8: apply lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     const rect = { width: 800, height: 400, top: 0, left: 0, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) };
     Element.prototype.getBoundingClientRect = () => rect as DOMRect;
@@ -312,6 +338,8 @@ describe("R6-4/5/7/8: apply lifecycle", () => {
       <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
     </div></main>`;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
     // A second rerun fires but the site reverts to the same list -> early
     // return; a dead gate chip must be canceled, not left on the page.
@@ -341,6 +369,8 @@ describe("R7-3/4/5: apply lifecycle", () => {
     stubChrome();
     document.body.innerHTML = FOUR_CARDS;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='label']")).not.toBeNull(), { timeout: 3000 });
     const n = document.querySelectorAll("[data-focal='label']").length;
     // a rerun must not stack a second pill on labelled cards (R7-3)
@@ -353,6 +383,8 @@ describe("R7-3/4/5: apply lifecycle", () => {
     stubChrome();
     document.body.innerHTML = FOUR_CARDS;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
     (document.querySelector<HTMLElement>("[data-focal='undo']"))!.click();
     await new Promise((r) => setTimeout(r, 300));
@@ -364,6 +396,8 @@ describe("R7-3/4/5: apply lifecycle", () => {
     const { sent } = stubChrome();
     document.body.innerHTML = FOUR_CARDS;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     // two rapid mutations while a run may be in flight
     appendCard();
     appendCard();
@@ -397,6 +431,8 @@ describe("R2-15c: gate ownership", () => {
     });
     document.body.innerHTML = RESTAURANT_GRID;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(rankCalls).toBe(1), { timeout: 3000 });
     // Trigger run 2 via a structural mutation.
     const container = document.querySelector(".results")!;
@@ -440,6 +476,8 @@ describe("R8-1/5: run serialization and move-mode skip", () => {
     const { sent } = stubChrome();
     document.body.innerHTML = CARDS;
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     // Two rapid mutations while the first run may be in flight.
     const c = document.createElement("div");
     c.className = "card"; c.innerHTML = "<a href='/e'><h3>E</h3></a><p>X</p>";
@@ -459,6 +497,8 @@ describe("R8-1/5: run serialization and move-mode skip", () => {
     const { sent } = stubChrome();
     document.body.innerHTML = CARDS; // first child is .promo, not a card
     prevMod = await import("../src/content");
+    (await import("../src/apply/apply")).__setTrustCheckForTests(() => true);
+    (await import("../src/apply/gate")).__setGateTrustCheckForTests(() => true);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 4000 });
     await new Promise((r) => setTimeout(r, 1200));
     // A rerun over the same cards must skip re-apply even with the promo child.

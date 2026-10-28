@@ -106,3 +106,22 @@ describe("settings sync from the server", () => {
     expect(on.body).toEqual({ hostname: "yelp.com", mode: null });
   });
 });
+
+describe("R9-8: injected buttons require trusted clicks", () => {
+  it("an untrusted synthetic click does not fire onFeedback", async () => {
+    const { __setTrustCheckForTests } = await import("../src/apply/apply");
+    __setTrustCheckForTests(undefined); // restore the real isTrusted check
+    document.body.innerHTML = RESTAURANT_GRID;
+    const card = document.querySelector<HTMLElement>(".card")!;
+    const container = card.parentElement!;
+    const onFeedback = vi.fn();
+    const p = { ops: [{ op: "annotate", containerId: "focal:results", clientId: "c0", text: "Top pick" }], pageId: "pg1", createdAt: new Date().toISOString(), summary: { moved: 0, collapsed: 0, unresolved: 0, avgMovement: 0, lifted: 1 } };
+    applyPlan({ container, cards: new Map([["c0", card]]) }, p as never, { onFeedback });
+    const more = card.querySelector<HTMLButtonElement>("button[data-focal-action='more']")!;
+    more.dispatchEvent(new MouseEvent("click", { bubbles: true })); // isTrusted=false
+    expect(onFeedback).not.toHaveBeenCalled();
+    __setTrustCheckForTests(() => true); // back to the test default
+    more.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onFeedback).toHaveBeenCalledWith("c0", "more", expect.any(HTMLElement));
+  });
+});

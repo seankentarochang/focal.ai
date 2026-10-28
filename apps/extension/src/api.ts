@@ -53,6 +53,8 @@ export interface RankResponse {
   status: "ranked" | "no_signals" | "nothing_scored";
   plan: RenderPlan | null;
   resolvedCount?: number;
+  /** True when the resolution budget left candidates unresolved (R9-7). */
+  resolutionLimited?: boolean;
 }
 
 /** More like this / Not for me taps (X-08). */

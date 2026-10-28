@@ -146,13 +146,19 @@ describe.skipIf(!url)("round2 server fixes", () => {
     const { cachedResolutionResolver } = await import("@/lib/server/resolution/cache");
     const { checkRateLimit } = await import("@/lib/server/rateLimit");
     let calls = 0;
-    const search = async () => { calls++; return { entities: [] } as never; };
+    const search = async () => { calls++; return [] as never; };
     // Exhaust the 90/min budget for this caller.
     for (let i = 0; i < 90; i++) checkRateLimit("resolve:budget-user", { limit: 90, windowMs: 60_000 });
-    const resolve = cachedResolutionResolver(null, "budget-user");
+    let limited = 0;
+    const resolve = cachedResolutionResolver(null, "budget-user", () => { limited++; });
     const out = await resolve([{ clientId: "c0", name: "X", originalIndex: 0 }] as never, search, "place");
     expect(calls).toBe(0);
     expect(out[0]?.status).toBe("unresolved");
+    expect(limited).toBe(1); // per-request signal, not module state (R9-7)
+    // A different caller's resolver is not marked limited.
+    let other = 0;
+    await cachedResolutionResolver(null, "budget-other", () => { other++; })([{ clientId: "c1", name: "Y", originalIndex: 0 }] as never, search, "place");
+    expect(other).toBe(0);
   });
 
   it("/mcp rate-limits by client IP before resolving the caller", async () => {
@@ -167,13 +173,41 @@ describe.skipIf(!url)("round2 server fixes", () => {
 
   it("a dev delete clears profile, settings and page results", async () => {
     const { DELETE } = await import("@/app/api/profile/route");
-    const { GET } = await import("@/app/api/settings/route");
+    const sites = await import("@/lib/server/sites/store");
     const viewer = await import("@/lib/server/auth/viewer");
     vi.spyOn(viewer, "currentViewer").mockResolvedValue({ userId: "dev-user", email: "d@e.v", persisted: false } as never);
-    const { memory } = await import("@/app/api/settings/route") as never;
+    sites.setMemorySites("dev-user", [{ hostname: "example.com", mode: "skip" }] as never);
+    expect(sites.memorySites("dev-user")).toHaveLength(1);
     const res = await DELETE(new Request("http://x/api/profile", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "delete" }) }));
     expect(res.status).toBe(200);
+    expect(sites.memorySites("dev-user")).toEqual([]);
     vi.restoreAllMocks();
+  });
+
+  it("R9-1: two MCP callers don't share the resolve budget", async () => {
+    const { cachedResolutionResolver } = await import("@/lib/server/resolution/cache");
+    const { checkRateLimit } = await import("@/lib/server/rateLimit");
+    for (let i = 0; i < 90; i++) checkRateLimit("resolve:mcp:user-a", { limit: 90, windowMs: 60_000 });
+    // user-a is exhausted; user-b still resolves.
+    let calls = 0;
+    const search = async () => { calls++; return [] as never; };
+    const c = [{ clientId: "c0", name: "X", originalIndex: 0 }] as never;
+    await cachedResolutionResolver(null, "mcp:user-a")(c, search, "place");
+    expect(calls).toBe(0);
+    await cachedResolutionResolver(null, "mcp:user-b")(c, search, "place");
+    expect(calls).toBe(1);
+  });
+
+  it("R9-5: a failing JWKS fetch yields 503, not 401", async () => {
+    const { verifyAccessToken } = await import("@/lib/server/mcp/auth");
+    const req = new Request("https://focal.example/mcp");
+    // A syntactically valid JWT whose signature can't be checked because the
+    // issuer's JWKS endpoint is unreachable -> transient, not invalid_token.
+    process.env.WORKOS_AUTHKIT_DOMAIN = "https://unreachable.invalid";
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "k1" })).toString("base64url");
+    const body = Buffer.from(JSON.stringify({ iss: "https://unreachable.invalid", aud: "a", sub: "u" })).toString("base64url");
+    await expect(verifyAccessToken(req, `${header}.${body}.sig`)).rejects.toThrow();
+    delete process.env.WORKOS_AUTHKIT_DOMAIN;
   });
 
   it("DELETE /api/profile with no user row returns 404", async () => {

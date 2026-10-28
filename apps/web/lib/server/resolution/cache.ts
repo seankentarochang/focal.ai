@@ -59,7 +59,7 @@ export function __setResolutionStoreForTests(store: ResolutionStore | null | und
 }
 
 const keyOf = (k: { normalizedName: string; type: string; city: string }) =>
-  `${k.type}${k.normalizedName}${k.city}`;
+  JSON.stringify([k.type, k.normalizedName, k.city]);
 
 function stillValid(row: CachedResolution): boolean {
   if (row.status === "unresolved") {
@@ -74,7 +74,11 @@ function stillValid(row: CachedResolution): boolean {
  * time so a thrown search error is never cached. Cache read/write failures
  * fall back to plain resolution rather than failing the rank.
  */
-export function cachedResolutionResolver(store: ResolutionStore | null, callerKey: string): CoreResolveFn {
+export function cachedResolutionResolver(
+  store: ResolutionStore | null,
+  callerKey: string,
+  onLimited?: () => void,
+): CoreResolveFn {
   return async (candidates, search, expectedType, defaults) => {
     const keys = candidates.map((candidate) => ({
       normalizedName: normalizeName(candidate.name),
@@ -111,6 +115,7 @@ export function cachedResolutionResolver(store: ResolutionStore | null, callerKe
       // Per-caller uncached budget: a 60-item rank fans out to paced Qloo
       // searches — cap them so one caller can't starve the queue (R8-8).
       if (!checkRateLimit(`resolve:${callerKey}`, { limit: 90, windowMs: 60_000 }).ok) {
+        onLimited?.(); // per-request signal (R9-7) — never module state
         resolved[index] = { ...candidates[index]!, status: "unresolved" as ResolutionStatus };
         continue;
       }

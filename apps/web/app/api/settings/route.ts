@@ -4,6 +4,7 @@ import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";
 import { checkRateLimit } from "@/lib/server/rateLimit";
 import type { SiteMode, SiteSetting } from "@focal-ai/db";
+import { memorySites, setMemorySites } from "@/lib/server/sites/store";
 
 const MAX_SITES = 500;
 const host = z.string().trim().toLowerCase().min(1).max(253).regex(/^[a-z0-9.-]+$/);
@@ -11,12 +12,7 @@ const putSchema = z.object({
   sites: z.array(z.object({ hostname: host, mode: z.enum(["skip", "off"]) })).max(MAX_SITES),
 });
 
-const memory = new Map<string, SiteSetting[]>();
 
-/** Dev delete: drop the in-memory site settings for a user (R8-4). */
-export function clearMemorySites(userId: string): void {
-  memory.delete(userId);
-}
 const RATE_LIMIT = { limit: 30, windowMs: 60000 };
 
 function limited(retryAfterMs: number): Response {
@@ -29,7 +25,7 @@ function limited(retryAfterMs: number): Response {
 async function read(userId: string, persisted: boolean): Promise<SiteSetting[]> {
   const db = getDb();
   if (persisted && db) return db.sites.list(userId);
-  return memory.get(userId) ?? [];
+  return memorySites(userId);
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -65,9 +61,9 @@ export async function POST(req: Request): Promise<Response> {
     if (mode === null) await db.sites.remove(who.userId, hostname);
     else await db.sites.set(who.userId, hostname, mode as SiteMode);
   } else {
-    const sites = (memory.get(who.userId) ?? []).filter((s) => s.hostname !== hostname);
+    const sites = memorySites(who.userId).filter((s) => s.hostname !== hostname);
     if (mode !== null) sites.push({ hostname, mode: mode as SiteMode });
-    memory.set(who.userId, sites);
+    setMemorySites(who.userId, sites);
   }
   return Response.json({ sites: await read(who.userId, who.persisted) });
 }
@@ -91,7 +87,7 @@ export async function PUT(req: Request): Promise<Response> {
   if (who.persisted && db) {
     await db.sites.replace(who.userId, sites.map((s) => ({ hostname: s.hostname, mode: s.mode as SiteMode })));
   } else {
-    memory.set(who.userId, sites);
+    setMemorySites(who.userId, sites);
   }
   return Response.json({ sites: await read(who.userId, who.persisted) });
 }

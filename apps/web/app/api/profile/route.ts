@@ -3,7 +3,7 @@ import { approveRule, changeStrength, removeEntry, ProfileError } from "@focal-a
 import { DbError } from "@focal-ai/db";
 import { currentViewer } from "@/lib/server/auth/viewer";
 import { clearMemoryProfile, dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
-import { clearMemorySites } from "@/app/api/settings/route";
+import { clearMemorySites } from "@/lib/server/sites/store";
 import { clearMemoryPageResults } from "@/lib/server/page/store";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";

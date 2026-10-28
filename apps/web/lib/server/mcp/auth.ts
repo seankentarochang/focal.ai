@@ -3,6 +3,19 @@ import type { Db } from "@focal-ai/db";
 import { DbError } from "@focal-ai/db";
 import { ensureUser, workosGone } from "../auth/users";
 
+/** jose error codes that mean "this token is bad" (401); anything else is transient (503). */
+const TOKEN_INVALID_CODES = new Set([
+  "ERR_JWT_EXPIRED",
+  "ERR_JWT_CLAIM_VALIDATION_FAILED",
+  "ERR_JWS_SIGNATURE_VERIFICATION_FAILED",
+  "ERR_JWS_INVALID",
+  "ERR_JWT_INVALID",
+  "ERR_JWKS_NO_MATCHING_KEY",
+  "ERR_JWKS_MULTIPLE_MATCHING_KEYS",
+  "ERR_JOSE_ALG_NOT_ALLOWED",
+  "ERR_JOSE_NOT_SUPPORTED",
+]);
+
 /** OAuth access tokens are JWTs, longer than the extension's session tokens. */
 function bearer(req: Request): string | null {
   const m = /^Bearer\s+(\S{1,4096})$/i.exec(req.headers.get("authorization") ?? "");
@@ -72,7 +85,14 @@ export async function verifyAccessToken(req: Request, token: string): Promise<JW
     return payload.sub ? payload : null;
   } catch (e) {
     if (process.env.MCP_AUTH_DEBUG) console.error(e);
-    return null;
+    // Only token-validation failures are "invalid" (401). A JWKS fetch error or
+    // IdP outage is transient — rethrow so the route returns 503 (R9-5).
+    // jose's instance `code` is a string literal (class names can be minified).
+    const code = (e as { code?: unknown }).code;
+    if (typeof code === "string" && TOKEN_INVALID_CODES.has(code)) {
+      return null;
+    }
+    throw e;
   }
 }
 
