@@ -7,7 +7,7 @@ export interface AuthUser {
 }
 
 /** Maps a WorkOS user onto our users table (one row per email). */
-export async function ensureUser(db: Db, user: AuthUser) {
+export async function ensureUser(db: Db, user: AuthUser, opts?: { workosVerified?: boolean }) {
   const byAuth = await db.users.byAuthId("workos", user.id);
   if (byAuth) return byAuth;
   // A different account with the same email is only claimable when WorkOS has
@@ -19,9 +19,13 @@ export async function ensureUser(db: Db, user: AuthUser) {
   }
   // Confirm the WorkOS user still exists before creating a row — otherwise a
   // deleted identity resurrects a fresh account on its next sign-in.
-  if (process.env.WORKOS_API_KEY) {
+  if (process.env.WORKOS_API_KEY && !opts?.workosVerified) {
     const { WorkOS } = await import("@workos-inc/node");
-    const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(user.id).catch(() => null);
+    // Only a 404 proves the WorkOS user is gone; any other error must surface.
+    const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(user.id).catch((e: unknown) => {
+      if ((e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found") return null;
+      throw e;
+    });
     if (!remote) {
       throw new DbError("CONFLICT", "ACCOUNT_CONFLICT: the WorkOS user no longer exists");
     }

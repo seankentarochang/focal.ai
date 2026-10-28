@@ -22,6 +22,7 @@ const CHROME_TAGS = new Set(["NAV", "HEADER", "FOOTER", "ASIDE", "FORM", "MENU"]
 const CHROME_ROLES = /^(navigation|menu|menubar|tablist|banner|contentinfo|toolbar|dialog|alertdialog|complementary)$/;
 
 function isHidden(el: Element): boolean {
+  if (el.hasAttribute("data-focal-hidden")) return false; // focal's own collapse marker
   if (el.hasAttribute("hidden") || el.getAttribute("aria-hidden") === "true") return true;
   const style = (el as HTMLElement).style;
   return style?.display === "none" || style?.visibility === "hidden";

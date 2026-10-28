@@ -127,7 +127,7 @@ describe("RR-4: sameList is order-sensitive", () => {
     const d = page(BOOK_LIST);
     const list = detectList(d)!;
     const a = [...list.cards.values()];
-    __setLastListForTests({ container: list.container, cards: a });
+    __setLastListForTests(list);
     expect(sameList(list)).toBe(true);
     // same cards, different order — a fresh change, not "the same list"
     const reordered = { container: list.container, cards: new Map([...a].reverse().map((el, i) => [`r${i}`, el])) };

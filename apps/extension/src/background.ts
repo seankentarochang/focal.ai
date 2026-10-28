@@ -12,6 +12,7 @@ async function post<T>(path: string, body: unknown): Promise<BackgroundReply<T>>
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${session.token}` },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000), // R4-12: never hang a message handler
     });
     if (res.status === 401) await setSession(null);
     if (!res.ok) return { ok: false, error: `http_${res.status}`, status: res.status };
@@ -44,6 +45,7 @@ async function authed(path: string, init?: RequestInit): Promise<Response | null
     const res = await fetch(`${FOCAL_ORIGIN}${path}`, {
       ...init,
       headers: { authorization: `Bearer ${session.token}`, ...(init?.body ? { "content-type": "application/json" } : {}) },
+      signal: AbortSignal.timeout(15000), // R4-12
     });
     if (res.status === 401) {
       await setSession(null);
@@ -137,7 +139,10 @@ chrome.runtime.onMessageExternal.addListener((msg: ExternalMessage, sender, send
         .then(() => sendResponse({ ok: true }));
       return true;
     case "focal:signout":
-      void setSession(null).then(() => sendResponse({ ok: true }));
+      void authed("/api/extension/session", { method: "DELETE" }) // revoke server-side (R4-1)
+        .catch(() => null)
+        .then(() => setSession(null))
+        .then(() => sendResponse({ ok: true }));
       return true;
     case "focal:ping":
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });

@@ -167,9 +167,9 @@ POST /api/page/rank       bearer | { host, pageType, items:IdentifiedItem[] }
                          → { status, pageResultId:string|null, plan:RenderPlan|null, resolvedCount }
 POST /api/feedback        bearer | { pageResultId, clientId, verdict:"more"|"less" }
                          → { saved:true, eventId:null } on no-op | { saved:true, entryId, eventId } on write
-GET  /api/me              cookie | → { viewer } profile-status probe
+GET  /api/me              cookie | → { signedIn:false } | { signedIn:true, email }
 GET  /api/activity?before cookie | → { activity:ActivityRecord[] }  (?before=<seq> cursor; no nextBefore)
-POST /api/activity/[id]/undo  cookie|bearer | → { undone:true, eventId:string|null } | 404 | 409 later-change
+POST /api/activity/[id]/undo  cookie|bearer | → { undone:true, eventId:string|null } | 404 | 409 later-change (bearer: actor "page" events only)
 GET  /api/settings        cookie|bearer | → { sites:[{hostname,mode:"skip"|"off"}] }
 PUT  /api/settings        cookie|bearer | { sites:[{hostname,mode:"skip"|"off"}] } → { sites }
 POST /api/settings        cookie|bearer | { hostname, mode:"skip"|"off"|null } → { sites }   (null removes)
@@ -178,13 +178,13 @@ POST /api/profile         cookie | { action:approve_rule|set_strength|remove, en
 DELETE /api/profile       cookie | { confirm:"delete" } → { deleted:true }
 GET  /api/profile/export  cookie | → JSON export incl. page_results
 POST /api/extension/session  cookie | → { token, email, expiresAt }
-DELETE /api/extension/session  cookie | → 204 (revokes the bearer token)
+DELETE /api/extension/session  bearer | → 204 (revokes the presented token)
 POST /api/chat            cookie | { messages:[...] } → chat tool calls over the profile
 POST /api/try/rank        anon | { pageType, items[{clientId?,name,city?}], seeds[] }
-                         → { status, items (clientId echoed), plan, meta:{durationMs,unresolved,qlooRequest,dataSource} }
+                         → { status, items (clientId echoed), plan, mock?, meta:{durationMs,unresolved,qlooRequest,dataSource} }
 GET  /api/health          anon | → { ok:true, hasQlooKey, dataSource:"live"|"mock" }
 POST /api/qloo/search     anon | { query, types?[], location? } → { entities, meta }
-POST /mcp                 hosted MCP (Streamable HTTP); 401 without auth
+GET|POST|DELETE /mcp      hosted MCP (Streamable HTTP); 401 without auth
 GET  /api/oauth/authorization-server  anon | OAuth metadata (hosted MCP discovery)
 GET  /api/oauth/protected-resource    anon | OAuth metadata (hosted MCP discovery)
 ```

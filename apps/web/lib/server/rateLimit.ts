@@ -12,23 +12,16 @@ export function checkRateLimit(
   const windowMs = opts?.windowMs ?? DEFAULT_WINDOW_MS;
   const now = Date.now();
 
+  if (windowMs > maxWindowSeen) maxWindowSeen = windowMs;
   if (hits.size > 10000) {
-    // Evict keys whose newest hit is outside every window we use.
-    const maxWindow = DEFAULT_WINDOW_MS * 60;
-    if (windowMs > maxWindowSeen) maxWindowSeen = windowMs;
+    // Evict stale keys first (older than the largest window ever requested),
+    // then the oldest-touched keys — never a blanket clear.
     for (const [k, ats] of hits) {
-      if (ats.every((at) => now - at > maxWindow)) hits.delete(k);
+      if (ats.every((at) => now - at > maxWindowSeen)) hits.delete(k);
     }
     if (hits.size > 10000) {
-      // Evict stale keys first (older than the largest window ever requested),
-      // then the oldest-touched keys — never a blanket clear.
-      for (const [k, ats] of hits) {
-        if (ats.every((at) => now - at > maxWindowSeen)) hits.delete(k);
-      }
-      if (hits.size > 10000) {
-        const byLastHit = [...hits.entries()].sort((a, b) => (a[1][a[1].length - 1] ?? 0) - (b[1][b[1].length - 1] ?? 0));
-        for (const [k] of byLastHit.slice(0, hits.size - 10000)) hits.delete(k);
-      }
+      const byLastHit = [...hits.entries()].sort((a, b) => (a[1][a[1].length - 1] ?? 0) - (b[1][b[1].length - 1] ?? 0));
+      for (const [k] of byLastHit.slice(0, hits.size - 10000)) hits.delete(k);
     }
   }
   const recent = (hits.get(key) ?? []).filter((at) => now - at < windowMs);

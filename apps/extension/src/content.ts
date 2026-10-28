@@ -4,7 +4,7 @@ import { applyPlan, type ApplyHandle } from "./apply/apply";
 import { createGate } from "./apply/gate";
 import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
-import type { CardSnapshot } from "./types";
+import type { CardSnapshot, RenderPlan } from "./types";
 import { checkEligibility } from "./guards/eligibility";
 import { applyLayout } from "./layouts/apply";
 import { deleteLayout, getLayout, layoutKey, saveLayout } from "./layouts/store";
@@ -20,19 +20,20 @@ let rerunTimer: ReturnType<typeof setTimeout> | undefined;
 let firstScheduledAt = 0;
 const runTimes: number[] = [];
 let generation = 0;
-let lastList: { container: Element; cards: Element[] } | null = null;
-const retryTimers = new Set<ReturnType<typeof setTimeout>>();
-let retryBudget = new WeakMap<Element, { count: number; timer: ReturnType<typeof setTimeout> }>();
+let lastList: { container: Element; cards: Element[]; fp: string } | null = null;
+let retryBudget = new Map<Element, { count: number; timer: ReturnType<typeof setTimeout> }>();
 /** Records we mutate ourselves queue MutationObserver records; drain them
  * synchronously after each self-mutation instead of suppressing delivery. */
 const drainRecords = () => { watcher?.takeRecords(); };
 /** Baseline post-apply: re-detect so our own moves/collapses don't look fresh.
  * Limitation (R3-25): site changes that landed in the same batch are absorbed
  * too — a site re-sort arriving mid-apply is treated as part of our write. */
+const fingerprint = (list: DetectedList) =>
+  snapshotCards(list).map((c) => c.snippets[0] ?? "").join("\n");
 const recomputeLastList = () => {
   const fresh = detectList(document);
   if (!fresh) return;
-  lastList = { container: fresh.container, cards: [...fresh.cards.values()] };
+  lastList = { container: fresh.container, cards: [...fresh.cards.values()], fp: fingerprint(fresh) };
   watch(fresh.container, fresh.cards.values());
 };
 let bodyBackoffMs = 1000; // doubles after consecutive no-list/same-list outcomes, caps at 30 s
@@ -66,15 +67,14 @@ function scheduleRerun(): void {
     }
     if (rejected.get(list.container) === list.cards.size) return;
     bodyBackoffMs = 1000;
-    current?.undo(); // our own edits; the watcher drops them via takeRecords
-    drainRecords();
-    current = null;
+    // R4-11: no eager undo — the applied DOM is a valid input (marked hidden
+    // cards still detect). The next run's gate.ready un- undoes before apply.
     void run(0);
   }, RERUN_DELAY_MS);
 }
 
-export function __setLastListForTests(list: { container: Element; cards: Element[] } | null): void {
-  lastList = list;
+export function __setLastListForTests(list: DetectedList | null): void {
+  lastList = list ? { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) } : null;
 }
 
 export function sameList(list: DetectedList): boolean {
@@ -82,7 +82,10 @@ export function sameList(list: DetectedList): boolean {
   const now = [...list.cards.values()];
   const then = lastList.cards;
   // Order-sensitive: a card the page moved is a fresh change, not a rerun loop.
-  return now.length === then.length && now.every((el, i) => el === then[i]);
+  if (!(now.length === then.length && now.every((el, i) => el === then[i]))) return false;
+  // R4-13: recycled elements (same nodes, new contents) still rerun — compare
+  // the first-snippet fingerprint, not just element identity.
+  return fingerprint(list) === lastList.fp;
 }
 
 function inFocal(n: Node): boolean {
@@ -101,6 +104,8 @@ function watch(container: Element, cards: Iterable<Element>): void {
       if (inFocal(r.target)) return false;
       // Site re-sorts and removals of known cards are fresh; focal nodes never are.
       if ([...r.removedNodes].some((n) => n.nodeType === 1 && knownOrDescendant(n) && !inFocal(n))) return true;
+      // A text node appearing/disappearing inside a known card is fresh (R4-13).
+      if (knownOrDescendant(r.target) && [...r.addedNodes, ...r.removedNodes].some((n) => n.nodeType === 3 && !inFocal(n))) return true;
       return [...r.addedNodes].some((n) => n.nodeType === 1 && !inFocal(n));
     });
     if (fresh || !container.isConnected) scheduleRerun();
@@ -135,6 +140,8 @@ function watchPage(): void {
 
 function reject(list: DetectedList): void {
   rejected.set(list.container, list.cards.size);
+  // R4-10: keep the baseline so the body watcher's same-list check stays cheap.
+  lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
   watchPage();
 }
 
@@ -164,11 +171,24 @@ async function runInner(gateMs?: number): Promise<void> {
   if (!eligibility.eligible) return;
 
   const list = detectList(document);
-  if (!list) return watchPage();
-  lastList = { container: list.container, cards: [...list.cards.values()] };
+  if (!list) {
+    lastList = null; // R4-10: stale baselines must not pin the next detection
+    return watchPage();
+  }
+  lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
   watch(list.container, list.cards.values());
 
-  const cards = snapshotCards(list);
+  let cards = snapshotCards(list);
+  if (current?.active && current.mode === "move") {
+    // Rank against the page's own order, not our applied arrangement; new
+    // cards the site added since the apply go last in DOM order (R4-11).
+    const byEl = new Map([...list.cards.entries()].map(([id, el], i) => [el, cards[i]!]));
+    const orig = new Set(current.originalOrder);
+    cards = [
+      ...current.originalOrder.map((el) => byEl.get(el)).filter((c): c is CardSnapshot => !!c),
+      ...[...byEl.entries()].filter(([el]) => !orig.has(el)).map(([, c]) => c),
+    ];
+  }
   // Apps can change the URL (and its search box) before swapping the list; cards keep the context they came with.
   const key = cards.map((c) => c.snippets[0] ?? "").sort().join("\n");
   const hints = last?.key === key ? last.hints : cityHints(document);
@@ -176,11 +196,11 @@ async function runInner(gateMs?: number): Promise<void> {
 
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
+  activeGate?.cancel();
+  drainRecords();
   const gate = createGate(list.container as HTMLElement, gateMs, {
     offerOnly: gen > 1 && onScreen(list.container),
   });
-  activeGate?.cancel();
-  drainRecords();
   activeGate = gate;
   try {
     return await runWithGate(list, cards, gate, gen, hints, pattern, host);
@@ -198,12 +218,8 @@ function scheduleRetry(container: Element): void {
   if (entry.count >= 3) return;
   entry.count += 1;
   clearTimeout(entry.timer); // a second failure while queued never double-books a run
-  entry.timer = setTimeout(() => {
-    retryTimers.delete(entry.timer);
-    void run(0);
-  }, 60000);
+  entry.timer = setTimeout(() => void run(0), 60000);
   retryBudget.set(container, entry);
-  retryTimers.add(entry.timer);
 }
 
 async function runWithGate(
@@ -234,8 +250,8 @@ async function runWithGate(
     if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
       gate.cancel();
       drainRecords();
-      if (identified.ok) reject(list); // identified and not a list: permanent for this container
-      else scheduleRetry(list.container); // transport/API failure: retry budget
+      if (identified.ok && identified.data.isList === false) reject(list); // definite non-list: permanent
+      else scheduleRetry(list.container); // failure, null type or empty items: retry budget (R4-14)
       return;
     }
     pageType = identified.data.pageType;
@@ -260,9 +276,17 @@ async function runWithGate(
     return;
   }
   const { plan, pageResultId } = ranked.data;
+  // R4-11: an element-equivalent plan against the already-applied one skips the
+  // gate entirely — a rerun that would lift the same items must not flicker.
+  if (current?.active && appliedPlan && planEquivalent(plan, appliedPlan)) {
+    gate.cancel();
+    drainRecords();
+    return;
+  }
   gate.ready(() => {
     if (gen !== generation) return;
     current?.undo();
+    drainRecords();
     current = applyPlan(list, plan, {
       onUndo: () => {
         // Strip Undo reverts our move/collapse — drain its records and take a
@@ -327,12 +351,13 @@ async function runWithGate(
           }
         : undefined,
     });
+    appliedPlan = plan;
     if (pageResultId) void send({ type: "page-result", pageResultId, lifted: current!.lifted });
-    // R3-5: recompute AFTER the gate has revealed — while the container is
-    // still hidden detectList's visibility check would skip it. The gate
-    // reveals synchronously before this microtask runs.
+    // R4-9: drain synchronously — the observer callback runs before our
+    // microtask would, so records from our own writes must go now. The
+    // microtask recompute still waits for the gate's synchronous reveal.
+    drainRecords();
     queueMicrotask(() => {
-      drainRecords();
       recomputeLastList();
     });
   });
@@ -347,11 +372,22 @@ const hrefTimer = setInterval(() => {
   lastHref = location.href;
   last = null; // E-1: hints came from the old URL's search box.
   rejected = new WeakMap();
-  retryBudget = new WeakMap(); // retry history is per page (R3-9)
+  retryBudget.clear(); // retry history is per page (R3-9)
   bodyBackoffMs = 1000;
   lastList = null;
   scheduleRerun();
 }, 1000);
+
+let appliedPlan: RenderPlan | null = null;
+/** Same clientId -> same ops/labels: re-applying would move nothing (R4-11). */
+function planEquivalent(a: RenderPlan, b: RenderPlan): boolean {
+  const key = (p: RenderPlan) => JSON.stringify(
+    [...p.ops]
+      .map((o) => ({ ...o, containerId: undefined }))
+      .sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y))),
+  );
+  return key(a) === key(b);
+}
 
 let droppedRecords = false;
 document.addEventListener("visibilitychange", () => {
@@ -366,8 +402,8 @@ export function __stopForTests(): void {
   watcher = null;
   clearTimeout(rerunTimer);
   rerunTimer = undefined;
-  for (const t of retryTimers) clearTimeout(t);
-  retryTimers.clear();
+  for (const e of retryBudget.values()) clearTimeout(e.timer);
+  retryBudget.clear();
   clearInterval(hrefTimer);
   activeGate = null;
 }

@@ -109,29 +109,25 @@ export interface McpCaller {
   scopes: string[];
 }
 
-const userIds = new Map<string, string>();
-
 async function userForWorkosId(db: Db, workosId: string): Promise<string | null> {
-  const cached = userIds.get(workosId);
-  if (cached) {
-    const alive = await db.users.byAuthId("workos", workosId);
-    if (alive) return cached;
-    userIds.delete(workosId);
-  }
+  // No cache: account deletion must take effect on the very next MCP call.
   let user = await db.users.byAuthId("workos", workosId);
   if (!user && process.env.WORKOS_API_KEY) {
     const { WorkOS } = await import("@workos-inc/node");
-    const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(workosId).catch(() => null);
+    // Only a 404 proves the WorkOS user is gone; any other error must surface.
+    const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(workosId).catch((e: unknown) => {
+      if ((e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found") return null;
+      throw e;
+    });
     if (remote?.email) {
       try {
-        user = await ensureUser(db, { id: workosId, email: remote.email, emailVerified: remote.emailVerified === true });
+        user = await ensureUser(db, { id: workosId, email: remote.email, emailVerified: remote.emailVerified === true }, { workosVerified: true });
       } catch (e) {
         if (e instanceof DbError && e.code === "CONFLICT") return null; // invalid token for MCP purposes
         throw e;
       }
     }
   }
-  if (user) userIds.set(workosId, user.id);
   return user?.id ?? null;
 }
 
@@ -156,6 +152,5 @@ export async function resolveMcpCaller(req: Request, db: Db): Promise<McpCaller 
 }
 
 export function __resetMcpAuthForTests() {
-  userIds.clear();
   jwks = null;
 }

@@ -82,7 +82,7 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 | `POST /api/feedback` | More like this / Not for me from a page |
 | `GET/PUT/POST /api/settings` | Sites to skip, preferences; POST writes one site (extension toolbar) |
 | `GET/DELETE /api/profile`, `GET /api/profile/export` | Account deletion and full export (profile, activity, page results) |
-| `POST/DELETE /api/extension/session` | Issue or revoke the extension's bearer token (cookie-auth only) |
+| `POST /api/extension/session`, `DELETE` with the bearer | Issue (cookie-auth) or revoke (bearer-auth) the extension token |
 | `POST /api/try/rank` | Anonymous lift-only demo rank for the /try pages; no profile, no cache |
 | `POST /api/chat` | Website chat agent (§5.9) |
 | `/mcp` | Hosted MCP endpoint with OAuth (§5.10) |
@@ -128,7 +128,7 @@ Automatic detection on any site, no per-site adapters: find the dominant group o
 
 ### 5.3 Identifying each item (Jev)
 
-- **New layout:** the extension sends the page's hostname, path pattern, any city hints found on the page (search box value, URL parameters, headings) and the card snippets to `/api/page/identify`. The server asks Jev (TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`) one request per page with, for each card:
+- **New layout:** the extension sends the page's hostname, path pattern, any city hints found on the page (search box value, URL parameters, headings), the structure-only page signature and the card snippets to `/api/page/identify`. The server asks Jev (TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`) one request per page with, for each card:
   - `name`: choice among that card's snippets (or `none`)
   - `type`: choice among Qloo's 10 insight types (or `not_a_thing`)
   - `city`: choice among the page's city hints (or `unknown`), for places and destinations
@@ -187,9 +187,9 @@ Read and write with the same rules as the chat: read profile, search entities an
 
 ## 6. Privacy and security
 
-- **What leaves the browser:** on a new site layout, the text snippets of list cards (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and settings. Item names go to Qloo. Card links are not sent (they return with X-05).
+- **What leaves the browser:** on a new site layout, the text snippets of list cards plus the structure-only page signature (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and settings. Item names go to Qloo. Card links are not sent (they return with X-05).
 - **Stored on the server:** account, profile, activity, settings, the shared resolution cache, and page results for 24 h. Learned layouts stay in the extension (structure only, D-18). No browsing history.
-- **Chat text** is processed by the free LLM providers, some of which log prompts; the privacy policy names them.
+- **Chat text and a summary of your taste profile** are sent to the configured LLM providers (Groq → Cerebras → OpenRouter), some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.
 - **Agents cannot act quietly:** every write is attributed and undoable; hard rules need approval; MCP cannot change settings.
 - **Export and delete** the profile and account at any time.

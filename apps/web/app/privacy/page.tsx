@@ -35,8 +35,8 @@ export default function PrivacyPage() {
               tag ids go to Qloo's insights API for affinity scoring.
             </li>
             <li>
-              <strong>Chat text</strong> is processed by the LLM providers behind the site chat — Groq first, then
-              Cerebras, then OpenRouter; some of them log prompts.
+              <strong>Chat text and your taste-profile summary</strong> are processed by the LLM providers behind
+              the site chat — Groq first, then Cerebras, then OpenRouter; some of them log prompts.
             </li>
           </ul>
         </Section>

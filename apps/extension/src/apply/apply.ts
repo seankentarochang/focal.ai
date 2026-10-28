@@ -22,6 +22,8 @@ export interface ApplyHandle {
   lifted: number;
   undo(): void;
   readonly active: boolean;
+  /** Card elements in their pre-apply DOM order (R4-11). */
+  readonly originalOrder: Element[];
 }
 
 function isFlexOrGrid(el: Element): boolean {
@@ -163,6 +165,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
   const inserted: Element[] = [];
   const originalChildren = [...container.children];
   const originalNodes = [...container.childNodes];
+  const markedHidden: Element[] = [];
   let active = true;
 
   const reorder = plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder");
@@ -174,11 +177,16 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
     get active() {
       return active;
     },
+    get originalOrder() {
+      const cardSet = new Set(cards.values());
+      return originalChildren.filter((el) => cardSet.has(el));
+    },
     undo() {
       if (!active) return;
       active = false;
       flip([...cards.values()], () => {
         for (const el of inserted) el.remove();
+        for (const el of markedHidden) el.removeAttribute("data-focal-hidden");
         for (const [el, style] of savedStyles) {
           if (style === null) el.removeAttribute("style");
           else el.setAttribute("style", style);
@@ -260,6 +268,9 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         for (const el of els) {
           saveStyle(el, savedStyles);
           el.style.setProperty("display", "none", "important");
+          // Mark ours so the rerun detector still counts the card (R4-11).
+          el.setAttribute("data-focal-hidden", "");
+          markedHidden.push(el);
         }
         const fold = decorate(make(doc, "div", "fold"), "fold");
         fold.append(doc.createTextNode(op.label));

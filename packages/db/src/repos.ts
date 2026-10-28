@@ -2,7 +2,6 @@ import { json, toIso, type Sql } from "./client";
 import {
   DbError,
   type ActivityRecord,
-  type Layout,
   type PageResultRecord,
   type Resolution,
   type ResolutionKey,
@@ -83,7 +82,8 @@ export function profileRepo(sql: Sql) {
      * (chat and MCP at once); a mismatch throws CONFLICT and nothing changes.
      */
     async commit(userId: string, event: StoredEvent, expectedVersion?: number): Promise<number> {
-      return sql.begin(async (tx) => {
+      try {
+      return await sql.begin(async (tx) => {
         const [user] = await tx`SELECT profile_version FROM users WHERE id = ${userId} FOR UPDATE`;
         if (!user) throw new DbError("NOT_FOUND", `user ${userId} not found`);
         if (expectedVersion !== undefined && user.profile_version !== expectedVersion) {
@@ -131,6 +131,13 @@ export function profileRepo(sql: Sql) {
           UPDATE users SET profile_version = profile_version + 1 WHERE id = ${userId} RETURNING profile_version`;
         return next!.profile_version as number;
       });
+      } catch (e) {
+        const pg = e as { code?: string };
+        if (pg.code === "23505" || pg.code === "40001") {
+          throw new DbError("CONFLICT", "profile write raced another commit; retry");
+        }
+        throw e;
+      }
     },
 
     async activity<E extends StoredEntry = StoredEntry>(
@@ -289,6 +296,7 @@ export function pageResultsRepo(sql: Sql) {
     },
     async purgeExpired(): Promise<number> {
       await sql`DELETE FROM resolution_cache WHERE status = 'unresolved' AND updated_at < now() - interval '7 days'`;
+      await sql`DELETE FROM extension_sessions WHERE expires_at < now() - interval '1 day' OR (revoked_at IS NOT NULL AND revoked_at < now() - interval '30 days')`;
       const rows = await sql`DELETE FROM page_results WHERE expires_at <= now() RETURNING id`;
       return rows.length;
     },

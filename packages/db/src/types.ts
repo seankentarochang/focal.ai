@@ -47,17 +47,6 @@ export interface SiteSetting {
   mode: SiteMode;
 }
 
-export interface Layout {
-  id: string;
-  hostname: string;
-  pathPattern: string;
-  fingerprint: string;
-  namePosition: unknown;
-  type: string;
-  citySource: unknown;
-  confidence: number;
-  learnedAt: string;
-}
 
 export interface ResolutionKey {
   normalizedName: string;

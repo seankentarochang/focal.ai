@@ -119,13 +119,21 @@ export async function DELETE(req: Request): Promise<Response> {
   const db = getDb();
   if (viewer.persisted && db) {
     const row = await db.sql`SELECT auth_ids->>'workos' AS wid FROM users WHERE id = ${viewer.userId}`;
-    await db.users.delete(viewer.userId);
     if (process.env.WORKOS_API_KEY && row[0]?.wid) {
       const { WorkOS } = await import("@workos-inc/node");
-      await new WorkOS(process.env.WORKOS_API_KEY).userManagement.deleteUser(row[0].wid as string).catch((e) => {
-        console.warn("WorkOS user delete failed:", e instanceof Error ? e.message : String(e));
-      });
+      // Delete the identity first so a partial failure can't orphan the local
+      // account. 404 means the WorkOS user is already gone.
+      try {
+        await new WorkOS(process.env.WORKOS_API_KEY).userManagement.deleteUser(row[0].wid as string);
+      } catch (e) {
+        if ((e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found") {
+          // already deleted upstream
+        } else {
+          return Response.json({ error: { code: "UPSTREAM", message: "identity deletion failed; try again" } }, { status: 502 });
+        }
+      }
     }
+    await db.users.delete(viewer.userId);
   }
   return Response.json({ deleted: true });
 }

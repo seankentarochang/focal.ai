@@ -76,7 +76,7 @@ Find the dominant group of 3+ repeated cards with title-like text; extract up to
 **Acceptance:** fixtures saved from 10 real sites detect the right list; non-list pages (inbox-like, news) detect nothing or are rejected by X-04.
 
 ### X-04 · Identify endpoint and layout learning
-Status: [x] (stage 2: learned layouts server-side and in the extension; e2e: no identify call on the second visit) · **P0** · Deps: V-02, X-03, P-01 · Owns: `apps/web/app/api/page/identify/**`, `apps/web/lib/server/jev/**`, `apps/extension/src/layouts/**`
+Status: [x] (learned layouts live in the extension; the server derives them but never stores them, D-18; e2e: no identify call on the second visit) · **P0** · Deps: V-02, X-03, P-01 · Owns: `apps/web/app/api/page/identify/**`, `apps/web/lib/server/jev/**`, `apps/extension/src/layouts/**`
 One Jev call per new layout (name / type / city per card, page-level "is this a list of things"); confidence threshold; derive and save the Layout; the extension identifies matching layouts locally with no Jev call. Per-user Jev rate limit.
 **Acceptance:** second visit to the same layout makes no identify call; low-confidence cards are excluded; TypeSafe key never leaves the server.
 

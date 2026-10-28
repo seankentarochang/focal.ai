@@ -60,7 +60,7 @@ export type FeedbackRequest = { pageResultId: string; clientId: string; verdict:
 
 export interface FeedbackResponse {
   saved: boolean;
-  entryId?: string;
+  entryId?: string | null;
   eventId: string | null;
 }
 

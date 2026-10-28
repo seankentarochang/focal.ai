@@ -126,6 +126,31 @@ describe("R3-4: strip Undo does not schedule a rerun (move mode)", () => {
   });
 });
 
+describe("R4-11: no eager undo on rerun", () => {
+  it("an infinite-scroll append keeps the strip and moves no seen item", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    // Infinite scroll appends a fifth card — seen items must not be re-lifted.
+    const container = document.querySelector(".results")!;
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/e'><h3>Epsilon</h3></a><p>Pizza</p>";
+    container.appendChild(extra);
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(2), { timeout: 5000 });
+    // The second plan is element-equivalent -> skipped: strip still present, no flicker.
+    await new Promise((r) => setTimeout(r, 800));
+    expect(document.querySelector("[data-focal='strip']")).not.toBeNull();
+  });
+});
+
 describe("R2-15c: gate ownership", () => {
   it("a failing run cancels only its own gate, leaving a newer gate live", async () => {
     let rankCalls = 0;
