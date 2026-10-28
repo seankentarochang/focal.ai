@@ -5,7 +5,7 @@ export {
   createQlooClient,
 } from "./client";
 export { QlooError } from "./errors";
-export { warmSearchCache } from "./pace";
+export { paceTurn, QLOO_MIN_INTERVAL_MS, warmSearchCache } from "./pace";
 export type { WarmSearchOptions, WarmSearchRequest, WarmSearchResult } from "./pace";
 export type {
   DataSource,

@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { CANDIDATES, fixtureProfile, writeProfileFile } from "./support.js";
 
@@ -28,10 +28,13 @@ describe("focal MCP server over stdio", () => {
     tmpDir = mkdtempSync(join(tmpdir(), "focal-mcp-smoke-"));
     const profilePath = writeProfileFile(join(tmpDir, "profile.json"), fixtureProfile());
     const transport = new StdioClientTransport({
-      command: "pnpm",
-      args: ["--filter", "@focal-ai/mcp", "start"],
+      // Spawn the server entry directly (`pnpm start` = `tsx src/index.ts`):
+      // a bare "pnpm" needs a working pnpm.cmd on Windows, which this dev
+      // machine's global install lacks; --import tsx is portable everywhere.
+      command: process.execPath,
+      args: ["--import", "tsx", "src/index.ts"],
       cwd: packageRoot,
-      env: { QLOO_MOCK: "1", FOCAL_PROFILE_PATH: profilePath },
+      env: { ...getDefaultEnvironment(), QLOO_MOCK: "1", FOCAL_PROFILE_PATH: profilePath },
       stderr: "pipe",
     });
     client = new Client({ name: "focal-mcp-smoke", version: "0.0.0" });

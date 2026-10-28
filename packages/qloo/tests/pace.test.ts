@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { warmSearchCache } from "../src/index.js";
+import { QLOO_MIN_INTERVAL_MS, warmSearchCache } from "../src/index.js";
 import { createFetchSpy, createLiveClient, jsonResponse, statusResponse } from "./support.js";
 
 const EMPTY_RESULTS = { success: true, results: [] };
@@ -79,6 +79,33 @@ describe("warmSearchCache", () => {
     expect(starts).toHaveLength(3);
     for (let index = 1; index < starts.length; index += 1) {
       expect(starts[index]! - starts[index - 1]!).toBeGreaterThanOrEqual(50);
+    }
+  });
+});
+
+describe("shared request queue", () => {
+  it("keeps concurrent calls across clients at or under 5 req/s", async () => {
+    const starts: number[] = [];
+    const spy = () =>
+      createFetchSpy(async () => {
+        starts.push(Date.now());
+        return jsonResponse(EMPTY_RESULTS);
+      });
+    // Default minIntervalMs (QLOO_MIN_INTERVAL_MS, 200 ms) on both clients.
+    const a = createLiveClient(spy(), { cacheTtlMs: 0, minIntervalMs: QLOO_MIN_INTERVAL_MS });
+    const b = createLiveClient(spy(), { cacheTtlMs: 0, minIntervalMs: QLOO_MIN_INTERVAL_MS });
+
+    await Promise.all([
+      a.search({ query: "a1" }),
+      a.search({ query: "a2" }),
+      b.search({ query: "b1" }),
+      b.insights({ resultType: "urn:entity:place", signalEntityIds: ["Q1"] }),
+    ]);
+
+    expect(starts).toHaveLength(4);
+    const ordered = [...starts].sort((x, y) => x - y);
+    for (let index = 1; index < ordered.length; index += 1) {
+      expect(ordered[index]! - ordered[index - 1]!).toBeGreaterThanOrEqual(180);
     }
   });
 });

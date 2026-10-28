@@ -1,5 +1,6 @@
 import { cacheKey, createTtlCache } from "./cache";
 import { QlooError } from "./errors";
+import { paceTurn, QLOO_MIN_INTERVAL_MS } from "./pace";
 import {
   extractResultsArray,
   extractTagsArray,
@@ -41,6 +42,8 @@ export function createQlooClient(opts: {
   mock?: boolean;
   timeoutMs?: number;
   cacheTtlMs?: number;
+  /** Spacing this client's requests reserve in the shared queue; 0 opts out. */
+  minIntervalMs?: number;
 } = {}): QlooClient {
   if (opts.mock ?? process.env.QLOO_MOCK === "1") {
     return createMockQlooClient();
@@ -51,6 +54,7 @@ export function createQlooClient(opts: {
   const timeoutMs = opts.timeoutMs ?? QLOO_DEFAULT_TIMEOUT_MS;
   const fetchImpl: typeof fetch = opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
   const cache = createTtlCache(opts.cacheTtlMs ?? QLOO_DEFAULT_CACHE_TTL_MS);
+  const minIntervalMs = opts.minIntervalMs ?? QLOO_MIN_INTERVAL_MS;
 
   function requireApiKey(): string {
     if (!apiKey) throw new QlooError("AUTH", "QLOO_API_KEY is not set");
@@ -74,6 +78,9 @@ export function createQlooClient(opts: {
     key: string,
   ): Promise<{ payload: unknown; durationMs: number }> {
     const url = buildUrl(path, query);
+    // Wait for a queue slot before the timeout clock starts, so requests that
+    // are merely queued behind the 5 req/s pace don't abort while waiting.
+    if (minIntervalMs > 0) await paceTurn(minIntervalMs);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const startedAt = Date.now();

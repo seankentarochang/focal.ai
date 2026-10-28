@@ -26,6 +26,7 @@ import {
 import { warmSearchCache, type DataSource, type QlooClient, type QlooEntityType } from "@focal-ai/qloo";
 import { toCandidateScores, toCoreSearchFn } from "@/lib/server/adapters";
 import { dataSource, getQlooClient } from "@/lib/server/qloo";
+import { cachedResolutionResolver, getResolutionStore } from "@/lib/server/resolution/cache";
 
 /** Mirrors INSIGHTS_TAKE_MIN / MAX / QLOO_DEFAULT_INSIGHTS_TAKE in the qloo client. */
 const INSIGHTS_TAKE_MIN = 1;
@@ -194,6 +195,7 @@ export async function runPageRank(input: RunPageRankInput): Promise<RankPipeline
     return { scores: toCandidateScores(result.entities), request: { path: "/v2/insights", params } };
   };
 
+  const resolutionStore = getResolutionStore();
   try {
     return await runRankPipeline({
       pageId: input.pageId,
@@ -202,7 +204,11 @@ export async function runPageRank(input: RunPageRankInput): Promise<RankPipeline
       containerId: input.containerId,
       candidates: input.candidates,
       profile: input.profile,
-      deps: { search, insights },
+      deps: {
+        search,
+        insights,
+        ...(resolutionStore ? { resolve: cachedResolutionResolver(resolutionStore) } : {}),
+      },
     });
   } catch (e) {
     if (e instanceof PipelineError) {

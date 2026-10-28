@@ -9,6 +9,7 @@ import type { QlooEntityType } from "@focal-ai/qloo";
 import { toCandidateScores, toCoreSearchFn } from "../adapters";
 import { buildInsightsParams } from "../pipeline";
 import { getQlooClient } from "../qloo";
+import { cachedResolutionResolver, getResolutionStore } from "../resolution/cache";
 import { toInsightType, type PageRankBody } from "./schemas";
 
 const RESOLVE_SEARCH_TAKE = 3;
@@ -56,12 +57,17 @@ export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: s
     };
   });
   const locationQuery = body.pageType === "place" || body.pageType === "destination" ? mostCommonCity(body) : undefined;
+  const store = getResolutionStore();
   return runCorePageRank({
     pageId,
     pageType,
     items,
     profile,
     ...(locationQuery ? { locationQuery } : {}),
-    deps: { search: toCoreSearchFn(getQlooClient(), RESOLVE_SEARCH_TAKE), insights: pageInsights() },
+    deps: {
+      search: toCoreSearchFn(getQlooClient(), RESOLVE_SEARCH_TAKE),
+      insights: pageInsights(),
+      ...(store ? { resolve: cachedResolutionResolver(store) } : {}),
+    },
   });
 }

@@ -114,16 +114,19 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
       await db.profile.commit(u.id, { id: "g1", actor: "chat", action: "add", entryId: e.id, after: e, at: "2026-10-20T10:00:00.000Z" });
       await db.sites.set(u.id, "Reddit.com", "skip");
       await db.pageResults.save({ id: "pr-del", userId: u.id, hostname: "yelp.com", status: "ranked", items: [], plan: null, meta: null });
+      const { token } = await db.extensionSessions.issue(u.id);
       const dump = await db.profile.export(u.id);
       expect(dump.profile.entries).toEqual([e]);
       expect(dump.activity).toHaveLength(1);
       expect(dump.sites).toEqual([{ hostname: "reddit.com", mode: "skip" }]);
       expect(await db.users.delete(u.id)).toBe(true);
+      expect(await db.extensionSessions.resolve(token)).toBeNull();
       const left = await db.sql`
         SELECT (SELECT count(*) FROM profile_entries WHERE user_id = ${u.id})::int
              + (SELECT count(*) FROM activity_events WHERE user_id = ${u.id})::int
              + (SELECT count(*) FROM site_settings WHERE user_id = ${u.id})::int
-             + (SELECT count(*) FROM page_results WHERE user_id = ${u.id})::int AS n`;
+             + (SELECT count(*) FROM page_results WHERE user_id = ${u.id})::int
+             + (SELECT count(*) FROM extension_sessions WHERE user_id = ${u.id})::int AS n`;
       expect(left[0]!.n).toBe(0);
     });
   });

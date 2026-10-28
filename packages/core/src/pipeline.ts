@@ -28,6 +28,7 @@ import { resolveCandidates } from "./resolve";
 import type {
   CandidateScore,
   CoreEntity,
+  CoreResolveFn,
   PageCandidate,
   RankedCandidate,
   RenderPlan,
@@ -65,7 +66,7 @@ export interface RankPipelineArgs {
   containerId?: string;
   candidates: PageCandidate[];
   profile: TasteProfile;
-  deps: { search: PipelineSearchFn; insights: PipelineInsightsFn };
+  deps: { search: PipelineSearchFn; insights: PipelineInsightsFn; resolve?: CoreResolveFn };
   planOptions?: { annotate?: boolean; emphasizeThreshold?: number; collapseSponsored?: boolean };
 }
 
@@ -106,7 +107,7 @@ export async function runRankPipeline(args: RankPipelineArgs): Promise<RankPipel
     throw new PipelineError("NO_SEEDS", NO_SEEDS_MESSAGE);
   }
 
-  const resolved = await resolveCandidates(candidates, deps.search, pageType, {
+  const resolved = await (deps.resolve ?? resolveCandidates)(candidates, deps.search, pageType, {
     location: locationQuery,
   });
 

@@ -1,6 +1,7 @@
 import { errorResponse } from "@/lib/server/errors";
 import { JevError } from "@/lib/server/jev/client";
 import { getIdentifier, IdentifyUnavailableError, selectIdentified } from "@/lib/server/page/identify";
+import { applyLayout, deriveLayout, getLayoutStore } from "@/lib/server/page/layout";
 import { identifyBodySchema } from "@/lib/server/page/schemas";
 import { resolveSession, unauthorizedResponse } from "@/lib/server/page/session";
 import { checkRateLimit } from "@/lib/server/rateLimit";
@@ -26,9 +27,49 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = identifyBodySchema.safeParse(payload);
   if (!parsed.success) return errorResponse(parsed.error);
+
+  const layouts = getLayoutStore();
+  if (layouts) {
+    try {
+      const layout = await layouts.find(parsed.data.host, parsed.data.pathPattern, parsed.data.signature);
+      const applied = layout ? applyLayout(layout, parsed.data) : null;
+      if (applied) {
+        return Response.json({
+          ...applied,
+          layout: {
+            fingerprint: layout!.fingerprint,
+            namePosition: layout!.namePosition,
+            type: layout!.type,
+            citySource: layout!.citySource ?? null,
+          },
+        });
+      }
+    } catch {
+      // A failed layout lookup must not cost the page its identification.
+    }
+  }
+
   try {
     const answer = await getIdentifier().identify(parsed.data);
-    return Response.json(selectIdentified(answer));
+    const result = selectIdentified(answer);
+    let layout;
+    if (layouts) {
+      const derived = deriveLayout(parsed.data, answer);
+      if (derived) {
+        try {
+          const saved = await layouts.save(derived);
+          layout = {
+            fingerprint: saved.fingerprint,
+            namePosition: saved.namePosition,
+            type: saved.type,
+            citySource: saved.citySource ?? null,
+          };
+        } catch {
+          // Saving the layout is best-effort; identification already succeeded.
+        }
+      }
+    }
+    return Response.json(layout ? { ...result, layout } : result);
   } catch (e) {
     if (e instanceof IdentifyUnavailableError) {
       return Response.json({ error: { code: "UNAVAILABLE", message: e.message } }, { status: 503 });

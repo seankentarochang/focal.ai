@@ -13,6 +13,8 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("undo"), event_id: z.string().min(1) }),
 ]);
 
+const deleteSchema = z.object({ confirm: z.literal("delete") });
+
 function notFound(message: string): Response {
   return Response.json({ error: { code: "NOT_FOUND", message } }, { status: 404 });
 }
@@ -75,4 +77,26 @@ export async function POST(req: Request): Promise<Response> {
     throw e;
   }
   return state(viewer.userId, viewer.persisted);
+}
+
+/** Delete the account (§6). Everything owned cascades with the users row. */
+export async function DELETE(req: Request): Promise<Response> {
+  const viewer = await currentViewer();
+  if (!viewer) return Response.json({ error: { code: "UNAUTHORIZED", message: "sign in to focal" } }, { status: 401 });
+  let payload: unknown;
+  try {
+    payload = await req.json();
+  } catch {
+    return Response.json({ error: { code: "BAD_REQUEST", message: "invalid request body" } }, { status: 400 });
+  }
+  const parsed = deleteSchema.safeParse(payload);
+  if (!parsed.success) {
+    return Response.json(
+      { error: { code: "BAD_REQUEST", message: 'send { "confirm": "delete" } to delete the account' } },
+      { status: 400 },
+    );
+  }
+  const db = getDb();
+  if (viewer.persisted && db) await db.users.delete(viewer.userId);
+  return Response.json({ deleted: true });
 }

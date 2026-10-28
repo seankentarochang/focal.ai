@@ -1,5 +1,27 @@
 import type { QlooClient, QlooEntityType } from "./types";
 
+/**
+ * Server-wide request queue (P-04): one module-level start gate shared by
+ * every QlooClient, so concurrent ranks, searches and insights calls across
+ * page routes, Studio routes, chat tools and MCP together stay under Qloo's
+ * 5 req/s limit. `minIntervalMs` is the spacing this call reserves after its
+ * own start; it always waits for reservations earlier calls already made.
+ */
+export const QLOO_MIN_INTERVAL_MS = 200;
+
+let nextStartAt = 0;
+let startGate: Promise<void> = Promise.resolve();
+
+export function paceTurn(minIntervalMs = QLOO_MIN_INTERVAL_MS): Promise<void> {
+  const slot = startGate.then(async () => {
+    const waitMs = nextStartAt - Date.now();
+    if (waitMs > 0) await delay(waitMs);
+    nextStartAt = Date.now() + minIntervalMs;
+  });
+  startGate = slot.catch(() => undefined);
+  return slot;
+}
+
 export interface WarmSearchRequest {
   query: string;
   types?: string[];

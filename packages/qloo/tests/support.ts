@@ -33,13 +33,14 @@ export function requestAt(spy: FetchSpy, index = 0): { url: URL; init: RequestIn
 
 export function createLiveClient(
   fetchImpl: FetchSpy,
-  overrides: { timeoutMs?: number; cacheTtlMs?: number } = {},
+  overrides: { timeoutMs?: number; cacheTtlMs?: number; minIntervalMs?: number } = {},
 ): QlooClient {
   return createQlooClient({
     apiKey: TEST_API_KEY,
     baseUrl: TEST_BASE_URL,
     fetchImpl,
     cacheTtlMs: overrides.cacheTtlMs ?? 0,
+    minIntervalMs: overrides.minIntervalMs ?? 0,
     ...(overrides.timeoutMs !== undefined ? { timeoutMs: overrides.timeoutMs } : {}),
   });
 }

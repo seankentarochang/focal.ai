@@ -1,10 +1,12 @@
-import type { BackgroundReply, ContentMessage, IdentifyResponse, RankResponse } from "./api";
+import type { BackgroundReply, ContentMessage, IdentifiedItem, IdentifyResponse, InsightType, RankResponse } from "./api";
 import { pathPattern } from "./api";
 import { applyPlan, type ApplyHandle } from "./apply/apply";
 import { createGate } from "./apply/gate";
 import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
 import { checkEligibility } from "./guards/eligibility";
+import { applyLayout } from "./layouts/apply";
+import { getLayout, layoutKey, saveLayout } from "./layouts/store";
 import { getSettings } from "./storage";
 
 function send<T>(msg: ContentMessage): Promise<BackgroundReply<T>> {
@@ -108,20 +110,35 @@ async function run(gateMs?: number): Promise<void> {
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
 
-  const identified = await send<IdentifyResponse>({
-    type: "identify",
-    body: { host, pathPattern: pattern, signature: list.signature, cityHints: hints, cards },
-  });
-  if (gen !== generation) return gate.cancel();
-  if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
-    gate.cancel();
-    if (identified.ok) reject(list);
-    return;
+  // A stored layout identifies the cards locally — no identify call (§5.3).
+  const storageKey = layoutKey(host, pattern, list.signature);
+  const stored = await getLayout(storageKey);
+  const local = stored ? applyLayout(stored, cards, hints) : null;
+
+  let pageType: InsightType;
+  let items: IdentifiedItem[];
+  if (local) {
+    ({ pageType, items } = local);
+  } else {
+    const identified = await send<IdentifyResponse>({
+      type: "identify",
+      body: { host, pathPattern: pattern, signature: list.signature, cityHints: hints, cards },
+    });
+    if (gen !== generation) return gate.cancel();
+    if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
+      gate.cancel();
+      if (identified.ok) reject(list);
+      return;
+    }
+    pageType = identified.data.pageType;
+    items = identified.data.items;
+    if (identified.data.layout) void saveLayout(storageKey, identified.data.layout);
   }
+  if (gen !== generation) return gate.cancel();
 
   const ranked = await send<RankResponse>({
     type: "rank",
-    body: { host, pathPattern: pattern, pageType: identified.data.pageType, items: identified.data.items },
+    body: { host, pathPattern: pattern, pageType, items },
   });
   if (gen !== generation) return gate.cancel();
   if (!ranked.ok || !ranked.data.plan) {

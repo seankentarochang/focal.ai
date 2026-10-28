@@ -22,6 +22,18 @@ export type CoreSearchFn = (args: {
   location?: string;
 }) => Promise<CoreEntity[]>;
 
+/**
+ * Injectable resolver seam, same contract as resolveCandidates: hosts may wrap
+ * resolution (e.g. a shared Postgres cache) while the core resolver stays the
+ * only owner of match decisions and stays free of any storage dependency.
+ */
+export type CoreResolveFn = (
+  candidates: PageCandidate[],
+  search: CoreSearchFn,
+  expectedType: string,
+  defaults?: { location?: string },
+) => Promise<ResolvedCandidate[]>;
+
 export interface TasteSeed {
   entityId: string;
   name: string;

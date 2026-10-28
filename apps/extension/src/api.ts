@@ -21,10 +21,24 @@ export interface IdentifiedItem {
   city?: string;
 }
 
+/**
+ * Structure-only layout the server learned (§5.3): which snippet holds the
+ * name, the page type and which city hint supplies the city. Replayed locally
+ * on later visits so no identify call is needed. Keep in sync with
+ * apps/web/lib/server/page/layout.ts.
+ */
+export interface LearnedLayout {
+  fingerprint: string;
+  namePosition: { snippetIndex: number };
+  type: InsightType;
+  citySource: { hintIndex: number } | null;
+}
+
 export interface IdentifyResponse {
   isList: boolean;
   pageType: InsightType | null;
   items: IdentifiedItem[];
+  layout?: LearnedLayout;
 }
 
 /** Known layouts send only names, type and city (§6). */

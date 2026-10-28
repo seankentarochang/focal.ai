@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { addEntry } from "@focal-ai/core";
 import { connect, createDb, migrate, type Db } from "@focal-ai/db";
 import { __setDbForTests } from "@/lib/server/db";
-import { GET, POST } from "@/app/api/profile/route";
+import { DELETE, GET, POST } from "@/app/api/profile/route";
+import { GET as exportGET } from "@/app/api/profile/export/route";
 
 let viewerUserId = "";
 vi.mock("@/lib/server/auth/viewer", () => ({
@@ -13,6 +14,9 @@ vi.mock("@/lib/server/auth/viewer", () => ({
 
 const post = (body: unknown) =>
   POST(new Request("http://localhost/api/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+
+const del = (body: unknown) =>
+  DELETE(new Request("http://localhost/api/profile", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
 
 const empty = { version: 2 as const, updatedAt: new Date().toISOString(), entries: [] };
 
@@ -33,6 +37,33 @@ describe("profile route without a database", () => {
     expect(await res.json()).toEqual({ entries: [], activity: [] });
     expect((await post({ action: "approve_rule", entry_id: "nope" })).status).toBe(404);
     expect((await post({ action: "undo", event_id: "nope" })).status).toBe(404);
+  });
+
+  it("export: 401 signed out, a JSON download with the memory profile signed in", async () => {
+    viewerUserId = "";
+    expect((await exportGET()).status).toBe(401);
+    viewerUserId = "u1";
+    const res = await exportGET();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toBe('attachment; filename="focal-export.json"');
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({
+      user: { id: "u1", email: "viewer@example.com" },
+      profile: { version: 2, entries: [] },
+      activity: [],
+      sites: [],
+    });
+  });
+
+  it("delete: 401 signed out, 400 without confirm, deleted with it", async () => {
+    viewerUserId = "";
+    expect((await del({ confirm: "delete" })).status).toBe(401);
+    viewerUserId = "u1";
+    expect((await del({})).status).toBe(400);
+    expect((await del({ confirm: "nope" })).status).toBe(400);
+    const res = await del({ confirm: "delete" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: true });
   });
 });
 
@@ -86,6 +117,45 @@ describe.skipIf(!url)("profile route in Postgres", () => {
     expect((await post({ action: "undo", event_id: add.event.id })).status).toBe(404);
     const [undoRecord] = await db.profile.activity(userId, { limit: 1 });
     expect((await post({ action: "undo", event_id: undoRecord!.id })).status).toBe(404);
+  });
+
+  it("export returns the persisted profile, activity and sites", async () => {
+    const add = addEntry(empty, { kind: "thing", qlooId: "Q-exp", name: "Exportable", type: "urn:entity:place", strength: "like", source: "manual" }, "manual");
+    const version = (await db.profile.load(userId)).version;
+    await db.profile.commit(userId, add.event as never, version);
+    await db.sites.set(userId, "reddit.com", "skip");
+
+    const res = await exportGET();
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      user: { id: string; email: string };
+      profile: { version: number; entries: { name: string }[] };
+      activity: { action: string }[];
+      sites: { hostname: string; mode: string }[];
+    };
+    expect(body.user).toMatchObject({ id: userId, email: "viewer@example.com" });
+    expect(body.profile.entries.some((e) => e.name === "Exportable")).toBe(true);
+    expect(body.activity.length).toBeGreaterThan(0);
+    expect(body.sites).toEqual([{ hostname: "reddit.com", mode: "skip" }]);
+  });
+
+  it("delete removes the account and its rows", async () => {
+    const victim = (await db.users.upsert("victim@example.com")).id;
+    const add = addEntry(empty, { kind: "thing", qlooId: "Q-v", name: "Victim", type: "urn:entity:place", strength: "like", source: "manual" }, "manual");
+    await db.profile.commit(victim, add.event as never, 0);
+    const { token } = await db.extensionSessions.issue(victim);
+    const prev = viewerUserId;
+    viewerUserId = victim;
+    try {
+      const res = await del({ confirm: "delete" });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ deleted: true });
+    } finally {
+      viewerUserId = prev;
+    }
+    expect(await db.users.get(victim)).toBeNull();
+    expect(await db.profile.load(victim).catch(() => null)).toBeNull();
+    expect(await db.extensionSessions.resolve(token)).toBeNull();
   });
 
   it("409s on a stale profile version", async () => {
