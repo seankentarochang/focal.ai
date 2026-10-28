@@ -29,11 +29,9 @@ const LINK_BUILDERS: Record<string, (city: string | null) => TryLink> = {
 
 const hasBuilder = (type: string): type is InsightType => type in LINK_BUILDERS;
 
-/** First plausible city: the name of a place/destination the user likes. */
+/** First plausible city: the name of a liked destination (places are restaurants, not cities). */
 function cityOf(entries: ProfileEntry[]): string | null {
-  const place = entries.find(
-    (e) => e.kind === "thing" && e.strength !== "dislike" && (e.type === "urn:entity:place" || e.type === "urn:entity:destination"),
-  );
+  const place = entries.find((e) => e.kind === "thing" && e.strength !== "dislike" && e.type === "urn:entity:destination");
   return place?.name ?? null;
 }
 

@@ -16,12 +16,17 @@
     "check": "pnpm -r typecheck && pnpm -r test",
     "probe": "tsx scripts/probe-qloo.ts",
     "probe:unknowns": "tsx scripts/probe-unknowns.ts",
-    "smoke": "tsx scripts/smoke-prod.ts"
+    "smoke": "tsx scripts/smoke-prod.ts",
+    "e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@focal-ai/core": "workspace:*",
+    "@focal-ai/db": "workspace:*",
     "@neon/config": "1.9.2",
     "@neon/env": "1.6.3",
+    "@playwright/test": "1.64.0",
     "@types/node": "^26.6.5",
+    "selfsigned": "^5.5.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

@@ -213,15 +213,20 @@ describe("tryNowLinks (W-01)", () => {
   const entry = (type: string, name: string, strength: "love" | "like" | "dislike" = "like"): ProfileEntry =>
     ({ id: `e-${name}`, kind: "thing", qlooId: `q-${name}`, name, type, strength, source: "manual", createdAt: "t" }) as unknown as ProfileEntry;
 
-  it("builds per-type links, using a liked place name as the city", () => {
+  it("builds per-type links, using a liked destination as the city", () => {
     const links = tryNowLinks([
-      entry("urn:entity:place", "San Francisco"),
+      entry("urn:entity:destination", "San Francisco"),
       entry("urn:entity:movie", "Parasite"),
     ]);
     expect(links).toEqual([
-      { label: "Restaurants on Yelp in San Francisco", url: "https://www.yelp.com/search?find_desc=restaurants&find_loc=San%20Francisco" },
+      { label: "Things to do in San Francisco on Yelp", url: "https://www.yelp.com/search?find_desc=things+to+do&find_loc=San%20Francisco" },
       { label: "Popular films on Letterboxd", url: "https://letterboxd.com/films/popular/" },
     ]);
+  });
+
+  it("omits the city when the profile has no destination", () => {
+    const links = tryNowLinks([entry("urn:entity:place", "Rintaro"), entry("urn:entity:movie", "Parasite")]);
+    expect(links[0]).toEqual({ label: "Restaurants on Yelp", url: "https://www.yelp.com/search?find_desc=restaurants" });
   });
 
   it("returns nothing for an empty profile and dedupes types", () => {

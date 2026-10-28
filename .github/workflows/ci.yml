@@ -43,3 +43,34 @@ jobs:
         with:
           name: focal-extension
           path: apps/extension/focal-extension-*.zip
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: focal
+          POSTGRES_PASSWORD: focal
+          POSTGRES_DB: focal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U focal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://focal:focal@localhost:5432/focal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e

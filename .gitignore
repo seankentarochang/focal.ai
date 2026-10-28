@@ -22,3 +22,8 @@ coverage/
 scripts/probe-output/
 *.tsbuildinfo
 .neon
+
+# Playwright e2e
+test-results/
+playwright-report/
+e2e/.session.json

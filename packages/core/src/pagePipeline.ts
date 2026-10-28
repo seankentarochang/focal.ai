@@ -61,6 +61,8 @@ export interface PageRankArgs {
 export interface PageResultItem {
   clientId: string;
   name: string;
+  /** The insight type the item was identified as — feedback needs it to write the entry back. */
+  type?: InsightType;
   originalIndex: number;
   status: ResolutionStatus | "skipped";
   entityId?: string;
@@ -165,7 +167,7 @@ export async function runPageRank(args: PageRankArgs): Promise<PageRankResult> {
   const eligible = items.filter((i) => i.type === undefined || i.type === pageType);
   const skipped: PageResultItem[] = items
     .filter((i) => i.type !== undefined && i.type !== pageType)
-    .map((i) => ({ clientId: i.clientId, name: i.name, originalIndex: i.originalIndex, status: "skipped", outcome: "skipped" }));
+    .map((i) => ({ clientId: i.clientId, name: i.name, type: i.type, originalIndex: i.originalIndex, status: "skipped", outcome: "skipped" }));
 
   const hasRules = profile.entries.some((e) => e.kind === "rule" && e.status === "active");
   if (signals.entities.length === 0 && signals.tags.length === 0 && !hasRules) {
@@ -175,6 +177,7 @@ export async function runPageRank(args: PageRankArgs): Promise<PageRankResult> {
         ...eligible.map((i): PageResultItem => ({
           clientId: i.clientId,
           name: i.name,
+          type: i.type ?? pageType,
           originalIndex: i.originalIndex,
           status: "unresolved",
           outcome: "unscored",
@@ -268,6 +271,7 @@ export async function runPageRank(args: PageRankArgs): Promise<PageRankResult> {
     return {
       clientId: c.clientId,
       name: c.name,
+      type: items.find((i) => i.clientId === c.clientId)?.type ?? pageType,
       originalIndex: c.originalIndex,
       status: c.status,
       ...(c.entity ? { entityId: c.entity.entityId, entityName: c.entity.name } : {}),
