@@ -1,7 +1,7 @@
 import type { BackgroundReply, ContentMessage, FeedbackResponse, IdentifiedItem, IdentifyResponse, InsightType, RankResponse } from "./api";
 import { pathPattern } from "./api";
 import { applyPlan, type ApplyHandle } from "./apply/apply";
-import { createGate, GATE_MS } from "./apply/gate";
+import { createFirstRunGate, createRerunGate } from "./apply/gate";
 import { focalTrusted } from "./apply/apply";
 import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
@@ -64,6 +64,8 @@ function scheduleRerun(): void {
     if (runTimes.length >= MAX_RUNS_PER_MINUTE) return scheduleRerun();
     const list = detectList(document);
     if (!list) {
+      activeGate?.cancel(); // R12-4: the armed chip dies with its list
+      activeGate = null;
       clearApplied(); // R8-2: the list is gone — stand down too
       bodyBackoffMs = Math.min(bodyBackoffMs * 2, 30000);
       return watchPage();
@@ -128,20 +130,24 @@ export function shouldInvalidateLayout(ranked: { ok: boolean; data?: { resolvedC
   return ranked.ok && ranked.data?.status !== "no_signals" && (ranked.data?.resolvedCount ?? 0) === 0;
 }
 
-/** Whether any part of the element is inside the viewport. */
-function liftedSectionOnScreen(list: DetectedList, plan: RenderPlan): boolean {
-  const lifted = plan.summary.lifted;
-  if (!lifted) return false;
+/** Whether applying `plan` would move something the user can see right now
+ *  (§5.7): the section currently rendering the lifted slots, the new plan's
+ *  lifted elements, and every collapse/hide target. */
+export function planEffectOnScreen(list: DetectedList, plan: RenderPlan, applied?: ApplyHandle | null): boolean {
   const kids = [...list.cards.values()];
   const order = plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder")?.order ?? [];
-  const liftedEls = order.slice(0, lifted).map((id) => list.cards.get(id)).filter((el): el is Element => !!el);
-  // The slots the lift would occupy now, plus the lifted elements themselves.
-  const els = [...kids.slice(0, lifted), ...liftedEls];
-  const H = window.innerHeight, W = window.innerWidth;
-  return els.some((el) => {
-    const r = (el as HTMLElement).getBoundingClientRect();
-    return r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
-  });
+  const lifted = plan.summary.lifted;
+  const els: Element[] = [...order.slice(0, lifted).map((id) => list.cards.get(id)).filter((el): el is Element => !!el)];
+  if (applied?.active) { // css-order shows the PREVIOUS lift in those slots
+    const curOrder = applied.plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder")?.order ?? [];
+    els.push(...curOrder.slice(0, applied.plan.summary.lifted).map((id) => applied.applied.get(id)).filter((el): el is Element => !!el));
+  } else {
+    els.push(...kids.slice(0, lifted));
+  }
+  for (const op of plan.ops) {
+    if (op.op === "collapse" || op.op === "hide") els.push(...op.clientIds.map((id) => list.cards.get(id)).filter((el): el is Element => !!el));
+  }
+  return els.some(onScreen);
 }
 
 function onScreen(el: Element): boolean {
@@ -173,7 +179,7 @@ function reject(list: DetectedList): void {
 }
 
 /** guards → list detection → identify → rank → apply (§4.1). */
-let activeGate: ReturnType<typeof createGate> | null = null;
+let activeGate: import("./apply/gate").RenderGate | null = null;
 
 async function run(): Promise<void> {
   if (running) {
@@ -235,12 +241,13 @@ async function runInner(): Promise<void> {
 
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
-  const hasGatedAtCreate = hasGated; // R11-4: the offer decision uses the plan
-  const gate = createGate(list.container as HTMLElement, hasGated ? 0 : GATE_MS);
-  hasGated = true;
+  const gate = hasGated ? createRerunGate(list.container as HTMLElement) : createFirstRunGate(list.container as HTMLElement);
   activeGate = gate;
+  // The list has now been shown once: later changes to what's on screen are
+  // offered, never re-hidden or moved in place — even if this run fails (§5.7).
+  hasGated = true;
   try {
-    return await runWithGate(list, cards, gate, hasGatedAtCreate, hints, pattern, host);
+    return await runWithGate(list, cards, gate, hints, pattern, host);
   } catch (e) {
     gate.cancel(); // only this run's gate
     drainRecords();
@@ -274,8 +281,7 @@ function scheduleRetry(container: Element): void {
 async function runWithGate(
   list: DetectedList,
   cards: CardSnapshot[],
-  gate: ReturnType<typeof createGate>,
-  hasGatedAtCreate: boolean,
+  gate: ReturnType<typeof createFirstRunGate>,
   hints: string[],
   pattern: string,
   host: string,
@@ -298,7 +304,8 @@ async function runWithGate(
     if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
       gate.cancel();
       drainRecords();
-      if (identified.ok && identified.data.isList === false) reject(list); // definite non-list: permanent
+      if (!identified.ok && identified.error === "signed_out") reject(list); // R12-F5: stand down until re-auth, don't retry
+      else if (identified.ok && identified.data.isList === false) reject(list); // definite non-list: permanent
       else scheduleRetry(list.container); // failure, null type or empty items: retry budget (R4-14)
       return;
     }
@@ -321,7 +328,8 @@ async function runWithGate(
       // The stored layout identified nothing the resolver knows — it is stale.
       void deleteLayout(storageKey);
     }
-    if (!ranked.ok) scheduleRetry(list.container);
+    if (!ranked.ok && ranked.error === "signed_out") reject(list); // R12-F5: stand down until re-auth
+    else if (!ranked.ok) scheduleRetry(list.container);
     return;
   }
   const { plan, pageResultId } = ranked.data;
@@ -424,7 +432,7 @@ async function runWithGate(
   // R6-4: a late-offered plan still labels in place immediately (spec §5.7);
   // the pass is idempotent, never touches `current`, and sends no page-result.
   // The chip's deferred apply does the full reorder.
-  const outcome = gate.ready(() => applyNow(plan), hasGatedAtCreate && liftedSectionOnScreen(list, plan));
+  const outcome = gate.ready(() => applyNow(plan), planEffectOnScreen(list, plan, current));
   if (outcome === "late-offered" && userUndidFor !== list.container) {
     labelHandle?.undo();
     const ops = plan.ops.filter(
@@ -460,6 +468,7 @@ const hrefTimer = setInterval(() => {
   clearTimeout(rerunTimer);
   rerunTimer = undefined;
   firstScheduledAt = 0; // R10-minor: a new page gets a fresh rerun window
+  void send({ type: "page-result", pageResultId: null, lifted: 0 }).catch(() => {}); // R12-B2: the old page's result is gone
   clearApplied();
   scheduleRerun();
 }, 1000);

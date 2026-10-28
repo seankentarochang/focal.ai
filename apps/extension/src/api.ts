@@ -71,7 +71,7 @@ export type ContentMessage =
   | { type: "rank"; body: RankRequest }
   | { type: "feedback"; body: FeedbackRequest }
   | { type: "undo-event"; eventId: string }
-  | { type: "page-result"; pageResultId: string; lifted: number }
+  | { type: "page-result"; pageResultId: string | null; lifted: number }
   | { type: "settings-open" }
   | { type: "open-why"; pageResultId: string }
   | { type: "set-site"; hostname: string; on: boolean };

@@ -16,7 +16,7 @@ export interface DetectedList {
 }
 
 const SKIP_TAGS = new Set([
-  "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD", "IFRAME", "CANVAS", "SELECT", "OPTION",
+  "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "SVG", "HEAD", "IFRAME", "CANVAS", "SELECT", "OPTION", "TEXTAREA",
 ]);
 const CHROME_TAGS = new Set(["NAV", "HEADER", "FOOTER", "ASIDE", "FORM", "MENU"]);
 const CHROME_ROLES = /^(navigation|menu|menubar|tablist|banner|contentinfo|toolbar|dialog|alertdialog|complementary)$/;

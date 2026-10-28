@@ -507,3 +507,37 @@ describe("R11-4: offer decision by lifted section", () => {
     expect([a, b].some(onScreen)).toBe(true);
   });
 });
+
+describe("R12-2/R12-3: planEffectOnScreen", () => {
+  const rect = (top: number) => ({ top, bottom: top + 40, left: 0, right: 100, width: 100, height: 40, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  const mkList = (cards: [string, HTMLElement][]) => ({ container: document.body, cards: new Map(cards), signature: "", snippet: "" }) as never;
+  const mkPlan = (lifted: number, extra: object[] = []) => ({
+    ops: [{ op: "reorder", containerId: "c", order: ["a", "b", "c"] }, ...extra],
+    summary: { lifted },
+  }) as never;
+
+  it("css-order: current lifted on screen + new lifted off-screen -> true", async () => {
+    const { planEffectOnScreen } = await import("../src/content");
+    const a = document.createElement("div"); const b = document.createElement("div"); const c = document.createElement("div");
+    a.getBoundingClientRect = () => rect(10); b.getBoundingClientRect = () => rect(5000); c.getBoundingClientRect = () => rect(5100);
+    const list = mkList([["a", a], ["b", b], ["c", c]]);
+    const applied = { active: true, plan: mkPlan(1), applied: new Map([["a", a]]), undo() {} } as never;
+    // current's lifted element `a` is on screen; the new plan lifts `b` (off screen)
+    const newPlan = mkPlan(1, []); ((newPlan as unknown) as { ops: { order: string[] }[] }).ops[0]!.order = ["b", "a", "c"];
+    expect(planEffectOnScreen(list, newPlan, applied)).toBe(true);
+  });
+  it("a fold-only plan with on-screen targets -> true", async () => {
+    const { planEffectOnScreen } = await import("../src/content");
+    const a = document.createElement("div"); a.getBoundingClientRect = () => rect(20);
+    const b = document.createElement("div"); b.getBoundingClientRect = () => rect(5000);
+    const plan = { ops: [{ op: "collapse", containerId: "c", clientIds: ["a"], label: "x" }], summary: { lifted: 0 } } as never;
+    expect(planEffectOnScreen(mkList([["a", a], ["b", b]]), plan, null)).toBe(true);
+  });
+  it("everything off screen -> false", async () => {
+    const { planEffectOnScreen } = await import("../src/content");
+    const a = document.createElement("div"); a.getBoundingClientRect = () => rect(5000);
+    const b = document.createElement("div"); b.getBoundingClientRect = () => rect(5100);
+    const plan = mkPlan(1, [{ op: "collapse", containerId: "c", clientIds: ["b"], label: "x" }]);
+    expect(planEffectOnScreen(mkList([["a", a], ["b", b]]), plan, null)).toBe(false);
+  });
+});

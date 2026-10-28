@@ -31,8 +31,9 @@ export default function PrivacyPage() {
               On a <strong>known layout</strong>, only item names, the entity type, and the city go to the focal server.
             </li>
             <li>
-              Item names and the page's city go to <strong>Qloo</strong> for entity resolution; resolved entity and
-              tag ids go to Qloo's insights API for affinity scoring.
+              Item names and the page's city go to <strong>Qloo</strong> for entity resolution; the page items&apos;
+              resolved ids, plus the entity and tag ids of the likes in your taste profile (the scoring signals), go to
+              Qloo&apos;s insights API on each rank for affinity scoring.
             </li>
             <li>
               <strong>Chat text and your taste-profile summary</strong> are processed by the LLM providers behind

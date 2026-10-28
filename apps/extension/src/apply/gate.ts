@@ -3,7 +3,6 @@ import { blockAnchor, decorate } from "./ui";
 
 export const GATE_MS = 300;
 
-
 export type GateOutcome = "before-reveal" | "late-applied" | "late-offered" | "cancelled";
 
 export interface RenderGate {
@@ -15,38 +14,53 @@ export interface RenderGate {
   readonly interacted: boolean;
 }
 
+/** Mount the shared "focal found matches · Apply" chip; the click applies (R12-1). */
+function mountApplyChip(container: HTMLElement, apply: () => void): HTMLElement {
+  const doc = container.ownerDocument;
+  const chip = decorate(doc.createElement("div"), "chip");
+  chip.setAttribute("data-focal", "chip");
+  chip.setAttribute("role", "status");
+  chip.textContent = "focal found matches";
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.setAttribute("data-focal", "apply");
+  button.textContent = "Apply";
+  button.addEventListener("click", (ev) => {
+    if (!focalTrusted(ev, chip)) return; // host: the chip (R10-2)
+    chip.remove();
+    apply();
+  });
+  chip.append(button);
+  blockAnchor(container).before(chip);
+  return chip;
+}
+
 /**
- * Render gate (§5.7): hide the list for at most `ms`. A plan that arrives in
- * time is applied before the list is shown. A late plan re-orders only if the
+ * First-run gate (§5.7): hide the list for at most GATE_MS. A plan that arrives
+ * in time is applied before the list is shown. A late plan re-orders only if the
  * user has not scrolled or clicked in the list; otherwise a chip offers Apply.
  */
-export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
+export function createFirstRunGate(container: HTMLElement): RenderGate {
   const doc = container.ownerDocument;
   const win = doc.defaultView;
-  const hid = ms > 0; // R11-1: gate BOTH the hide and the restore
-  const prevVisibility = hid ? container.style.getPropertyValue("visibility") : undefined;
+  const prevVisibility = container.style.getPropertyValue("visibility");
   let revealed = false;
   let interacted = false;
   let settled = false;
   let chip: HTMLElement | null = null;
 
-  if (hid) container.style.setProperty("visibility", "hidden");
+  container.style.setProperty("visibility", "hidden");
 
   const onInteract = () => {
     if (revealed) interacted = true;
   };
   const events = ["pointerdown", "click", "keydown", "wheel", "touchstart"] as const;
-  // Only a gate that hid the list watches for interaction; on reruns (ms 0) the
-  // caller's ready-time `offer` alone decides — scrolling a feed must not force it (R11-4).
-  if (hid) {
-    for (const e of events) container.addEventListener(e, onInteract, { passive: true });
-    win?.addEventListener("scroll", onInteract, { passive: true });
-  }
+  for (const e of events) container.addEventListener(e, onInteract, { passive: true });
+  win?.addEventListener("scroll", onInteract, { passive: true });
 
   const reveal = () => {
     if (revealed) return;
     revealed = true;
-    if (!hid) return; // never touched visibility — never restore it (R11-1)
     if (prevVisibility) container.style.setProperty("visibility", prevVisibility);
     else container.style.removeProperty("visibility");
   };
@@ -64,16 +78,12 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
     chip.setAttribute("role", "status");
     chip.textContent = "focal is ranking…";
     blockAnchor(container).before(chip);
-  }, ms);
+  }, GATE_MS);
 
   return {
-    get revealed() {
-      return revealed;
-    },
-    get interacted() {
-      return interacted;
-    },
-    ready(apply, offer) {
+    get revealed() { return revealed; },
+    get interacted() { return interacted; },
+    ready(apply, _offer) {
       if (settled) return "cancelled";
       settled = true;
       clearTimeout(timer);
@@ -83,26 +93,15 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
         detach();
         return "before-reveal";
       }
-      if (!interacted && !offer) {
+      if (!interacted) {
         chip?.remove();
         apply();
         detach();
         return "late-applied";
       }
       detach();
-      if (chip) {
-        chip.textContent = "focal found matches";
-        const button = doc.createElement("button");
-        button.type = "button";
-        button.setAttribute("data-focal", "apply");
-        button.textContent = "Apply";
-        button.addEventListener("click", (ev) => {
-          if (!focalTrusted(ev, chip as Element)) return; // host: the chip (R10-2)
-          chip?.remove();
-          apply();
-        });
-        chip.append(button);
-      }
+      chip?.remove();
+      mountApplyChip(container, apply);
       return "late-offered";
     },
     cancel() {
@@ -111,6 +110,34 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
       chip?.remove();
       reveal();
       detach();
+    },
+  };
+}
+
+/**
+ * Rerun gate (§5.7): background reruns never hide the list and never flash a
+ * "ranking…" chip — the list stays live while the identify+rank round trip runs.
+ * `ready` applies in place unless `offer` says the change touches what's on screen.
+ */
+export function createRerunGate(container: HTMLElement): RenderGate {
+  let settled = false;
+  let chip: HTMLElement | null = null;
+  return {
+    get revealed() { return true; },
+    get interacted() { return false; },
+    ready(apply, offer) {
+      if (settled) return "cancelled";
+      settled = true;
+      if (!offer) {
+        apply();
+        return "late-applied";
+      }
+      chip = mountApplyChip(container, apply);
+      return "late-offered";
+    },
+    cancel() {
+      settled = true;
+      chip?.remove();
     },
   };
 }

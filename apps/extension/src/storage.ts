@@ -40,3 +40,6 @@ export async function getTabResult(tabId: number): Promise<TabResult | null> {
 export async function setTabResult(tabId: number, result: TabResult): Promise<void> {
   await chrome.storage.session.set({ [`result:${tabId}`]: result });
 }
+export async function clearTabResult(tabId: number): Promise<void> {
+  await chrome.storage.session.remove(`result:${tabId}`);
+}

@@ -88,8 +88,11 @@ export function ChatPanel({ email }: { email: string }) {
       }
       const data = (await res.json()) as { reply: string; events: ActivityEvent[] };
       // Never store an empty assistant reply — it would poison the next send (R11-3).
+      // An empty reply that carried events still shows as "Done." (R12-SPEC-2).
       if (typeof data.reply === "string" && data.reply.trim().length > 0) {
         setMessages((prev) => [...prev, { role: "assistant", content: data.reply, events: data.events }]);
+      } else if (Array.isArray(data.events) && data.events.length > 0) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Done.", events: data.events }]);
       }
     } catch {
       setError(errorCopy(0));

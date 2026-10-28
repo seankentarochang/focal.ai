@@ -1,7 +1,7 @@
 import type { BackgroundReply, ContentMessage, ExternalMessage } from "./api";
 import { FOCAL_ORIGIN } from "./config";
 import type { Settings } from "./settings";
-import { getSession, getSettings, setSession, setSettings, setTabResult } from "./storage";
+import { clearTabResult, getSession, getSettings, setSession, setSettings, setTabResult } from "./storage";
 
 /** All server calls go from here; content scripts never call the API. */
 async function post<T>(path: string, body: unknown): Promise<BackgroundReply<T>> {
@@ -115,7 +115,10 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, sender, sendResponse)
       void refreshSettingsFromServer();
       return false;
     case "page-result":
-      if (tabId !== undefined) void setTabResult(tabId, { pageResultId: msg.pageResultId, lifted: msg.lifted });
+      if (tabId !== undefined) {
+        if (msg.pageResultId === null) void clearTabResult(tabId); // R12-B2
+        else void setTabResult(tabId, { pageResultId: msg.pageResultId, lifted: msg.lifted });
+      }
       return false;
     case "open-why":
       void chrome.tabs.create({ url: `${FOCAL_ORIGIN}/why/${encodeURIComponent(msg.pageResultId)}` });
