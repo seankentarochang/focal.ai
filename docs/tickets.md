@@ -13,12 +13,12 @@ The Studio-era tickets (T-01..T-25), still referenced by older docs such as `arc
 ## Wave V — settle the unknowns (spec §8)
 
 ### V-01 · Qloo signal behaviour
-Status: [ ] — **Partial** (probes ran 2026-10-20; results are in spec §8 "Results": tag signals move scores, weights are rejected, the cap stays 20; still to copy into `docs/qloo-contract.md` and fold into spec §5.5) · **P0** · Deps: Qloo key · Owns: `scripts/probe-unknowns.ts` (qloo section), `docs/qloo-contract.md`
+Status: [x] (probes 2026-10-20; results in `docs/qloo-contract.md` §11 and spec §5.5) · **P0** · Deps: Qloo key · Owns: `scripts/probe-unknowns.ts` (qloo section), `docs/qloo-contract.md`
 Run `pnpm probe:unknowns qloo`. Record in `docs/qloo-contract.md`: whether `signal.interests.tags` changes scores for place / movie / brand, whether any weight syntax is accepted, and how many entity signals one call uses. Check the weight syntax against Qloo's Parameter Reference.
 **Acceptance:** contract updated with redacted evidence; spec §5.5 updated to match (tags as signals or local boosts per type; weights or cut-only; signal cap).
 
 ### V-02 · Jev identification: cost, speed, accuracy
-Status: [ ] — **Partial** (labelled-sample run 2026-10-20 in spec §8: ~540 tokens per card, 60–90 ms, 96% accurate at ≥ 0.8; thresholds set by decision 27; spec §7 still shows the third-party cost estimate; the real-site run waits on X-03 captures) · **P0** · Deps: TypeSafe key · Owns: `scripts/probe-unknowns.ts` (jev section)
+Status: [x] (labelled-sample run 2026-10-20; thresholds 0.8 / 0.5 per decision 28; cost in spec §7; a real-site rerun follows X-03 captures) · **P0** · Deps: TypeSafe key · Owns: `scripts/probe-unknowns.ts` (jev section)
 Run `pnpm probe:unknowns jev` on the labelled sample pages, then on snippets captured from 10 real sites once X-03 exists. Record tokens per page, cost, latency, accuracy by confidence, and behaviour on non-list pages.
 **Acceptance:** confidence threshold for §5.3 chosen from data; cost per identification recorded in spec §7.
 
@@ -28,7 +28,7 @@ Confirm tool calling per provider and model with `pnpm probe:unknowns llm`, then
 **Acceptance:** chosen model and provider order recorded in spec §5.9 with scores.
 
 ### V-04 · Sign-in service that can serve MCP OAuth
-Status: [ ] — **Partial** (WorkOS AuthKit chosen in `docs/auth-and-db.md` and shipped in #6 / #8; the decision record and the connector OAuth check (M-03) are outstanding) · **P0** · Deps: none · Owns: `docs/decisions.md` (new record)
+Status: [ ] — **Partial** (WorkOS AuthKit chosen in `docs/auth-and-db.md` and shipped in #6 / #8; decision record D-16 written; the connector OAuth check runs in M-03) · **P0** · Deps: none · Owns: `docs/decisions.md` (new record)
 Evaluate WorkOS AuthKit, Clerk, Stytch, Descope, Better Auth, Supabase Auth and Cloudflare workers-oauth-provider for: Google + email-link sign-in, OAuth 2.1 authorization server for MCP (resource indicators, Client ID Metadata Documents or dynamic client registration), free tier, Next.js support.
 **Acceptance:** decision record with the choice and evidence; a ChatGPT or claude.ai connector completes the OAuth flow against a spike.
 

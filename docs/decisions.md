@@ -202,7 +202,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 ## D-15 · Extension-first product with a server-side profile
 
-**Date:** 2026-10-20 · **Status:** Proposed (pending team review of [spec.md](./spec.md))
+**Date:** 2026-10-20 · **Status:** Accepted (spec merged in PR #1, 2026-10-20)
 
 **Context.** The hosted Studio demonstrates the ranking engine on in-repo demo pages, but the product promise is re-ordering the real websites people already use. The team decided to build that product for the hackathon rather than after it.
 
@@ -211,3 +211,17 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 **Alternatives considered.** Submitting the Studio and building the extension afterwards; hand-written per-site adapters; a browser-local profile with a local-only MCP bridge.
 
 **Consequences.** Supersedes D-1, D-2 and D-14; amends D-3, D-7 and D-9. Adds a database, sign-in, a Jev dependency and an LLM dependency. The previous backlog moves to [archive/tickets-studio.md](./archive/tickets-studio.md) and [tickets.md](./tickets.md) becomes the extension backlog. Open technical questions are tracked in spec §8 and settled by `pnpm probe:unknowns`.
+
+---
+
+## D-16 · WorkOS AuthKit for sign-in and MCP OAuth; Neon for Postgres
+
+**Date:** 2026-10-20 · **Status:** Accepted (implemented in PRs #6 and #8; the connector OAuth check runs in M-03)
+
+**Context.** Spec decision 16 needs Google and email-link sign-in from a service that is also an OAuth 2.1 authorization server for MCP connectors (resource indicators, Client ID Metadata Documents, dynamic client registration for older clients), on a free tier, working on Vercel. Decision 7 needs hosted Postgres.
+
+**Decision.** WorkOS AuthKit: hosted sign-in, CIMD, DCR and resource indicators for `/mcp`, free up to 1M monthly active users. The extension never holds a provider token: the website issues an opaque, revocable extension session (stored hashed in Postgres) and hands it over through `externally_connectable`. Postgres is Neon via the Vercel Marketplace (free plan with scale-to-zero, a branch per preview).
+
+**Alternatives considered.** Clerk (smaller free tier), Better Auth (self-hosted, never enables DCR), Supabase Auth (couples auth to Supabase; free projects pause), Stytch; Supabase or Vercel Postgres for the database. Evidence: [auth-and-db.md](./auth-and-db.md).
+
+**Consequences.** Production needs the WorkOS variables plus `WORKOS_AUTHKIT_DOMAIN` and `FOCAL_PUBLIC_URL`, and the dashboard steps in [deployment.md](./deployment.md) §4. V-04's last acceptance item, a ChatGPT or claude.ai connector completing OAuth, runs in M-03.

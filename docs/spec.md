@@ -1,6 +1,6 @@
 # Product spec — focal.ai v2 (the extension)
 
-**Date:** 2026-10-20 · **Status:** Proposed (pending team review) · **Supersedes:** the hosted-Studio plan in [decisions.md](./decisions.md) D-1 and D-2; the previous backlog is archived at [archive/tickets-studio.md](./archive/tickets-studio.md).
+**Date:** 2026-10-20 · **Status:** Accepted (merged in PR #1, 2026-10-20) · **Supersedes:** the hosted-Studio plan in [decisions.md](./decisions.md) D-1 and D-2; the previous backlog is archived at [archive/tickets-studio.md](./archive/tickets-studio.md).
 
 This spec defines the product we are building: a browser extension that re-orders real websites around the user's taste, with a profile written by a chat agent. It was produced by walking the design tree one decision at a time; §10 lists every decision. Anything not yet verified against a live API is marked **UNVERIFIED** and appears in §8 with the test that settles it.
 
@@ -141,9 +141,9 @@ Automatic detection on any site, no per-site adapters: find the dominant group o
 
 - Your top ~5 favourites overall, of any type (cross-domain taste is Qloo's strength).
 - Fill up to the signal cap with your strongest likes of this page's type.
-- Add the vibes (tags) that apply to this type as `signal.interests.tags` (**UNVERIFIED**: if the live test shows tag signals have no effect for a type, vibes act only as local boosts there).
-- Strength is sent as a weight if Qloo accepts weights (**UNVERIFIED**); otherwise it only decides which likes make the cut.
-- The cap starts at 20 (the current code's choice); the validation script measures Qloo's real limit.
+- Add the vibes (tags) that apply to this type as `signal.interests.tags` (verified 2026-10-20: tag signals move scores for place, movie and brand; local boosts remain only a config fallback).
+- Strength is not sent to Qloo: both weight syntaxes were rejected with HTTP 400 (§8), so strength only decides which likes make the cut.
+- The cap is 20: going to 35 or 50 signals moved scores by only about 0.002–0.003 per step while doubling latency (§8).
 
 ### 5.6 Changing the page
 
@@ -195,7 +195,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 | Service | Use | Limits and cost |
 |---|---|---|
 | Qloo (hackathon key) | search, entities, tags, insights | Free; 5 req/s burst; key deactivated after judging closes, so a commercial key is needed to keep running. Do not store Qloo response data in the public repo |
-| TypeSafe Jev | card identification on new layouts | Reported $0.042 per million input tokens, output free (third-party sources; measure with §8). Budget $5 ≈ 12–24k page identifications at 5–10k tokens each |
+| TypeSafe Jev | card identification on new layouts | Measured 2026-10-20 (§8): about 540 input tokens per card, so a 30-card page is about 16k tokens or $0.0007 at $0.042 per million input tokens (output free), in 60–90 ms. Budget $5 ≈ 7,000 such pages; learned layouts skip Jev on repeat visits |
 | Open-weight LLM | website chat | Free tiers: Groq about 1,000 requests and 200k tokens per day per model; Cerebras and OpenRouter as fallbacks (figures from third-party summaries, verify) |
 | Hosting, database, auth | website, API, storage, sign-in | Free tiers (Vercel Hobby, hosted Postgres, sign-in service) |
 
@@ -272,5 +272,5 @@ New: `apps/extension`, database and migrations, auth, the identify endpoint, the
 | 24 | Labels are page-relative words with the reason first; exact score in "Why this order?" |
 | 25 | Dislikes are never lifted; hard rules fold matching items behind "Show" only on Qloo's own tag |
 | 26 | This spec lands through a pull request for team review |
-| 26 | Vibes go to Qloo as tag signals (verified to move scores); strength is not sent as a weight (rejected) |
-| 27 | Jev keeps the 0.8 per-answer threshold and a 0.5 page-level "is a list" cut-off |
+| 27 | Vibes go to Qloo as tag signals (verified to move scores); strength is not sent as a weight (rejected) |
+| 28 | Jev keeps the 0.8 per-answer threshold and a 0.5 page-level "is a list" cut-off |

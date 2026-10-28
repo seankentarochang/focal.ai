@@ -215,6 +215,8 @@ Resolver city-token nuance: Atlas disambiguations use the Portuguese spelling ("
 
 ## 10. Deviations log
 
+All six deviations below were fixed in Wave K (`9d6b6fb`); the Action column records the original finding.
+
 | Date | Deviation from `docs/contracts.md` / build | Action taken |
 | --- | --- | --- |
 | 2026-10-19 | `/search` and `/entities` results carry no `subtype` (only `types[0]`); frozen resolver requires `entity.subtype === expectedType`, so live search never resolves | Recorded; mapper fix (fallback to `types[0]`) required before live rank runs — flagged to owner, not yet applied |
@@ -226,4 +228,13 @@ Resolver city-token nuance: Atlas disambiguations use the Portuguese spelling ("
 
 ---
 
-Verification artifacts (raw JSON) are written by the probe to the gitignored `scripts/probe-output/`. Until the mapper deviations above are fixed, live `/search` resolution returns `unresolved` for every candidate; mock mode (`QLOO_MOCK=1`) is unaffected.
+Verification artifacts (raw JSON) are written by the probe to the gitignored `scripts/probe-output/`. The mapper deviations above were fixed in Wave K (`9d6b6fb`).
+
+## 11. Signals, weights and cap (`pnpm probe:unknowns qloo`, 2026-10-20)
+
+- **Tag signals** (`signal.interests.tags`) change insights scores for every type tested: place max |Δaffinity| 0.021 (order unchanged), movie 0.138 and brand 0.131 (order changed). Vibes are sent as tag signals.
+- **Weights:** both candidate JSON syntaxes (`[{"entity","weight"}]` and `[{"entity_id","weight"}]`) return HTTP 400. Strength is not sent; it only decides which likes make the cut.
+- **Signal cap:** 20 → 35 → 50 entity signals move scores by about 0.002–0.003 per step while latency rises from 0.64 s to 1.29 s, so the cap stays 20.
+- **Liked entities are not scored:** Qloo leaves signal entities out of `results.entities`, so a page item the user already likes comes back unscored (open product call, spec §8).
+
+Raw output stays in the gitignored `scripts/probe-output/`.
