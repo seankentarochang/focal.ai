@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-type Site = { hostname: string; mode: "skip" | "off" | "on" };
+type Site = { hostname: string; mode: "skip" | "off" };
 
 /** Built-in never-run categories (mirrors extension neverRun.ts; don't import it). */
 const NEVER_RUN = ["banking", "health", "government", "email", "messaging", "documents", "passwords", "sign-in", "focal"];

@@ -44,6 +44,8 @@ export default function PrivacyPage() {
         <Section title="What the server stores">
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
             <li>Your account, taste profile, activity feed, and site settings.</li>
+            <li>Your data is never sold or shared for advertising.</li>
+            <li>Labels on a page may name things from your taste profile (&ldquo;because you like X&rdquo;); the site can read the label text it displays.</li>
             <li>Page results for 24 hours — they power feedback and the "Why this order?" inspector, then expire.</li>
             <li>Learned layouts live only in your browser's extension storage — the server never stores them.</li>
             <li>A shared entity-resolution cache keyed by normalized item name, type, and city; resolved entries do not expire. It is not tied to your browsing.</li>

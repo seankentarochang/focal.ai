@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { tryNowLinks, type TryLink } from "@/lib/onboarding";
 
-type Site = { hostname: string; mode: "skip" | "off" | "on" };
+type Site = { hostname: string; mode: "skip" | "off" };
 
 const HOST_RE = /^[a-z0-9.-]+$/;
 

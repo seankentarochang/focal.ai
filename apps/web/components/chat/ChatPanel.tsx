@@ -11,6 +11,16 @@ import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-van
 import { describeEvent } from "@/lib/client/chatEvents";
 import { cn } from "@/lib/utils";
 
+/** Trim/clip each message to the server's content contract; drop empties (R11-3). */
+export function historyForSend(messages: Message[]): { role: "user" | "assistant"; content: string }[] {
+  return messages
+    .slice(-MAX_TURNS)
+    .map(({ role, content }) => ({ role, content: content.trim().slice(0, 2000) }))
+    .filter((m) => m.content.length > 0);
+}
+
+
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -56,6 +66,7 @@ export function ChatPanel({ email }: { email: string }) {
   }, [messages, busy]);
 
   async function send(text: string) {
+    // Sanitize each history entry to the server's contract before sending (R11-3).
     const content = text.trim().slice(0, 2000);
     if (!content || busy) return;
     const history: Message[] = [...messages, { role: "user", content }];
@@ -68,7 +79,7 @@ export function ChatPanel({ email }: { email: string }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          messages: history.slice(-MAX_TURNS).map(({ role, content: c }) => ({ role, content: c })),
+          messages: historyForSend(history),
         }),
       });
       if (!res.ok) {
@@ -76,7 +87,10 @@ export function ChatPanel({ email }: { email: string }) {
         return;
       }
       const data = (await res.json()) as { reply: string; events: ActivityEvent[] };
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, events: data.events }]);
+      // Never store an empty assistant reply — it would poison the next send (R11-3).
+      if (typeof data.reply === "string" && data.reply.trim().length > 0) {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.reply, events: data.events }]);
+      }
     } catch {
       setError(errorCopy(0));
     } finally {

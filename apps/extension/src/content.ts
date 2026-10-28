@@ -129,6 +129,21 @@ export function shouldInvalidateLayout(ranked: { ok: boolean; data?: { resolvedC
 }
 
 /** Whether any part of the element is inside the viewport. */
+function liftedSectionOnScreen(list: DetectedList, plan: RenderPlan): boolean {
+  const lifted = plan.summary.lifted;
+  if (!lifted) return false;
+  const kids = [...list.cards.values()];
+  const order = plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder")?.order ?? [];
+  const liftedEls = order.slice(0, lifted).map((id) => list.cards.get(id)).filter((el): el is Element => !!el);
+  // The slots the lift would occupy now, plus the lifted elements themselves.
+  const els = [...kids.slice(0, lifted), ...liftedEls];
+  const H = window.innerHeight, W = window.innerWidth;
+  return els.some((el) => {
+    const r = (el as HTMLElement).getBoundingClientRect();
+    return r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
+  });
+}
+
 function onScreen(el: Element): boolean {
   const r = el.getBoundingClientRect();
   return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
@@ -220,13 +235,12 @@ async function runInner(): Promise<void> {
 
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
-  const gate = createGate(list.container as HTMLElement, hasGated ? 0 : GATE_MS, {
-    offerOnly: hasGated && onScreen(list.container),
-  });
+  const hasGatedAtCreate = hasGated; // R11-4: the offer decision uses the plan
+  const gate = createGate(list.container as HTMLElement, hasGated ? 0 : GATE_MS);
   hasGated = true;
   activeGate = gate;
   try {
-    return await runWithGate(list, cards, gate, hints, pattern, host);
+    return await runWithGate(list, cards, gate, hasGatedAtCreate, hints, pattern, host);
   } catch (e) {
     gate.cancel(); // only this run's gate
     drainRecords();
@@ -261,6 +275,7 @@ async function runWithGate(
   list: DetectedList,
   cards: CardSnapshot[],
   gate: ReturnType<typeof createGate>,
+  hasGatedAtCreate: boolean,
   hints: string[],
   pattern: string,
   host: string,
@@ -409,7 +424,7 @@ async function runWithGate(
   // R6-4: a late-offered plan still labels in place immediately (spec §5.7);
   // the pass is idempotent, never touches `current`, and sends no page-result.
   // The chip's deferred apply does the full reorder.
-  const outcome = gate.ready(() => applyNow(plan));
+  const outcome = gate.ready(() => applyNow(plan), hasGatedAtCreate && liftedSectionOnScreen(list, plan));
   if (outcome === "late-offered" && userUndidFor !== list.container) {
     labelHandle?.undo();
     const ops = plan.ops.filter(

@@ -132,7 +132,7 @@ Automatic detection on any site, no per-site adapters: find the dominant group o
 
 ### 5.3 Identifying each item (Jev)
 
-- **New layout:** the extension sends the page's hostname, path pattern, any city hints found on the page (search box value, URL parameters, headings), the structure-only page signature and the card snippets to `/api/page/identify`. The server asks Jev (TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`) one request per page with, for each card:
+- **New layout:** the extension sends the page's hostname, path pattern, any city hints found on the page (location-box value, "in <city>" phrases from search boxes, URL parameters, headings), the structure-only page signature and the card snippets to `/api/page/identify`. The server asks Jev (TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`) one request per page with, for each card:
   - `name`: choice among that card's snippets (or `none`)
   - `type`: choice among Qloo's 10 insight types (or `not_a_thing`)
   - `city`: choice among the page's city hints (or `unknown`), for places and destinations
@@ -196,6 +196,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 - **Chat text and a summary of your taste profile** are sent to the configured LLM providers (Groq → Cerebras → OpenRouter), some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.
 - **Agents cannot act quietly:** every write is attributed and undoable; hard rules need approval; MCP cannot change settings.
+- **Labels are readable by the site.** A label such as "because you like Fugazi and Rintaro" names things from the user's profile and sits in the page's DOM, so the site can read the text it displays.
 - **On-page controls live in the page's DOM.** focal ignores synthetic clicks and, for pointer clicks, requires the control to be visible, on top and inside its focal container. A hostile page could still trick a user into a real click (e.g. a click-through decoy or stolen keyboard focus); any such write is attributed "page", shown in the activity feed and undoable.
 - **Export and delete** the profile and account at any time.
 - **Keys** (Qloo, TypeSafe, LLM providers) are server-only and never reach the extension or the browser.

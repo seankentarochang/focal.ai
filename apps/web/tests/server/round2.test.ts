@@ -210,6 +210,19 @@ describe.skipIf(!url)("round2 server fixes", () => {
     delete process.env.WORKOS_AUTHKIT_DOMAIN;
   });
 
+  it("R11-3: historyForSend trims, clips and drops empty entries", async () => {
+    const { historyForSend } = await import("@/components/chat/ChatPanel");
+    const out = historyForSend([
+      { role: "user", content: "  hi  " },
+      { role: "assistant", content: "   " },
+      { role: "assistant", content: "x".repeat(3000) },
+    ] as never);
+    expect(out).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "x".repeat(2000) },
+    ]);
+  });
+
   it("DELETE /api/profile with no user row returns 404", async () => {
     const { DELETE } = await import("@/app/api/profile/route");
     const viewer = await import("@/lib/server/auth/viewer");

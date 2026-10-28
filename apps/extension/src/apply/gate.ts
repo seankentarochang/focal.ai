@@ -8,7 +8,7 @@ export type GateOutcome = "before-reveal" | "late-applied" | "late-offered" | "c
 
 export interface RenderGate {
   /** Call when the plan is ready. `apply` runs now or behind an "Apply" chip. */
-  ready(apply: () => void): GateOutcome;
+  ready(apply: () => void, offer: boolean): GateOutcome;
   /** No plan (no list, nothing to lift, error): reveal and clean up. */
   cancel(): void;
   readonly revealed: boolean;
@@ -20,27 +20,33 @@ export interface RenderGate {
  * time is applied before the list is shown. A late plan re-orders only if the
  * user has not scrolled or clicked in the list; otherwise a chip offers Apply.
  */
-export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOnly?: boolean } = {}): RenderGate {
+export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
   const doc = container.ownerDocument;
   const win = doc.defaultView;
-  const prevVisibility = ms > 0 ? container.style.getPropertyValue("visibility") : undefined;
+  const hid = ms > 0; // R11-1: gate BOTH the hide and the restore
+  const prevVisibility = hid ? container.style.getPropertyValue("visibility") : undefined;
   let revealed = false;
   let interacted = false;
   let settled = false;
   let chip: HTMLElement | null = null;
 
-  if (ms > 0) container.style.setProperty("visibility", "hidden");
+  if (hid) container.style.setProperty("visibility", "hidden");
 
   const onInteract = () => {
     if (revealed) interacted = true;
   };
   const events = ["pointerdown", "click", "keydown", "wheel", "touchstart"] as const;
-  for (const e of events) container.addEventListener(e, onInteract, { passive: true });
-  win?.addEventListener("scroll", onInteract, { passive: true });
+  // Only a gate that hid the list watches for interaction; on reruns (ms 0) the
+  // caller's ready-time `offer` alone decides — scrolling a feed must not force it (R11-4).
+  if (hid) {
+    for (const e of events) container.addEventListener(e, onInteract, { passive: true });
+    win?.addEventListener("scroll", onInteract, { passive: true });
+  }
 
   const reveal = () => {
     if (revealed) return;
     revealed = true;
+    if (!hid) return; // never touched visibility — never restore it (R11-1)
     if (prevVisibility) container.style.setProperty("visibility", prevVisibility);
     else container.style.removeProperty("visibility");
   };
@@ -67,7 +73,7 @@ export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOn
     get interacted() {
       return interacted;
     },
-    ready(apply) {
+    ready(apply, offer) {
       if (settled) return "cancelled";
       settled = true;
       clearTimeout(timer);
@@ -77,7 +83,7 @@ export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOn
         detach();
         return "before-reveal";
       }
-      if (!interacted && !opts.offerOnly) {
+      if (!interacted && !offer) {
         chip?.remove();
         apply();
         detach();

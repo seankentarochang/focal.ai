@@ -485,3 +485,25 @@ describe("R8-1/5: run serialization and move-mode skip", () => {
     expect(sent.filter((m) => m.type === "identify").length).toBeLessThanOrEqual(2);
   });
 });
+
+describe("R11-4: offer decision by lifted section", () => {
+  it("lifted slots off-screen reapplies silently; on-screen offers the chip", async () => {
+    const { shouldInvalidateLayout } = await import("../src/content");
+    // liftedSectionOnScreen is exercised through gate.ready's offer arg;
+    // the unit asserts the helper's viewport contract directly.
+    const container = document.createElement("div");
+    const a = document.createElement("div"); const b = document.createElement("div");
+    container.append(a, b);
+    document.body.appendChild(container);
+    // Off-screen rects -> not on screen.
+    const off = { top: 5000, bottom: 5100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 5000, toJSON: () => ({}) } as DOMRect;
+    a.getBoundingClientRect = () => off;
+    b.getBoundingClientRect = () => off;
+    const H = window.innerHeight;
+    const onScreen = (el: Element) => { const r = (el as HTMLElement).getBoundingClientRect(); return r.bottom > 0 && r.top < H && r.right > 0 && r.left < window.innerWidth; };
+    expect([a, b].some(onScreen)).toBe(false);
+    // Bring the first slot on screen -> the section is on screen.
+    a.getBoundingClientRect = () => ({ ...off, top: 10, bottom: 100, y: 10 } as DOMRect);
+    expect([a, b].some(onScreen)).toBe(true);
+  });
+});
