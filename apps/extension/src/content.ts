@@ -6,7 +6,7 @@ import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
 import { checkEligibility } from "./guards/eligibility";
 import { applyLayout } from "./layouts/apply";
-import { getLayout, layoutKey, saveLayout } from "./layouts/store";
+import { deleteLayout, getLayout, layoutKey, saveLayout } from "./layouts/store";
 import { getSettings } from "./storage";
 
 function send<T>(msg: ContentMessage): Promise<BackgroundReply<T>> {
@@ -19,7 +19,7 @@ let rerunTimer: ReturnType<typeof setTimeout> | undefined;
 let firstScheduledAt = 0;
 const runTimes: number[] = [];
 let generation = 0;
-let lastList: { container: Element; cards: Set<Element> } | null = null;
+let lastList: { container: Element; cards: Element[] } | null = null;
 let last: { key: string; hints: string[] } | null = null;
 /** Lists that weren't worth ranking, with their size then; a new card makes them worth another look. */
 let rejected = new WeakMap<Element, number>();
@@ -49,9 +49,16 @@ function scheduleRerun(): void {
   }, RERUN_DELAY_MS);
 }
 
-function sameList(list: DetectedList): boolean {
-  if (!lastList || list.container !== lastList.container || list.cards.size !== lastList.cards.size) return false;
-  return [...list.cards.values()].every((el) => lastList!.cards.has(el));
+export function __setLastListForTests(list: { container: Element; cards: Element[] } | null): void {
+  lastList = list;
+}
+
+export function sameList(list: DetectedList): boolean {
+  if (!lastList || list.container !== lastList.container) return false;
+  const now = [...list.cards.values()];
+  const then = lastList.cards;
+  // Order-sensitive: a card the page moved is a fresh change, not a rerun loop.
+  return now.length === then.length && now.every((el, i) => el === then[i]);
 }
 
 function watch(container: Element, cards: Iterable<Element>): void {
@@ -65,6 +72,17 @@ function watch(container: Element, cards: Iterable<Element>): void {
   });
   watcher.observe(container, { childList: true });
   if (container.parentElement) watcher.observe(container.parentElement, { childList: true });
+}
+
+/** A stored layout that resolves nothing is stale — drop it (G2). */
+export function shouldInvalidateLayout(ranked: { ok: boolean; data?: { resolvedCount?: number } }): boolean {
+  return ranked.ok && (ranked.data?.resolvedCount ?? 0) === 0;
+}
+
+/** Whether any part of the element is inside the viewport. */
+function onScreen(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
 }
 
 /** No rankable list yet (still loading, or the wrong group was found): look again when the page changes. */
@@ -82,7 +100,18 @@ function reject(list: DetectedList): void {
 }
 
 /** guards → list detection → identify → rank → apply (§4.1). */
+let activeGate: ReturnType<typeof createGate> | null = null;
+
 async function run(gateMs?: number): Promise<void> {
+  try {
+    await runInner(gateMs);
+  } catch {
+    // Any failure after the gate hides the list must still reveal it.
+    activeGate?.cancel();
+  }
+}
+
+async function runInner(gateMs?: number): Promise<void> {
   runTimes.push(Date.now());
   const gen = ++generation;
   const settings = await getSettings();
@@ -97,7 +126,7 @@ async function run(gateMs?: number): Promise<void> {
 
   const list = detectList(document);
   if (!list) return watchPage();
-  lastList = { container: list.container, cards: new Set(list.cards.values()) };
+  lastList = { container: list.container, cards: [...list.cards.values()] };
   watch(list.container, list.cards.values());
 
   const cards = snapshotCards(list);
@@ -106,7 +135,10 @@ async function run(gateMs?: number): Promise<void> {
   const hints = last?.key === key ? last.hints : cityHints(document);
   last = { key, hints };
 
-  const gate = createGate(list.container as HTMLElement, gateMs);
+  const gate = createGate(list.container as HTMLElement, gateMs, {
+    offerOnly: gen > 1 && onScreen(list.container),
+  });
+  activeGate = gate;
   const host = location.hostname.replace(/^www\./, "");
   const pattern = pathPattern(location.pathname);
 
@@ -143,6 +175,10 @@ async function run(gateMs?: number): Promise<void> {
   if (gen !== generation) return gate.cancel();
   if (!ranked.ok || !ranked.data.plan) {
     gate.cancel();
+    if (local && shouldInvalidateLayout(ranked)) {
+      // The stored layout identified nothing the resolver knows — it is stale.
+      void deleteLayout(storageKey);
+    }
     return;
   }
   const { plan, pageResultId } = ranked.data;
@@ -153,12 +189,24 @@ async function run(gateMs?: number): Promise<void> {
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
       onFeedback: pageResultId
         ? (clientId, verdict, label) => {
+            const buttons = [...label.querySelectorAll<HTMLButtonElement>("button[data-focal-action]")];
+            for (const b of buttons) b.disabled = true;
             void send<FeedbackResponse>({ type: "feedback", body: { pageResultId, clientId, verdict } }).then((res) => {
-              if (!res.ok || !res.data.saved) return;
+              if (!res.ok || !res.data.saved) {
+                for (const b of buttons) b.disabled = false;
+                const failed = document.createElement("span");
+                failed.setAttribute("data-focal", "fb-error");
+                failed.textContent = "Couldn't save";
+                failed.style.cssText =
+                  "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#f87171!important;align-self:center";
+                label.append(failed);
+                setTimeout(() => failed.remove(), 4000);
+                return;
+              }
               const { eventId } = res.data;
-              label.querySelectorAll("button[data-focal-action]").forEach((b) => b.remove());
+              buttons.forEach((b) => b.remove());
               const saved = document.createElement("span");
-              saved.textContent = "Saved · ";
+              saved.textContent = eventId === null ? "Saved" : "Saved · ";
               saved.style.cssText =
                 "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#52525b!important;align-self:center";
               const undo = document.createElement("button");
@@ -168,17 +216,22 @@ async function run(gateMs?: number): Promise<void> {
                 "display:inline-flex!important;align-items:center;height:20px!important;padding:0 8px!important;border-radius:999px;cursor:pointer;" +
                 "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
                 "background:#18181b!important;border:1px solid #3f3f46!important";
+              const id = eventId ?? "";
               undo.addEventListener("click", (ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();
-                void send<FeedbackResponse>({ type: "feedback", body: { action: "undo", eventId } }).then((u) => {
-                  if (u.ok && u.data.saved) {
+                undo.disabled = true;
+                void send<FeedbackResponse>({ type: "undo-event", eventId: id }).then((u) => {
+                  if (u.ok) {
                     saved.remove();
                     undo.remove();
+                  } else {
+                    undo.disabled = false;
                   }
                 });
               });
-              label.append(saved, undo);
+              label.append(saved);
+              if (eventId !== null) label.append(undo);
             });
           }
         : undefined,
@@ -191,6 +244,7 @@ let lastHref = location.href;
 setInterval(() => {
   if (location.href === lastHref) return;
   lastHref = location.href;
+  last = null; // E-1: hints came from the old URL's search box.
   rejected = new WeakMap();
   scheduleRerun();
 }, 1000);

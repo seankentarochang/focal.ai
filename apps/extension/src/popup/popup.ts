@@ -27,6 +27,7 @@ async function main(): Promise<void> {
     $("account").append(" · ", link);
   }
 
+  void chrome.runtime.sendMessage({ type: "settings-open" });
   const url = tab?.url ?? "";
   const host = url ? normalizeHost(url) : "";
   const toggle = $<HTMLInputElement>("site-toggle");
@@ -40,7 +41,14 @@ async function main(): Promise<void> {
     toggle.checked = !settings.siteOff.includes(host);
     toggle.addEventListener("change", async () => {
       await setSettings(toggleSite(await getSettings(), host, toggle.checked));
-      void chrome.runtime.sendMessage({ type: "set-site", hostname: host, on: toggle.checked });
+      const res = (await chrome.runtime.sendMessage({ type: "set-site", hostname: host, on: toggle.checked })) as { ok?: boolean } | undefined;
+      if (!res?.ok) {
+        // Server write failed: revert the local toggle so state stays honest.
+        await setSettings(toggleSite(await getSettings(), host, !toggle.checked));
+        toggle.checked = !toggle.checked;
+        $("site-status").textContent = "Couldn't save to your account — change kept local only.";
+        return;
+      }
       if (tab?.id !== undefined) await chrome.tabs.reload(tab.id);
     });
   }

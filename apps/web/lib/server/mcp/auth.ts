@@ -112,12 +112,16 @@ const userIds = new Map<string, string>();
 
 async function userForWorkosId(db: Db, workosId: string): Promise<string | null> {
   const cached = userIds.get(workosId);
-  if (cached) return cached;
+  if (cached) {
+    const alive = await db.users.byAuthId("workos", workosId);
+    if (alive) return cached;
+    userIds.delete(workosId);
+  }
   let user = await db.users.byAuthId("workos", workosId);
   if (!user && process.env.WORKOS_API_KEY) {
     const { WorkOS } = await import("@workos-inc/node");
     const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(workosId).catch(() => null);
-    if (remote?.email) user = await ensureUser(db, { id: workosId, email: remote.email });
+    if (remote?.email) user = await ensureUser(db, { id: workosId, email: remote.email, emailVerified: remote.emailVerified === true });
   }
   if (user) userIds.set(workosId, user.id);
   return user?.id ?? null;

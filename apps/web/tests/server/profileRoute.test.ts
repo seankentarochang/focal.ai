@@ -4,6 +4,7 @@ import { addEntry } from "@focal-ai/core";
 import { connect, createDb, migrate, type Db } from "@focal-ai/db";
 import { __setDbForTests } from "@/lib/server/db";
 import { DELETE, GET, POST } from "@/app/api/profile/route";
+import { POST as undoPOST } from "@/app/api/activity/[id]/undo/route";
 import { GET as exportGET } from "@/app/api/profile/export/route";
 
 let viewerUserId = "";
@@ -34,9 +35,9 @@ describe("profile route without a database", () => {
     viewerUserId = "u1";
     const res = await GET();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ entries: [], activity: [] });
+    expect(await res.json()).toEqual({ entries: [] });
     expect((await post({ action: "approve_rule", entry_id: "nope" })).status).toBe(404);
-    expect((await post({ action: "undo", event_id: "nope" })).status).toBe(404);
+    expect((await post({ action: "undo", event_id: "nope" })).status).toBe(400); // undo moved to /api/activity/[id]/undo
   });
 
   it("export: 401 signed out, a JSON download with the memory profile signed in", async () => {
@@ -109,20 +110,34 @@ describe.skipIf(!url)("profile route in Postgres", () => {
 
     const approved = await post({ action: "approve_rule", entry_id: rule.event.entryId });
     expect(approved.status).toBe(200);
-    const body = (await approved.json()) as { entries: { id: string; status?: string }[]; activity: { actor: string; action: string }[] };
+    const body = (await approved.json()) as { entries: { id: string; status?: string }[] };
     expect(body.entries.find((e) => e.id === rule.event.entryId)?.status).toBe("active");
-    expect(body.activity[0]).toMatchObject({ actor: "manual", action: "approve" });
+    expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ actor: "manual", action: "approve" });
     expect((await post({ action: "approve_rule", entry_id: rule.event.entryId })).status).toBe(404);
 
-    const undone = await post({ action: "undo", event_id: add.event.id });
+    const undone = await undoPOST(
+      new Request(`http://localhost/api/activity/${add.event.id}/undo`, { method: "POST" }),
+      { params: Promise.resolve({ id: add.event.id }) },
+    );
     expect(undone.status).toBe(200);
-    const after = (await undone.json()) as { entries: { name: string }[]; activity: { action: string; undoes?: string; actor: string }[] };
-    expect(after.entries.some((e) => e.name === "Rintaro")).toBe(false);
-    expect(after.activity[0]).toMatchObject({ action: "undo", actor: "manual", undoes: add.event.id });
+    expect((await db.profile.load(userId)).entries.some((e) => e.name === "Rintaro")).toBe(false);
+    expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ action: "undo", actor: "manual", undoes: add.event.id });
 
-    expect((await post({ action: "undo", event_id: add.event.id })).status).toBe(404);
+    expect(
+      (
+        await undoPOST(new Request(`http://localhost/api/activity/${add.event.id}/undo`, { method: "POST" }), {
+          params: Promise.resolve({ id: add.event.id }),
+        })
+      ).status,
+    ).toBe(404);
     const [undoRecord] = await db.profile.activity(userId, { limit: 1 });
-    expect((await post({ action: "undo", event_id: undoRecord!.id })).status).toBe(404);
+    expect(
+      (
+        await undoPOST(new Request(`http://localhost/api/activity/${undoRecord!.id}/undo`, { method: "POST" }), {
+          params: Promise.resolve({ id: undoRecord!.id }),
+        })
+      ).status,
+    ).toBe(404);
   });
 
   it("export returns the persisted profile, activity and sites", async () => {
@@ -152,21 +167,23 @@ describe.skipIf(!url)("profile route in Postgres", () => {
 
     const changed = await post({ action: "set_strength", entry_id: add.event.entryId, strength: "love" });
     expect(changed.status).toBe(200);
-    let body = (await changed.json()) as { entries: { id: string; strength?: string }[]; activity: { id: string; actor: string; action: string }[] };
+    let body = (await changed.json()) as { entries: { id: string; strength?: string }[] };
     expect(body.entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
-    expect(body.activity[0]).toMatchObject({ actor: "manual", action: "change" });
+    expect((await db.profile.activity(userId, { limit: 1 }))[0]).toMatchObject({ actor: "manual", action: "change" });
 
     const removed = await post({ action: "remove", entry_id: add.event.entryId });
     expect(removed.status).toBe(200);
     body = (await removed.json()) as typeof body;
     expect(body.entries.some((e) => e.id === add.event.entryId)).toBe(false);
-    expect(body.activity[0]).toMatchObject({ actor: "manual", action: "remove" });
+    const [removeEvent] = await db.profile.activity(userId, { limit: 1 });
+    expect(removeEvent).toMatchObject({ actor: "manual", action: "remove" });
 
     expect((await post({ action: "set_strength", entry_id: add.event.entryId, strength: "like" })).status).toBe(404);
-    const undo = await post({ action: "undo", event_id: body.activity[0]!.id });
+    const undo = await undoPOST(new Request(`http://localhost/api/activity/${removeEvent!.id}/undo`, { method: "POST" }), {
+      params: Promise.resolve({ id: removeEvent!.id }),
+    });
     expect(undo.status).toBe(200);
-    const after = (await undo.json()) as typeof body;
-    expect(after.entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
+    expect((await db.profile.load(userId)).entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
   });
 
   it("delete removes the account and its rows", async () => {

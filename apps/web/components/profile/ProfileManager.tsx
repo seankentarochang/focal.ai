@@ -32,9 +32,11 @@ export function ProfileManager({ email }: { email: string }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/profile");
-      if (!res.ok) throw new Error();
-      setState((await res.json()) as ProfileState);
+      const [pRes, aRes] = await Promise.all([fetch("/api/profile"), fetch("/api/activity")]);
+      if (!pRes.ok) throw new Error();
+      const profile = (await pRes.json()) as { entries: ProfileState["entries"] };
+      const activity = aRes.ok ? ((await aRes.json()) as { activity: ProfileState["activity"] }).activity : [];
+      setState({ entries: profile.entries, activity });
       setError(null);
     } catch {
       setError("Couldn't load your profile.");
@@ -43,14 +45,40 @@ export function ProfileManager({ email }: { email: string }) {
 
   useEffect(() => {
     let live = true;
-    fetch("/api/profile")
-      .then((res) => (res.ok ? (res.json() as Promise<ProfileState>) : Promise.reject(new Error())))
-      .then((data) => live && setState(data))
+    Promise.all([fetch("/api/profile"), fetch("/api/activity")])
+      .then(async ([pRes, aRes]) => {
+        if (!pRes.ok) throw new Error();
+        const profile = (await pRes.json()) as { entries: ProfileState["entries"] };
+        const activity = aRes.ok ? ((await aRes.json()) as { activity: ProfileState["activity"] }).activity : [];
+        if (live) setState({ entries: profile.entries, activity });
+      })
       .catch(() => live && setError("Couldn't load your profile."));
     return () => {
       live = false;
     };
   }, []);
+
+  const undo = async (eventId: string) => {
+    setBusy(eventId);
+    try {
+      const res = await fetch(`/api/activity/${encodeURIComponent(eventId)}/undo`, { method: "POST" });
+      if (res.status === 409) {
+        const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        setError(data?.error?.message ?? "Undo that entry's later change first.");
+        return;
+      }
+      if (!res.ok) {
+        setError("That change is no longer available.");
+        return;
+      }
+      await load();
+      setError(null);
+    } catch {
+      setError("Couldn't reach the server.");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const act = async (key: string, body: Record<string, string>) => {
     setBusy(key);
@@ -105,13 +133,23 @@ export function ProfileManager({ email }: { email: string }) {
                 <CardDescription>
                   Proposed <Badge variant="secondary">{actorBadge(rule.source)}</Badge>
                 </CardDescription>
-                <Button
-                  size="sm"
-                  disabled={busy === rule.id}
-                  onClick={() => void act(rule.id, { action: "approve_rule", entry_id: rule.id })}
-                >
-                  Approve
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={busy === rule.id}
+                    onClick={() => void act(rule.id, { action: "approve_rule", entry_id: rule.id })}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy === rule.id}
+                    onClick={() => void act(rule.id, { action: "remove", entry_id: rule.id })}
+                  >
+                    Reject
+                  </Button>
+                </div>
               </CardHeader>
             </Card>
           ))
@@ -137,7 +175,7 @@ export function ProfileManager({ email }: { email: string }) {
                         variant="ghost"
                         size="xs"
                         disabled={busy === event.id}
-                        onClick={() => void act(event.id, { action: "undo", event_id: event.id })}
+                        onClick={() => void undo(event.id)}
                       >
                         Undo
                       </Button>
@@ -193,16 +231,16 @@ export function ProfileManager({ email }: { email: string }) {
                                   {s}
                                 </button>
                               ))}
-                              <button
-                                type="button"
-                                disabled={busy !== null}
-                                className="rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-ink disabled:opacity-40"
-                                onClick={() => void act(e.id, { action: "remove", entry_id: e.id })}
-                              >
-                                Remove
-                              </button>
                             </span>
                           )}
+                          <button
+                            type="button"
+                            disabled={busy !== null}
+                            className="rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-ink disabled:opacity-40"
+                            onClick={() => void act(e.id, { action: "remove", entry_id: e.id })}
+                          >
+                            {e.kind === "rule" && e.status === "pending" ? "Reject" : "Remove"}
+                          </button>
                         </li>
                       ))}
                     </ul>

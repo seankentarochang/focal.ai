@@ -84,20 +84,25 @@ describe("settings sync from the server", () => {
     expect((data.settings as { incognito: boolean }).incognito).toBe(true);
   });
 
-  it("set-site write-back PUTs the updated list", async () => {
+  it("set-site write-back POSTs the single site", async () => {
     stubChrome({ session: { token: "t", email: "a@b.c", savedAt: "x" }, settings: { skipSites: [], siteOff: [], incognito: false } });
     const calls: { url: string; method: string; body?: unknown }[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      if (init?.method === "PUT") return new Response(JSON.stringify({ sites: [{ hostname: "yelp.com", mode: "off" }] }), { status: 200 });
-      return new Response(JSON.stringify({ sites: [] }), { status: 200 });
+      return new Response(JSON.stringify({ sites: [{ hostname: "yelp.com", mode: "off" }] }), { status: 200 });
     }));
 
     const { setSiteOnServer } = await import("../src/background");
-    await setSiteOnServer("yelp.com", false);
+    expect(await setSiteOnServer("yelp.com", false)).toBe(true);
 
-    const putCall = calls.find((c) => c.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect((putCall!.body as { sites: unknown[] }).sites).toEqual([{ hostname: "yelp.com", mode: "off" }]);
+    const postCall = calls.find((c) => c.method === "POST");
+    expect(postCall).toBeTruthy();
+    expect(postCall!.url).toContain("/api/settings");
+    expect(postCall!.body).toEqual({ hostname: "yelp.com", mode: "off" });
+    // the "on" toggle removes the row with mode:null
+    await setSiteOnServer("yelp.com", true);
+    const on = calls[calls.length - 1]!;
+    expect(on.method).toBe("POST");
+    expect(on.body).toEqual({ hostname: "yelp.com", mode: null });
   });
 });

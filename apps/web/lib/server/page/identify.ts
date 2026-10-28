@@ -1,3 +1,4 @@
+import { devSessionsEnabled } from "./session";
 import { createJevIdentifier } from "../jev/client";
 import type { IdentifiedItem, IdentifyBody, ShortType } from "./schemas";
 
@@ -66,7 +67,7 @@ let identifier: Identifier | undefined;
 /** Mock mode stays offline; otherwise Jev when keyed, the mock in dev, else unavailable. */
 export function getIdentifier(): Identifier {
   if (identifier) return identifier;
-  if (process.env.QLOO_MOCK === "1") return (identifier = createMockIdentifier());
+  if (devSessionsEnabled()) return (identifier = createMockIdentifier());
   const apiKey = process.env.TYPESAFE_API_KEY?.trim();
   if (apiKey) {
     return (identifier = createJevIdentifier({
@@ -75,7 +76,6 @@ export function getIdentifier(): Identifier {
       model: process.env.TYPESAFE_MODEL,
     }));
   }
-  if (process.env.FOCAL_DEV_SESSION === "1") return (identifier = createMockIdentifier());
   throw new IdentifyUnavailableError();
 }
 

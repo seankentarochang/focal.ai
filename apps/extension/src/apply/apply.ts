@@ -125,9 +125,9 @@ function labelElement(doc: Document, text: string, badge: string | undefined, co
   const span = doc.createElement("span");
   span.setAttribute(
     "style",
-    "display:inline-flex;align-items:center;gap:5px;flex:none;margin:2px 0;padding:3px 9px 3px 7px;border-radius:999px;" +
+    "display:inline-flex;align-items:center;gap:5px;flex:0 1 auto;margin:2px 0;padding:3px 9px 3px 7px;border-radius:999px;" +
       'font:500 12px/16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:0;' +
-      "box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:nowrap;" +
+      "box-shadow:0 1px 2px rgba(0,0,0,.12);white-space:nowrap;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;" +
       LABEL_STYLE[kind],
   );
   if (kind === "top-pick") span.insertAdjacentHTML("afterbegin", sparkleSvg());
@@ -184,7 +184,11 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
           else el.setAttribute("style", style);
         }
         if (reorder && mode === "move") {
-          for (const node of originalNodes) if (node.parentNode === container) container.appendChild(node);
+          // Insert the originals back before the first non-original child —
+          // appending would bury them behind cards the site added meanwhile.
+          const originalSet = new Set(originalNodes);
+          const anchor = [...container.childNodes].find((n) => !originalSet.has(n)) ?? null;
+          for (const node of originalNodes) if (node.parentNode === container) container.insertBefore(node, anchor);
         }
       });
       opts.onUndo?.();
@@ -202,7 +206,11 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
           h.style.setProperty("order", String(i));
         });
       } else {
-        for (const el of sequence) container.appendChild(el);
+        // Re-append only nodes whose position actually changes — touching every
+        // child would re-fire the mutation watcher against our own edits.
+        sequence.forEach((el, i) => {
+          if (container.children[i] !== el) container.insertBefore(el, container.children[i] ?? null);
+        });
       }
     }
 
@@ -251,7 +259,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         if (!first) continue;
         for (const el of els) {
           saveStyle(el, savedStyles);
-          el.style.setProperty("display", "none");
+          el.style.setProperty("display", "none", "important");
         }
         const fold = decorate(make(doc, "div", "fold"), "fold");
         fold.append(doc.createTextNode(op.label));

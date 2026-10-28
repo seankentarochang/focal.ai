@@ -1,11 +1,19 @@
 import { currentViewer } from "@/lib/server/auth/viewer";
 import { memoryProfileStore } from "@/lib/server/chat/store";
 import { getDb } from "@/lib/server/db";
+import { checkRateLimit } from "@/lib/server/rateLimit";
 
 /** Full account export as a JSON download (§6: export at any time). */
 export async function GET(): Promise<Response> {
   const viewer = await currentViewer();
   if (!viewer) return Response.json({ error: { code: "UNAUTHORIZED", message: "sign in to focal" } }, { status: 401 });
+  const limit = checkRateLimit(`export:${viewer.userId}`, { limit: 5, windowMs: 60000 });
+  if (!limit.ok) {
+    return Response.json(
+      { error: { code: "RATE_LIMIT", message: "Too many exports" } },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } },
+    );
+  }
   const db = getDb();
   const payload =
     viewer.persisted && db

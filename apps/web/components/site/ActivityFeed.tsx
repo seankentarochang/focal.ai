@@ -17,6 +17,7 @@ export interface Row {
   at: string;
   undoes?: string | null;
   undoneBy?: string | null;
+  seq?: number;
 }
 
 const nameOf = (v: unknown): string | undefined =>
@@ -49,11 +50,7 @@ export function ActivityFeed({ activity, hasMore }: { activity: Row[]; hasMore: 
     setBusy(eventId);
     setError(null);
     try {
-      const res = await fetch("/api/profile", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "undo", event_id: eventId }),
-      });
+      const res = await fetch(`/api/activity/${encodeURIComponent(eventId)}/undo`, { method: "POST" });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
         setError(data?.error?.message ?? "That change is no longer available.");
@@ -102,7 +99,7 @@ export function ActivityFeed({ activity, hasMore }: { activity: Row[]; hasMore: 
         </Card>
       )}
       {hasMore && last && (
-        <Link className="text-sm text-muted-foreground underline" href={`/activity?before=${encodeURIComponent(last.at)}`}>
+        <Link className="text-sm text-muted-foreground underline" href={`/activity?before=${last.seq ?? last.at}`}>
           Load older
         </Link>
       )}

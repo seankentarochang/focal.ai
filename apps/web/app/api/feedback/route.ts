@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { addEntry, changeStrength, findEntry, undoEvent, type ActivityEvent, type InsightType } from "@focal-ai/core";
+import { DbError } from "@focal-ai/db";
+import { addEntry, changeStrength, findEntry, ProfileError, type InsightType } from "@focal-ai/core";
 import { errorResponse } from "@/lib/server/errors";
 import { dbProfileStore } from "@/lib/server/chat/store";
 import { resolveSession, unauthorizedResponse } from "@/lib/server/page/session";
@@ -14,7 +15,6 @@ const bodySchema = z.union([
     clientId: z.string().min(1).max(16),
     verdict: z.enum(["more", "less"]),
   }),
-  z.object({ action: z.literal("undo"), eventId: z.string().min(1).max(80) }),
 ]);
 
 function notFound(message: string): Response {
@@ -60,43 +60,53 @@ export async function POST(req: Request): Promise<Response> {
   if (!conn) {
     return Response.json({ error: { code: "UNAVAILABLE", message: "feedback needs a database" } }, { status: 503 });
   }
-  const store = dbProfileStore(conn, session.userId);
-  const profile = await store.load();
-  const v2 = { version: 2 as const, updatedAt: new Date().toISOString(), entries: profile.entries as never };
-
-  if ("action" in parsed.data) {
-    const record = await conn.profile.event(session.userId, parsed.data.eventId);
-    if (!record || record.actor !== "page" || record.undoneBy || record.action === "undo") {
-      return notFound("No undoable feedback with that id");
-    }
-    const write = undoEvent(v2, record as ActivityEvent, "page");
-    await store.commit(write.profile, write.event);
-    return Response.json({ saved: true, entryId: write.event.entryId, eventId: write.event.id });
-  }
-
   const { pageResultId, clientId, verdict } = parsed.data;
   const result = await db.get(pageResultId, session.userId);
   if (!result) return notFound("No such page result");
   const items = (result.items ?? []) as ResultItem[];
   const item = items.find((i) => i.clientId === clientId);
-  if (!item?.entityId || !item.type) return notFound("That card has no matched thing to rate");
+  if (!item?.entityId || !item.type || item.status !== "resolved") {
+    return notFound("That card has no matched thing to rate");
+  }
 
   const strength = verdict === "more" ? "like" : "dislike";
-  const existing = findEntry(v2, "thing", item.entityId);
-  const write = existing
-    ? changeStrength(v2, existing.id, strength, "page")
-    : addEntry(
-        v2,
-        {
-          kind: "thing",
-          qlooId: item.entityId,
-          name: item.entityName ?? item.name,
-          type: item.type as InsightType,
-          strength,
-          source: "page",
-        },
-        "page",
-      );
-  await store.commit(write.profile, write.event);
-  return Response.json({ saved: true, entryId: write.event.entryId, eventId: write.event.id });
+  const store = dbProfileStore(conn, session.userId);
+  // One retry on a profile-version conflict; a second means a real race.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const profile = await store.load();
+      const v2 = { version: 2 as const, updatedAt: new Date().toISOString(), entries: profile.entries as never };
+      const existing = findEntry(v2, "thing", item.entityId);
+      if (existing && existing.strength === strength) {
+        return Response.json({ saved: true, eventId: null });
+      }
+      const write = existing
+        ? changeStrength(v2, existing.id, strength, "page")
+        : addEntry(
+            v2,
+            {
+              kind: "thing",
+              qlooId: item.entityId,
+              name: item.entityName ?? item.name,
+              type: item.type as InsightType,
+              strength,
+              source: "page",
+            },
+            "page",
+          );
+      await store.commit(write.profile, write.event);
+      return Response.json({ saved: true, entryId: write.event.entryId, eventId: write.event.id });
+    } catch (e) {
+      if (e instanceof DbError && e.code === "CONFLICT") {
+        if (attempt === 0) continue;
+        return Response.json(
+          { error: { code: "CONFLICT", message: "Your profile changed elsewhere; try again." } },
+          { status: 409 },
+        );
+      }
+      if (e instanceof ProfileError) return notFound(e.message);
+      throw e;
+    }
+  }
+  return notFound("unreachable");
 }

@@ -229,8 +229,8 @@ describe("tryNowLinks (W-01)", () => {
     expect(links[0]).toEqual({ label: "Restaurants on Yelp", url: "https://www.yelp.com/search?find_desc=restaurants" });
   });
 
-  it("returns nothing for an empty profile and dedupes types", () => {
-    expect(tryNowLinks([])).toEqual([]);
+  it("falls back to a generic link for an empty profile and dedupes types", () => {
+    expect(tryNowLinks([])).toEqual([{ label: "Top movies on IMDb", url: "https://www.imdb.com/chart/top/" }]);
     const links = tryNowLinks([entry("urn:entity:book", "A"), entry("urn:entity:book", "B")]);
     expect(links).toHaveLength(1);
   });

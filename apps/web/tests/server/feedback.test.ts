@@ -4,6 +4,7 @@ import { addEntry } from "@focal-ai/core";
 import { connect, createDb, migrate, type Db } from "@focal-ai/db";
 import { __setDbForTests } from "@/lib/server/db";
 import { POST } from "@/app/api/feedback/route";
+import { POST as undoPOST } from "@/app/api/activity/[id]/undo/route";
 import { __resetRateLimitForTests } from "@/lib/server/rateLimit";
 
 const url = process.env.DATABASE_URL;
@@ -94,7 +95,10 @@ describe.skipIf(!url)("POST /api/feedback in Postgres", () => {
   it("undo reverses the write and only works for actor=page events", async () => {
     const res = await post({ pageResultId, clientId: "c0", verdict: "more" }, token);
     const { eventId } = (await res.json()) as { eventId: string };
-    const undone = await post({ action: "undo", eventId }, token);
+    const undone = await undoPOST(
+      new Request(`http://localhost/api/activity/${eventId}/undo`, { method: "POST", headers: { authorization: `Bearer ${token}` } }),
+      { params: Promise.resolve({ id: eventId }) },
+    );
     expect(undone.status).toBe(200);
     // The earlier "less" test left the entry at dislike; undoing the change
     // restores that state rather than emptying the profile.
@@ -109,7 +113,11 @@ describe.skipIf(!url)("POST /api/feedback in Postgres", () => {
     );
     const version = (await db.profile.load(userId)).version;
     await db.profile.commit(userId, write.event as never, version);
-    expect((await post({ action: "undo", eventId: write.event.id }, token)).status).toBe(404);
+    const bad = await undoPOST(
+      new Request(`http://localhost/api/activity/${write.event.id}/undo`, { method: "POST", headers: { authorization: `Bearer ${token}` } }),
+      { params: Promise.resolve({ id: write.event.id }) },
+    );
+    expect(bad.status).toBe(404);
   });
 
   it("401s signed out", async () => {

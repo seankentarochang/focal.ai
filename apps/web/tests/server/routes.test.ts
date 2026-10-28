@@ -12,11 +12,9 @@ const ENTITY_PLACE_TYPE = "urn:entity:place";
 type RoutePost = (req: Request) => Promise<Response>;
 
 let searchPOST: RoutePost;
-let rankPOST: RoutePost;
 
 beforeAll(async () => {
   searchPOST = (await import("@/app/api/qloo/search/route")).POST;
-  rankPOST = (await import("@/app/api/qloo/rank/route")).POST;
 });
 
 beforeEach(() => {
@@ -102,88 +100,3 @@ describe("POST /api/qloo/search", () => {
   });
 });
 
-describe("POST /api/qloo/rank", () => {
-  it("ranks resolved mock candidates, builds a plan and records the insights request", async () => {
-    const res = await rankPOST(post("/api/qloo/rank", rankBody));
-
-    expect(res.status).toBe(200);
-    const text = await res.text();
-    const body = JSON.parse(text);
-
-    expect(body.ranked).toHaveLength(3);
-
-    const resolved = body.ranked.filter((entry: { status: string }) => entry.status === "resolved");
-    expect(resolved).toHaveLength(2);
-
-    const rintaro = resolved.find((entry: { clientId: string }) => entry.clientId === "c-0");
-    expect(rintaro?.entity?.entityId).toBe(RINTARO_ENTITY_ID);
-    expect(rintaro?.affinityPct).toBe(93);
-    expect(rintaro?.reason?.text).toBe("Matches your taste for Fugazi");
-    expect(rintaro?.reason?.contributions).toEqual([{ name: "Fugazi", score: 0.44 }]);
-
-    const stateBird = resolved.find((entry: { clientId: string }) => entry.clientId === "c-1");
-    expect(stateBird?.entity?.entityId).toBe(STATE_BIRD_ENTITY_ID);
-    expect(stateBird?.affinityPct).toBe(78);
-    expect(stateBird?.reason?.text).toContain("Fugazi");
-
-    expect(body.plan.pageId).toBe("test-page");
-    expect(body.plan.ops.length).toBeGreaterThanOrEqual(1);
-    expect(body.plan.ops[0].op).toBe("reorder");
-    expect(body.plan.ops[0].order).toHaveLength(3);
-
-    expect(body.meta.dataSource).toBe("mock");
-    expect(typeof body.meta.durationMs).toBe("number");
-    expect(body.meta.unresolved).toBe(1);
-
-    expect(body.meta.qlooRequest.path).toBe("/v2/insights");
-    expect(body.meta.qlooRequest.params["filter.type"]).toBe(ENTITY_PLACE_TYPE);
-    expect(body.meta.qlooRequest.params["signal.interests.entities"]).toBe(FUGAZI_ENTITY_ID);
-    expect(body.meta.qlooRequest.params["filter.results.entities"]).toBe(
-      `${RINTARO_ENTITY_ID},${STATE_BIRD_ENTITY_ID}`,
-    );
-    expect(body.meta.qlooRequest.params["filter.location.query"]).toBe("San Francisco");
-    expect(body.meta.qlooRequest.params["feature.explainability"]).toBe("true");
-    expect(body.meta.qlooRequest.params.take).toBe("20");
-
-    expect(text).not.toContain("QLOO_API_KEY");
-    expect(text).not.toContain("test-secret-key-that-must-not-leak");
-  });
-
-  it("keeps unresolved candidates in the response with no affinity", async () => {
-    const res = await rankPOST(post("/api/qloo/rank", rankBody));
-    const body = await res.json();
-
-    const notReal = body.ranked.find(
-      (entry: { clientId: string }) => entry.clientId === "c-2",
-    );
-    expect(notReal.status).toBe("unresolved");
-    expect(notReal.affinityPct).toBeUndefined();
-    expect(notReal.entity).toBeUndefined();
-  });
-
-  it("rejects a profile with no positive seeds", async () => {
-    const res = await rankPOST(
-      post("/api/qloo/rank", {
-        ...rankBody,
-        profile: {
-          ...profile,
-          seeds: profile.seeds.map((seed) => ({ ...seed, polarity: "dislike" })),
-        },
-      }),
-    );
-
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe("BAD_REQUEST");
-    expect(body.error.message).toBe("Add at least one positive taste seed before ranking.");
-  });
-
-  it("rejects an invalid body with 400", async () => {
-    const res = await rankPOST(post("/api/qloo/rank", { ...rankBody, candidates: [] }));
-
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error.code).toBe("BAD_REQUEST");
-    expect(body.error.message).toBe("invalid request body");
-  });
-});

@@ -48,6 +48,8 @@ let storeOverride: ResolutionStore | null | undefined;
 /** db.resolutions when a database is configured; null keeps today's behaviour. */
 export function getResolutionStore(): ResolutionStore | null {
   if (storeOverride !== undefined) return storeOverride;
+  // Mock resolutions carry fixture IDs — never let them into the shared cache.
+  if (process.env.QLOO_MOCK === "1") return null;
   return getDb()?.resolutions ?? null;
 }
 

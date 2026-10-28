@@ -153,15 +153,15 @@ Next.js route handlers are the only HTTP surface. The Qloo key lives in server e
 GET  /api/health   → { ok: true, hasQlooKey: boolean, dataSource: "live" | "mock" }
 POST /api/qloo/search  body { query: string, types?: QlooEntityType[], location?: string }
                        → { entities: QlooEntity[], meta: { dataSource: DataSource, durationMs: number } }
-POST /api/qloo/rank    body { pageType: QlooEntityType, locationQuery?: string, candidates: PageCandidate[], profile: TasteProfile }
-                       → { ranked: RankedCandidate[], plan: RenderPlan, meta: { dataSource: DataSource, durationMs: number, unresolved: number, qlooRequest: { path: string, params: Record<string, string> } } }
-POST /api/agent        (P1, contract TBD in ticket T-19)
+Removed 2026-10-28 (D-17): POST /api/qloo/rank and the Studio /api/agent. The web's only
+ranking surface is POST /api/try/rank (anonymous, lift-only) and POST /api/page/rank
+(authenticated extension traffic); stdio MCP keeps the v1 pipeline until ported.
 ```
 
 Data-flow rules (non-negotiable):
 
 - Only these leave the browser: entity name strings, city strings, Qloo entity IDs, and the taste profile. The server never receives page HTML, DOM dumps, or form values.
-- The profile travels with each request (`/api/qloo/rank`, `/api/agent`) and is never persisted server-side — no database, no profile contents in logs.
+- The profile is server-side and persisted (D-15); requests carry identified items, never page HTML, DOM dumps, or form values.
 - `dataSource: "mock"` is reachable ONLY when `QLOO_MOCK=1`, and the UI must badge mock data loudly anywhere it appears.
 - `meta.qlooRequest` records the upstream path + query params (key excluded) so the inspector can show exactly what was asked of Qloo.
 - Invalid bodies are rejected with zod (400) before any upstream call.
@@ -188,4 +188,4 @@ export declare class PipelineError extends Error { code: "NO_SEEDS" | "PLAN_INVA
 export declare function runRankPipeline(args: RankPipelineArgs): Promise<RankPipelineResult>;
 ```
 
-Web `/api/qloo/rank` and the MCP `score_candidates` tool both call `runRankPipeline`; adapters (search/insights injection, request building, error mapping) live at the edges.
+The web's lift-only page rank and the MCP `score_candidates` tool share the core pipeline; adapters (search/insights injection, request building, error mapping) live at the edges.

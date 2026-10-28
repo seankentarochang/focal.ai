@@ -1,5 +1,5 @@
 import type { RankedCandidate, RenderPlan, TasteProfile } from "@focal-ai/core";
-import type { DemoPage, HealthResponse, RankResponse, SearchResponse } from "./types";
+import type { DemoPage, HealthResponse, RankMeta, RankResponse, SearchResponse } from "./types";
 
 async function readErrorMessage(res: Response): Promise<string | undefined> {
   try {
@@ -37,6 +37,7 @@ export async function rankPage(input: {
     body: JSON.stringify({
       pageType: input.page.type,
       items: input.page.candidates.map((c) => ({
+        clientId: c.clientId,
         name: c.name,
         ...(c.locationText ? { city: c.locationText } : {}),
       })),
@@ -60,13 +61,21 @@ export async function rankPage(input: {
     data.items.map((item) => item.clientId);
   const positionOf = new Map(order.map((clientId, i) => [clientId, i] as const));
   return {
-    ranked: data.items.map(
-      (item) => ({ ...item, position: positionOf.get(item.clientId) ?? Number.MAX_SAFE_INTEGER }) as unknown as RankedCandidate,
-    ),
+    ranked: data.items.map((item) => {
+      const { label, affinity, ...rest } = item;
+      return {
+        ...rest,
+        position: positionOf.get(item.clientId) ?? Number.MAX_SAFE_INTEGER,
+        ...(label ? { reason: label } : {}),
+        ...(affinity !== undefined ? { affinity, affinityPct: Math.round(affinity * 1000) / 10 } : {}),
+      } as unknown as RankedCandidate;
+    }),
     plan: data.plan ?? EMPTY_PLAN,
     meta: {
       durationMs: data.meta.durationMs,
-      unresolved: data.items.filter((i) => (i as { outcome?: string }).outcome === "unresolved").length,
+      unresolved: data.meta.unresolved,
+      ...(data.meta.qlooRequest ? { qlooRequest: data.meta.qlooRequest } : {}),
+      ...(data.meta.dataSource ? { dataSource: data.meta.dataSource } : {}),
       mock: data.mock,
     },
   };
@@ -74,10 +83,16 @@ export async function rankPage(input: {
 
 interface TryRankWire {
   status: string;
-  items: { clientId: string; name: string }[];
+  items: {
+    clientId: string;
+    name: string;
+    status: string;
+    label?: { badge: string; text: string; reasonNames: string[] };
+    affinity?: number;
+  }[];
   plan: RenderPlan | null;
   mock: boolean;
-  meta: { durationMs: number };
+  meta: { durationMs: number; unresolved: number; qlooRequest?: { path: string; params: Record<string, string> }; dataSource?: RankMeta["dataSource"] };
 }
 
 const EMPTY_PLAN: RenderPlan = {

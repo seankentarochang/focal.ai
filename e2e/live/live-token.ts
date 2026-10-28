@@ -1,0 +1,10 @@
+import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { openDb } from "@focal-ai/db";
+const db = openDb(process.env.DATABASE_URL!);
+const [u] = await db.sql`select id from users where email='live-e2e@focal.test'`;
+const { token } = await db.extensionSessions.issue(u.id);
+writeFileSync(join(dirname(fileURLToPath(import.meta.url)), ".live-session.json"), JSON.stringify({ token }));
+console.log("live token issued for live-e2e@focal.test");
+await db.sql.end();

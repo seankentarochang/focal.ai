@@ -49,8 +49,16 @@ export function createMemoryPageResultStore(ttlMs = PAGE_RESULT_TTL_MS, max = 50
 
 /** Postgres-backed store, so results survive restarts and are shared across instances. */
 export function createDbPageResultStore(db: Db): PageResultStore {
+  let lastPurge = 0;
   return {
-    save: (r) => db.pageResults.save(r, PAGE_RESULT_TTL_MS),
+    save: (r) => {
+      const now = Date.now();
+      if (now - lastPurge > 60 * 60 * 1000) {
+        lastPurge = now;
+        void db.pageResults.purgeExpired().catch(() => {});
+      }
+      return db.pageResults.save(r, PAGE_RESULT_TTL_MS);
+    },
     get: (id, userId) => db.pageResults.get(id, userId),
   };
 }

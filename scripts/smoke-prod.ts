@@ -70,110 +70,38 @@ async function postJson(path: string, payload: unknown): Promise<{ status: numbe
   });
 }
 
-/** Page fields shared by the rank and agent calls. */
-function pageFields() {
+/** Request body shared by the /try rank checks. */
+function tryRankBody() {
   return {
-    pageId: "smoke-prod",
     pageType: ENTITY_PLACE_TYPE,
-    locationQuery: "San Francisco",
-  };
-}
-
-function profile() {
-  const now = new Date().toISOString();
-  return {
-    version: 1 as const,
-    updatedAt: now,
+    items: [
+      { clientId: "c-0", name: "Rintaro", city: "San Francisco" },
+      { clientId: "c-1", name: "State Bird Provisions", city: "San Francisco" },
+      { clientId: "c-2", name: "Absolutely Not A Real Venue", city: "San Francisco" },
+    ],
     seeds: [
       {
         entityId: FUGAZI_ENTITY_ID,
         name: "Fugazi",
         subtype: "urn:entity:artist",
-        disambiguation: "Washington, D.C.",
         polarity: "like" as const,
-        weight: 1,
-        source: "searched" as const,
-        addedAt: now,
       },
     ],
-    rules: [],
   };
 }
 
-function candidates() {
-  return [
-    { clientId: "c-0", name: "Rintaro", locationText: "San Francisco", originalIndex: 0 },
-    { clientId: "c-1", name: "State Bird Provisions", locationText: "San Francisco", originalIndex: 1 },
-    { clientId: "c-2", name: "Absolutely Not A Real Venue", locationText: "San Francisco", originalIndex: 2 },
-  ];
-}
-
-async function checkHealth(): Promise<void> {
-  const name = "health";
-  try {
-    const { status, body } = await request("/api/health");
-    const root = asRecord(body);
-    if (status !== 200) {
-      fail(name, `GET /api/health — HTTP ${status}`);
-      return;
-    }
-    if (root?.ok !== true) {
-      fail(name, `GET /api/health — ok !== true`);
-      return;
-    }
-    const hasQlooKey = root.hasQlooKey === true;
-    const dataSource = typeof root.dataSource === "string" ? root.dataSource : "unknown";
-    mockMode = dataSource === "mock";
-    const detail = `HTTP 200, ok=true, hasQlooKey=${hasQlooKey}, dataSource=${dataSource}`;
-    if (!hasQlooKey && dataSource === "mock") {
-      warn(name, `${detail} — mock mode (no Qloo key set, serving fixture data)`);
-      return;
-    }
-    pass(name, detail);
-  } catch (error) {
-    fail(name, errorMessage(error));
-  }
-}
-
-async function checkSearch(): Promise<void> {
-  const name = "search";
-  try {
-    const { status, body } = await postJson("/api/qloo/search", { query: "Rintaro" });
-    if (status !== 200) {
-      fail(name, `POST /api/qloo/search — HTTP ${status}`);
-      return;
-    }
-    const entities = asRecord(body)?.entities;
-    if (!Array.isArray(entities)) {
-      fail(name, "POST /api/qloo/search — entities is not an array");
-      return;
-    }
-    if (mockMode && entities.length === 0) {
-      fail(name, "mock mode but Rintaro returned 0 entities");
-      return;
-    }
-    pass(name, `HTTP 200, entities=${entities.length}${mockMode ? " (mock mode)" : ""}`);
-  } catch (error) {
-    fail(name, errorMessage(error));
-  }
-}
-
 async function checkRank(): Promise<void> {
-  const name = "rank";
+  const name = "try rank";
   try {
-    const { status, body } = await postJson("/api/qloo/rank", {
-      ...pageFields(),
-      candidates: candidates(),
-      profile: profile(),
-    });
+    const { status, body } = await postJson("/api/try/rank", tryRankBody());
     if (status !== 200) {
-      fail(name, `POST /api/qloo/rank — HTTP ${status}`);
+      fail(name, `POST /api/try/rank — HTTP ${status}`);
       return;
     }
     const root = asRecord(body);
-    const ranked = root?.ranked;
-    if (!Array.isArray(ranked) || ranked.length !== 3) {
-      fail(name, `ranked.length=${Array.isArray(ranked) ? ranked.length : "not an array"} (expected 3)`);
+    const items = root?.items;
+    if (!Array.isArray(items) || items.length !== 3) {
+      fail(name, `items.length=${Array.isArray(items) ? items.length : "not an array"} (expected 3)`);
       return;
     }
     const meta = asRecord(root?.meta);
@@ -182,48 +110,18 @@ async function checkRank(): Promise<void> {
       fail(name, `meta.qlooRequest.path=${JSON.stringify(qlooRequest?.path)} (expected /v2/insights)`);
       return;
     }
-    if (mockMode) {
-      const entries = ranked.map(asRecord);
-      const rintaro = entries.find((entry) => entry?.clientId === "c-0");
-      if (rintaro?.affinityPct !== 93) {
-        fail(name, `mock mode: Rintaro affinityPct=${JSON.stringify(rintaro?.affinityPct)} (expected 93)`);
-        return;
-      }
-      if (meta?.unresolved !== 1) {
-        fail(name, `mock mode: meta.unresolved=${JSON.stringify(meta?.unresolved)} (expected 1)`);
-        return;
-      }
+    if (mockMode && meta?.unresolved !== 1) {
+      fail(name, `mock mode: meta.unresolved=${JSON.stringify(meta?.unresolved)} (expected 1)`);
+      return;
     }
     const liveNote = mockMode ? " (mock mode)" : " (structure only, live mode)";
-    pass(name, `HTTP 200, ranked=3, qlooRequest.path=/v2/insights${liveNote}`);
+    pass(name, `HTTP 200, items=3, qlooRequest.path=/v2/insights${liveNote}`);
   } catch (error) {
     fail(name, errorMessage(error));
   }
 }
 
-async function checkAgent(message: string, expectedKind: "policy" | "discovery"): Promise<void> {
-  const name = expectedKind === "policy" ? "agent policy" : "agent discovery";
-  try {
-    const { status, body } = await postJson("/api/agent", {
-      message,
-      ...pageFields(),
-      candidates: candidates(),
-      profile: profile(),
-    });
-    if (status !== 200) {
-      fail(name, `POST /api/agent ("${message}") — HTTP ${status}`);
-      return;
-    }
-    const result = asRecord(asRecord(body)?.result);
-    if (result?.kind !== expectedKind) {
-      fail(name, `result.kind=${JSON.stringify(result?.kind)} (expected "${expectedKind}")`);
-      return;
-    }
-    pass(name, `HTTP 200, result.kind=${expectedKind}`);
-  } catch (error) {
-    fail(name, errorMessage(error));
-  }
-}
+
 
 /** MCP OAuth discovery: protected-resource metadata, the 401 challenge, and the authorization server. */
 async function checkMcp(): Promise<void> {
@@ -329,8 +227,6 @@ console.log(`Production smoke test against ${BASE_URL}`);
 await checkHealth();
 await checkSearch();
 await checkRank();
-await checkAgent("hide sponsored", "policy");
-await checkAgent("find me something similar", "discovery");
 await checkMcp();
 await checkSecretHygiene();
 

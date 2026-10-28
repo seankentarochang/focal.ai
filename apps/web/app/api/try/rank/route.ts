@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PagePipelineError, type InsightType, type ProfileV2 } from "@focal-ai/core";
 import { errorResponse } from "@/lib/server/errors";
+import { dataSource } from "@/lib/server/qloo";
 import { rankPage } from "@/lib/server/page/rank";
 import { checkRateLimit, clientKey } from "@/lib/server/rateLimit";
 
@@ -16,6 +17,7 @@ const bodySchema = z.object({
       z.object({
         name: z.string().trim().min(1).max(80),
         city: z.string().trim().min(1).max(80).optional(),
+        clientId: z.string().trim().min(1).max(64).optional(),
       }),
     )
     .min(1)
@@ -81,7 +83,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const insightType = `urn:entity:${pageType}` as InsightType;
   const items = parsed.data.items.map((item, i) => ({
-    clientId: `c${i}`,
+    clientId: item.clientId ?? `c${i}`,
     name: item.name,
     type: pageType as (typeof SHORT_TYPES)[number],
     ...(item.city ? { city: item.city } : {}),
@@ -92,13 +94,19 @@ export async function POST(req: Request): Promise<Response> {
       { host: "playground", pathPattern: "/try", pageType: pageType as never, items },
       toProfile(parsed.data.seeds, insightType),
       `try-${crypto.randomUUID()}`,
+      { useResolutionCache: false },
     );
     return Response.json({
       status: result.status,
       items: result.items,
       plan: result.plan,
       mock: process.env.QLOO_MOCK === "1",
-      meta: { durationMs: Date.now() - startedAt },
+      meta: {
+        durationMs: Date.now() - startedAt,
+        unresolved: result.meta.unresolved,
+        ...(result.meta.qlooRequest ? { qlooRequest: result.meta.qlooRequest } : {}),
+        dataSource: dataSource(),
+      },
     });
   } catch (e) {
     if (e instanceof PagePipelineError) {

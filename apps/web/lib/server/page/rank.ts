@@ -7,7 +7,7 @@ import {
 } from "@focal-ai/core";
 import type { QlooEntityType } from "@focal-ai/qloo";
 import { toCandidateScores, toCoreSearchFn } from "../adapters";
-import { buildInsightsParams } from "../pipeline";
+import { buildInsightsParams } from "./insights";
 import { getQlooClient } from "../qloo";
 import { cachedResolutionResolver, getResolutionStore } from "../resolution/cache";
 import { toInsightType, type PageRankBody } from "./schemas";
@@ -39,12 +39,17 @@ function pagePosition(clientId: string): number | undefined {
 
 function mostCommonCity(body: PageRankBody): string | undefined {
   const counts = new Map<string, number>();
-  for (const item of body.items) if (item.city) counts.set(item.city, (counts.get(item.city) ?? 0) + 1);
+  for (const item of body.items) if (item.type === body.pageType && item.city) counts.set(item.city, (counts.get(item.city) ?? 0) + 1);
   return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
 }
 
 /** Server side of the extension's rank request: one insights call, lift-only plan. */
-export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: string): Promise<PageRankResult> {
+export async function rankPage(
+  body: PageRankBody,
+  profile: ProfileV2,
+  pageId: string,
+  opts?: { useResolutionCache?: boolean },
+): Promise<PageRankResult> {
   const pageType = toInsightType(body.pageType);
   const items: PageItem[] = body.items.map((item, i) => {
     const located = item.type === "place" || item.type === "destination";
@@ -57,7 +62,7 @@ export async function rankPage(body: PageRankBody, profile: ProfileV2, pageId: s
     };
   });
   const locationQuery = body.pageType === "place" || body.pageType === "destination" ? mostCommonCity(body) : undefined;
-  const store = getResolutionStore();
+  const store = opts?.useResolutionCache === false ? null : getResolutionStore();
   return runCorePageRank({
     pageId,
     pageType,

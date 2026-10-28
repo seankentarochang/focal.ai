@@ -22,9 +22,9 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
             <li>
               On a <strong>new site layout</strong>, the extension sends each list card's short text snippets (at most 6
-              per card, 80 characters each, and at most 60 cards), each card's outgoing links (at most 4), up to 5 city
-              hints, and a structure-only page signature to the focal server — and to TypeSafe (Jev) for list
-              identification. Never full pages, form fields, or screenshots.
+              per card, 80 characters each, and at most 60 cards) plus the site's hostname, path pattern and up to 5
+              city hints to TypeSafe (Jev) for list identification. The card links (at most 4 per card) and the
+              structure-only page signature go only to the focal server. Never full pages, form fields, or screenshots.
             </li>
             <li>
               On a <strong>known layout</strong>, only item names, the entity type, and the city go to the focal server.
@@ -44,8 +44,8 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
             <li>Your account, taste profile, activity feed, and site settings.</li>
             <li>Page results for 24 hours — they power feedback and the "Why this order?" inspector, then expire.</li>
-            <li>Learned layouts: structure only (selectors and positions), never page text.</li>
-            <li>A shared entity-resolution cache keyed by normalized name, type, and city — not tied to your browsing.</li>
+            <li>Learned layouts live only in your browser's extension storage — the server never stores them.</li>
+            <li>A shared entity-resolution cache keyed by normalized item name, type, and city; resolved entries do not expire. It is not tied to your browsing.</li>
           </ul>
           <p className="text-muted-foreground">No browsing history. No passive tracking of sites you visit.</p>
         </Section>

@@ -53,24 +53,25 @@ export interface RankResponse {
   pageResultId: string | null;
   status: "ranked" | "no_signals" | "nothing_scored";
   plan: RenderPlan | null;
+  resolvedCount?: number;
 }
 
-/** More like this / Not for me taps (X-08); undo posts the action body. */
-export type FeedbackRequest =
-  | { pageResultId: string; clientId: string; verdict: "more" | "less" }
-  | { action: "undo"; eventId: string };
+/** More like this / Not for me taps (X-08). */
+export type FeedbackRequest = { pageResultId: string; clientId: string; verdict: "more" | "less" };
 
 export interface FeedbackResponse {
   saved: boolean;
-  entryId: string;
-  eventId: string;
+  entryId?: string;
+  eventId: string | null;
 }
 
 export type ContentMessage =
   | { type: "identify"; body: IdentifyRequest }
   | { type: "rank"; body: RankRequest }
   | { type: "feedback"; body: FeedbackRequest }
+  | { type: "undo-event"; eventId: string }
   | { type: "page-result"; pageResultId: string; lifted: number }
+  | { type: "settings-open" }
   | { type: "open-why"; pageResultId: string }
   | { type: "set-site"; hostname: string; on: boolean };
 
@@ -80,7 +81,6 @@ export type BackgroundReply<T> = { ok: true; data: T } | { ok: false; error: str
 export type ExternalMessage =
   | { type: "focal:session"; token: string; email?: string }
   | { type: "focal:signout" }
-  | { type: "focal:settings"; settings: unknown }
   | { type: "focal:ping" };
 
 /**

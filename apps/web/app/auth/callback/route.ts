@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     returnPathname: "/post-sign-in",
     onSuccess: async ({ user }) => {
       const db = getDb();
-      if (db && user.email) await ensureUser(db, { id: user.id, email: user.email });
+      if (db && user.email) await ensureUser(db, { id: user.id, email: user.email, emailVerified: user.emailVerified === true });
     },
   })(request);
 }

@@ -45,5 +45,6 @@ export function tryNowLinks(entries: ProfileEntry[]): TryLink[] {
     seen.add(entry.type);
     links.push(LINK_BUILDERS[entry.type]!(entry.type === "urn:entity:place" || entry.type === "urn:entity:destination" ? city : null));
   }
+  if (links.length === 0) links.push({ label: "Top movies on IMDb", url: "https://www.imdb.com/chart/top/" });
   return links;
 }

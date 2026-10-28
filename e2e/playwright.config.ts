@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
 const here = dirname(fileURLToPath(import.meta.url));
+// FOCAL_E2E_LIVE=1 runs the suite against live Qloo + live Jev (L5): no mock,
+// real resolutions — spec assertions degrade to structural ones in that mode.
+const LIVE = !!process.env.FOCAL_E2E_LIVE;
 
 export default defineConfig({
   testDir: "specs",
@@ -20,10 +23,13 @@ export default defineConfig({
       timeout: 120_000,
       reuseExistingServer: false,
       env: {
-        QLOO_MOCK: "1",
+        ...(LIVE ? {} : { QLOO_MOCK: "1" }),
         // No FOCAL_DEV_SESSION here: global-setup issues a real bearer token,
         // and the dev user can't satisfy the feedback route's DB writes.
-        ...(process.env.DATABASE_URL ? { DATABASE_URL: process.env.DATABASE_URL } : { FOCAL_DEV_SESSION: "1" }),
+        // The mock identifier is dev-gated; bearer tokens still resolve to the
+        // seeded user, so the dev fallback never fires in these tests.
+        FOCAL_DEV_SESSION: "1",
+        ...(process.env.DATABASE_URL ? { DATABASE_URL: process.env.DATABASE_URL } : {}),
       },
     },
     {

@@ -1,16 +1,23 @@
 import { z } from "zod";
-import { approveRule, changeStrength, removeEntry, undoEvent, ProfileError, type ActivityEvent } from "@focal-ai/core";
+import { approveRule, changeStrength, removeEntry, ProfileError } from "@focal-ai/core";
 import { DbError } from "@focal-ai/db";
 import { currentViewer } from "@/lib/server/auth/viewer";
 import { dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";
+import { checkRateLimit } from "@/lib/server/rateLimit";
 
 const ACTIVITY_LIMIT = 50;
 
+function limited(retryAfterMs: number): Response {
+  return Response.json(
+    { error: { code: "RATE_LIMIT", message: "Too many profile writes" } },
+    { status: 429, headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) } },
+  );
+}
+
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approve_rule"), entry_id: z.string().min(1) }),
-  z.object({ action: z.literal("undo"), event_id: z.string().min(1) }),
   z.object({ action: z.literal("set_strength"), entry_id: z.string().min(1), strength: z.enum(["love", "like", "dislike"]) }),
   z.object({ action: z.literal("remove"), entry_id: z.string().min(1) }),
 ]);
@@ -21,13 +28,12 @@ function notFound(message: string): Response {
   return Response.json({ error: { code: "NOT_FOUND", message } }, { status: 404 });
 }
 
-/** Entries and the recent activity feed for the signed-in user. */
+/** Entries for the signed-in user; the activity feed lives at /api/activity. */
 async function state(userId: string, persisted: boolean): Promise<Response> {
   const db = getDb();
   const store = persisted && db ? dbProfileStore(db, userId) : memoryProfileStore(userId);
   const { entries } = await store.load();
-  const activity = persisted && db ? await db.profile.activity(userId, { limit: ACTIVITY_LIMIT }) : [];
-  return Response.json({ entries, activity });
+  return Response.json({ entries });
 }
 
 export async function GET(): Promise<Response> {
@@ -39,6 +45,8 @@ export async function GET(): Promise<Response> {
 export async function POST(req: Request): Promise<Response> {
   const viewer = await currentViewer();
   if (!viewer) return Response.json({ error: { code: "UNAUTHORIZED", message: "sign in to focal" } }, { status: 401 });
+  const limit = checkRateLimit(`profile:${viewer.userId}`, { limit: 30, windowMs: 60000 });
+  if (!limit.ok) return limited(limit.retryAfterMs);
   const db = getDb();
   const store = viewer.persisted && db ? dbProfileStore(db, viewer.userId) : memoryProfileStore(viewer.userId);
   let payload: unknown;
@@ -74,13 +82,6 @@ export async function POST(req: Request): Promise<Response> {
       if (!target) return notFound("No entry with that id");
       const write = removeEntry(profile, target.id, "manual");
       await store.commit(write.profile, write.event);
-    } else {
-      if (!(viewer.persisted && db)) return notFound("No change with that id");
-      const record = await db.profile.event(viewer.userId, parsed.data.event_id);
-      if (!record || record.undoneBy || record.action === "undo") return notFound("No undoable change with that id");
-      const profile = await store.load();
-      const write = undoEvent(profile, record as ActivityEvent, "manual");
-      await store.commit(write.profile, write.event);
     }
   } catch (e) {
     if (e instanceof DbError && e.code === "CONFLICT") {
@@ -99,6 +100,8 @@ export async function POST(req: Request): Promise<Response> {
 export async function DELETE(req: Request): Promise<Response> {
   const viewer = await currentViewer();
   if (!viewer) return Response.json({ error: { code: "UNAUTHORIZED", message: "sign in to focal" } }, { status: 401 });
+  const limit = checkRateLimit(`profile-delete:${viewer.userId}`, { limit: 3, windowMs: 60000 });
+  if (!limit.ok) return limited(limit.retryAfterMs);
   let payload: unknown;
   try {
     payload = await req.json();

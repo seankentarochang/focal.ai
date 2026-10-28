@@ -12,7 +12,7 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
 
   describe("migrations", () => {
     it("apply from empty and are idempotent", async () => {
-      expect(loadMigrations().map((m) => m.name)).toEqual(["0001_init.sql", "0002_extension_sessions.sql"]);
+      expect(loadMigrations().map((m) => m.name)).toEqual(["0001_init.sql", "0002_extension_sessions.sql", "0003_activity_seq.sql"]);
       expect(await migrate(db.sql)).toEqual([]);
       const tables = await db.sql`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() ORDER BY 1`;
       expect(tables.map((t) => t.table_name)).toEqual([
@@ -143,20 +143,6 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
       ]);
       await db.sites.remove(u.id, "yelp.com");
       expect(await db.sites.list(u.id)).toHaveLength(1);
-    });
-  });
-
-  describe("layouts", () => {
-    it("saves, finds and only replaces with equal or higher confidence", async () => {
-      const base = { hostname: "yelp.com", pathPattern: "/search", fingerprint: "DIV.card", namePosition: { snippet: 0 }, type: "urn:entity:place", citySource: { param: "find_loc" } };
-      const saved = await db.layouts.save({ ...base, confidence: 0.9 });
-      expect(saved.confidence).toBeCloseTo(0.9);
-      const kept = await db.layouts.save({ ...base, namePosition: { snippet: 1 }, confidence: 0.8 });
-      expect(kept.namePosition).toEqual({ snippet: 0 });
-      const replaced = await db.layouts.save({ ...base, namePosition: { snippet: 2 }, confidence: 0.95 });
-      expect(replaced.namePosition).toEqual({ snippet: 2 });
-      expect((await db.layouts.find("yelp.com", "/search", "DIV.card"))?.id).toBe(saved.id);
-      expect(await db.layouts.forHost("yelp.com")).toHaveLength(1);
     });
   });
 

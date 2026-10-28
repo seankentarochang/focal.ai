@@ -16,7 +16,8 @@ async function ActivityGate({ searchParams }: { searchParams: Promise<{ before?:
   const { withAuth } = await import("@workos-inc/authkit-nextjs");
   const { user } = await withAuth();
   if (!user) redirect("/sign-in?returnTo=%2Factivity");
-  const { before } = await searchParams;
+  const rawBefore = (await searchParams).before;
+  const before = rawBefore !== undefined && /^\d+$/.test(rawBefore) ? Number(rawBefore) : undefined;
   const viewer = await currentViewer();
   const db = getDb();
   const activity =

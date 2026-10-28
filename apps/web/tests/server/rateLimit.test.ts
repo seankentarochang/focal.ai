@@ -62,18 +62,29 @@ describe("checkRateLimit", () => {
 });
 
 describe("clientKey", () => {
-  it("reads the first x-forwarded-for entry", () => {
+  it("reads the first x-forwarded-for entry on Vercel", () => {
+    vi.stubEnv("VERCEL", "1");
     const req = new Request("http://localhost/api/qloo/search", {
       headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
     });
     expect(clientKey(req)).toBe("203.0.113.7");
+    vi.unstubAllEnvs();
   });
 
-  it("trims a single x-forwarded-for entry", () => {
+  it("trims a single x-forwarded-for entry on Vercel", () => {
+    vi.stubEnv("VERCEL", "1");
     const req = new Request("http://localhost/api/qloo/search", {
       headers: { "x-forwarded-for": "  198.51.100.9 " },
     });
     expect(clientKey(req)).toBe("198.51.100.9");
+    vi.unstubAllEnvs();
+  });
+
+  it("ignores x-forwarded-for off Vercel (attacker-controlled)", () => {
+    const req = new Request("http://localhost/api/qloo/search", {
+      headers: { "x-forwarded-for": "203.0.113.7" },
+    });
+    expect(clientKey(req)).toBe("local");
   });
 
   it("falls back to local when the header is missing or empty", () => {

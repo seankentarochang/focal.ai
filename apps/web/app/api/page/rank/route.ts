@@ -31,16 +31,28 @@ export async function POST(req: Request): Promise<Response> {
   const pageResultId = crypto.randomUUID();
   try {
     const result = await rankPage(parsed.data, session.profile, pageResultId);
-    await getPageResultStore().save({
-      id: pageResultId,
-      userId: session.userId,
-      hostname: parsed.data.host,
+    let savedId: string | null = pageResultId;
+    try {
+      await getPageResultStore().save({
+        id: pageResultId,
+        userId: session.userId,
+        hostname: parsed.data.host,
+        status: result.status,
+        items: result.items,
+        plan: result.plan,
+        meta: { ...result.meta, signals: result.signals, stats: result.stats, durationMs: Date.now() - startedAt },
+      });
+    } catch {
+      // Persistence is best-effort: feedback needs a stored result, but a save
+      // failure must not cost the page its plan.
+      savedId = null;
+    }
+    return Response.json({
+      pageResultId: savedId,
       status: result.status,
-      items: result.items,
       plan: result.plan,
-      meta: { ...result.meta, signals: result.signals, stats: result.stats, durationMs: Date.now() - startedAt },
+      resolvedCount: result.meta.resolved,
     });
-    return Response.json({ pageResultId, status: result.status, plan: result.plan });
   } catch (e) {
     if (e instanceof PagePipelineError) {
       return Response.json({ error: { code: e.code, message: "could not build a valid plan" } }, { status: 500 });

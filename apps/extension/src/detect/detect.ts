@@ -47,7 +47,7 @@ function stableClasses(el: Element): string {
 
 /** Shape of an element: its own tag + classes plus its children's tags. */
 function shape(el: Element): string {
-  const kids = [...el.children].map((c) => c.tagName).join(",");
+  const kids = [...el.children].filter((c) => !c.hasAttribute("data-focal")).map((c) => c.tagName).join(",");
   return `${el.tagName}.${stableClasses(el)}[${kids}]`;
 }
 
@@ -88,6 +88,7 @@ export function extractSnippets(card: Element): string[] {
       out.push(truncate(text));
     }
     for (const child of el.children) {
+      if (child.hasAttribute("data-focal")) continue;
       if (/^(B|I|EM|STRONG|SMALL|MARK|SUP|SUB)$/.test(child.tagName)) continue;
       visit(child);
     }
@@ -175,6 +176,7 @@ export function detectList(root: Document | Element): DetectedList | null {
     if (el.children.length >= MIN_CARDS) {
       const groups = new Map<string, Element[]>();
       for (const child of el.children) {
+        if (child.hasAttribute("data-focal")) continue;
         if (SKIP_TAGS.has(child.tagName) || isHidden(child)) continue;
         const key = groupKey(child);
         const list = groups.get(key);
@@ -187,7 +189,10 @@ export function detectList(root: Document | Element): DetectedList | null {
         if (score > 0 && (!best || score > best.score)) best = { container: el, cards, key, score };
       }
     }
-    for (const child of el.children) walk(child);
+    for (const child of el.children) {
+      if (child.hasAttribute("data-focal")) continue;
+      walk(child);
+    }
   };
   walk(body);
   const found = best as Candidate | null;

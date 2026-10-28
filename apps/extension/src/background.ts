@@ -1,6 +1,6 @@
 import type { BackgroundReply, ContentMessage, ExternalMessage } from "./api";
 import { FOCAL_ORIGIN } from "./config";
-import { parseSettings, type Settings } from "./settings";
+import type { Settings } from "./settings";
 import { getSession, getSettings, setSession, setSettings, setTabResult } from "./storage";
 
 /** All server calls go from here; content scripts never call the API. */
@@ -55,29 +55,34 @@ async function authed(path: string, init?: RequestInit): Promise<Response | null
   }
 }
 
+/** Writes started locally win over a refresh already in flight. */
+let lastLocalWrite = 0;
+
 /** Pull /api/settings into the local cache; safe offline (cache stays). */
 export async function refreshSettingsFromServer(): Promise<void> {
+  const startedAt = Date.now();
   const res = await authed("/api/settings");
-  if (!res) return;
+  if (!res || startedAt < lastLocalWrite) return;
   const body = (await res.json().catch(() => null)) as { sites?: WireSite[] } | null;
+  if (startedAt < lastLocalWrite) return;
   if (Array.isArray(body?.sites)) await applyWireSites(body.sites);
 }
 
-/** Toolbar per-site toggle writes back: on = no row, off = an "off" row. */
-export async function setSiteOnServer(hostname: string, on: boolean): Promise<void> {
-  const res = await authed("/api/settings");
-  if (!res) return;
+/** Toolbar per-site toggle writes back a single-site row; mode null removes it. */
+export async function setSiteOnServer(hostname: string, on: boolean): Promise<boolean> {
+  lastLocalWrite = Date.now();
+  const res = await authed("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({ hostname, mode: on ? null : "off" }),
+  });
+  if (!res) return false;
   const body = (await res.json().catch(() => null)) as { sites?: WireSite[] } | null;
-  const list = (Array.isArray(body?.sites) ? body.sites : []).filter((s) => s.hostname !== hostname);
-  const sites = on ? list : [...list, { hostname, mode: "off" as const }];
-  const put = await authed("/api/settings", { method: "PUT", body: JSON.stringify({ sites }) });
-  if (!put) return;
-  const next = (await put.json().catch(() => null)) as { sites?: WireSite[] } | null;
-  if (Array.isArray(next?.sites)) await applyWireSites(next.sites);
+  if (Array.isArray(body?.sites)) await applyWireSites(body.sites);
+  return true;
 }
 
 void refreshSettingsFromServer();
-setInterval(() => void refreshSettingsFromServer(), 30 * 60 * 1000);
+chrome.runtime.onStartup?.addListener(() => void refreshSettingsFromServer());
 
 chrome.runtime.onMessage.addListener((msg: ContentMessage, sender, sendResponse) => {
   const tabId = sender.tab?.id;
@@ -91,8 +96,14 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, sender, sendResponse)
     case "feedback":
       void post("/api/feedback", msg.body).then(sendResponse);
       return true;
+    case "undo-event":
+      void post(`/api/activity/${encodeURIComponent(msg.eventId)}/undo`, {}).then(sendResponse);
+      return true;
     case "set-site":
-      void setSiteOnServer(msg.hostname, msg.on);
+      void setSiteOnServer(msg.hostname, msg.on).then((saved) => sendResponse({ ok: saved, data: undefined as never }));
+      return true;
+    case "settings-open":
+      void refreshSettingsFromServer();
       return false;
     case "page-result":
       if (tabId !== undefined) void setTabResult(tabId, { pageResultId: msg.pageResultId, lifted: msg.lifted });
@@ -120,9 +131,6 @@ chrome.runtime.onMessageExternal.addListener((msg: ExternalMessage, sender, send
       return true;
     case "focal:signout":
       void setSession(null).then(() => sendResponse({ ok: true }));
-      return true;
-    case "focal:settings":
-      void setSettings(parseSettings(msg.settings)).then(() => sendResponse({ ok: true }));
       return true;
     case "focal:ping":
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });

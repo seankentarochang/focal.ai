@@ -48,13 +48,13 @@ Same site, same data, your ordering. focal lifts what you will care about to the
                 │ identify (new layouts only)   │ plan          │ rank
                 ▼                               │               ▼
 ┌──────────────────────── focal server (Next.js) ─────────────────┐
-│ /api/page/identify ──► Jev (TypeSafe)   layout store (shared)    │
+│ /api/page/identify ──► Jev (TypeSafe)   layout returned, stored  │
 │ /api/page/rank ──► resolve (shared cache) ──► Qloo insights      │
 │                    signal selection · lift rule · plan           │
 │ /api/profile · /api/activity · /api/feedback · /api/settings     │
 │ /api/chat ──► open-weight LLM (free tiers, fallback chain)       │
 │ /mcp (HTTP, OAuth) ──► same profile tools                        │
-│ Postgres: users, profile entries, activity, settings, layouts,   │
+│ locally. Postgres: users, profile entries, activity, settings,   │
 │           resolution cache, short-lived page results            │
 └──────────────────────────────────────────────────────────────────┘
         ▲ website pages (same Next.js app): onboarding, chat, profile,
@@ -74,14 +74,17 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/page/identify` | Card snippets for a new layout → Jev → name/type/city per card + a layout description to save |
+| `POST /api/page/identify` | Card snippets for a new layout → Jev → name/type/city per card + a layout description the extension stores locally (D-18) |
 | `POST /api/page/rank` | Identified items for a page → resolve → one Qloo insights call → lift decision → render plan + labels; stores the result for "Why this order?" (24 h) |
 | `GET/POST /api/profile` | Read and write things, vibes and rules (§4.5); every write produces an activity event |
+
 | `GET /api/activity`, `POST /api/activity/:id/undo` | Activity feed and undo |
 | `POST /api/feedback` | More like this / Not for me from a page |
-| `GET/PUT /api/settings` | Sites to skip, preferences |
+| `GET/PUT/POST /api/settings` | Sites to skip, preferences; POST writes one site (extension toolbar) |
 | `POST /api/chat` | Website chat agent (§5.9) |
 | `/mcp` | Hosted MCP endpoint with OAuth (§5.10) |
+
+Manual adds (things a user names outside onboarding, chat or a page) go through the website chat or an MCP assistant — there is no ad-hoc add form.
 
 Server-wide concerns: one Qloo request queue paced under 5 req/s; a shared resolution cache keyed by (normalized name, type, city) → entity, kept indefinitely (Qloo's hackathon guide allows private server-side caching with no time limit); per-user limits on Jev calls, rank calls and chat messages.
 
@@ -101,7 +104,7 @@ Moves from local stdio to a hosted HTTP endpoint with OAuth so ChatGPT and claud
 | ProfileEntry | id, user, kind (`thing` / `vibe` / `rule`), qloo id (entity or tag URN), name, type, strength (`love` / `like` / `dislike`; rules are `never`), source (`chat` / `mcp:<client>` / `page` / `manual`), created | Rules start `pending` when proposed by an agent and become active on approval |
 | ActivityEvent | id, user, actor, action (add / remove / change / approve / undo), entry snapshot, at, undone | Feeds the activity page and undo |
 | SiteSetting | user, hostname, mode (`skip` / `off` / `on`) | Built-in never-run list is code, not data |
-| Layout | hostname, path pattern, card fingerprint, name position, type, city source, confidence, learned at | Shared across users: holds structure only, never page content |
+| Layout | card fingerprint, name position, type, city source | Derived by identify and stored only in the extension (D-18); structure only, never page content |
 | ResolutionCache | normalized name, type, city → entity id + match status | Shared across users |
 | PageResult | id, user, hostname, items with status/affinity/reasons, plan, created | Deleted after 24 h; backs `/why/<id>` |
 
@@ -129,7 +132,7 @@ Automatic detection on any site, no per-site adapters: find the dominant group o
   
   plus one page-level yes/no: "is this a list of real-world things?"
 - **Confidence rule:** a card whose answers fall below the confidence threshold is left untouched. Initial threshold 0.8, tuned with the validation script (§8).
-- **Layout learning:** once Jev has picked names on a page, the server derives where names sit in that card structure, the page's type and where the city comes from, and saves a Layout. Later visits to a matching layout are identified locally with no Jev call and only names, type and city are sent to the rank endpoint.
+- **Layout learning:** once Jev has picked names on a page, the server derives where names sit in that card structure, the page's type and where the city comes from, and returns a Layout in the response — the extension stores it locally (14-day TTL, discarded when a rank resolves nothing; the server never persists layouts, D-18). Later visits to a matching layout are identified locally with no Jev call and only names, type and city are sent to the rank endpoint.
 - **Confirmation by outside IDs:** where a card links to a site Qloo records an ID for (Resy, Michelin, Tripadvisor, Google Place), a matching ID on the Qloo entity confirms the match.
 
 ### 5.4 Matching and scoring
@@ -182,7 +185,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 ## 6. Privacy and security
 
 - **What leaves the browser:** on a new site layout, the text snippets of list cards (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server. Item names go to Qloo.
-- **Stored on the server:** account, profile, activity, settings, shared layouts (structure only), the shared resolution cache, and page results for 24 h. No browsing history.
+- **Stored on the server:** account, profile, activity, settings, the shared resolution cache, and page results for 24 h. Learned layouts stay in the extension (structure only, D-18). No browsing history.
 - **Chat text** is processed by the free LLM providers, some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.
 - **Agents cannot act quietly:** every write is attributed and undoable; hard rules need approval; MCP cannot change settings.

@@ -64,6 +64,7 @@ const eventFrom = <E extends StoredEntry>(r: Row): ActivityRecord<E> => ({
   ...(r.undoes ? { undoes: r.undoes as string } : {}),
   at: toIso(r.at as Date)!,
   undoneBy: (r.undone_by as string | null) ?? null,
+  seq: Number(r.seq),
 });
 
 export function profileRepo(sql: Sql) {
@@ -123,12 +124,12 @@ export function profileRepo(sql: Sql) {
 
     async activity<E extends StoredEntry = StoredEntry>(
       userId: string,
-      opts: { limit?: number; before?: string } = {},
+      opts: { limit?: number; before?: number } = {},
     ): Promise<ActivityRecord<E>[]> {
       const limit = Math.min(Math.max(opts.limit ?? 50, 1), 500);
-      const rows = opts.before
-        ? await sql`SELECT * FROM activity_events WHERE user_id = ${userId} AND at < ${opts.before} ORDER BY at DESC, id DESC LIMIT ${limit}`
-        : await sql`SELECT * FROM activity_events WHERE user_id = ${userId} ORDER BY at DESC, id DESC LIMIT ${limit}`;
+      const rows = opts.before !== undefined
+        ? await sql`SELECT * FROM activity_events WHERE user_id = ${userId} AND seq < ${opts.before} ORDER BY seq DESC LIMIT ${limit}`
+        : await sql`SELECT * FROM activity_events WHERE user_id = ${userId} ORDER BY seq DESC LIMIT ${limit}`;
       return rows.map((r) => eventFrom<E>(r));
     },
 
@@ -137,17 +138,29 @@ export function profileRepo(sql: Sql) {
       return row ? eventFrom<E>(row) : null;
     },
 
+    /** A later, not-undone write touched the same entry — undoing would resurrect a stale version. */
+    async hasLaterChange(userId: string, entryId: string, seq: number): Promise<boolean> {
+      const rows = await sql`
+        SELECT 1 FROM activity_events
+        WHERE user_id = ${userId} AND entry_id = ${entryId} AND seq > ${seq}
+          AND undone_by IS NULL AND action <> 'undo'
+        LIMIT 1`;
+      return rows.length > 0;
+    },
+
     /** Full export: account, profile entries, settings and activity. */
     async export(userId: string) {
       const [user] = await sql`SELECT * FROM users WHERE id = ${userId}`;
       if (!user) throw new DbError("NOT_FOUND", `user ${userId} not found`);
       const entries = await sql`SELECT data FROM profile_entries WHERE user_id = ${userId} ORDER BY created_at, id`;
-      const events = await sql`SELECT * FROM activity_events WHERE user_id = ${userId} ORDER BY at, id`;
+      const events = await sql`SELECT * FROM activity_events WHERE user_id = ${userId} ORDER BY seq`;
+      const pageResults = await sql`SELECT * FROM page_results WHERE user_id = ${userId}`;
       const sites = await sql`SELECT hostname, mode FROM site_settings WHERE user_id = ${userId} ORDER BY hostname`;
       return {
         user: userFrom(user),
         profile: { version: 2 as const, entries: entries.map((r) => r.data as StoredEntry) },
         activity: events.map((r) => eventFrom(r)),
+        pageResults,
         sites: sites.map((r) => ({ hostname: r.hostname as string, mode: r.mode as SiteMode })),
       };
     },
@@ -168,47 +181,25 @@ export function sitesRepo(sql: Sql) {
     async remove(userId: string, hostname: string): Promise<void> {
       await sql`DELETE FROM site_settings WHERE user_id = ${userId} AND hostname = ${hostname.toLowerCase()}`;
     },
-  };
-}
-
-const layoutFrom = (r: Row): Layout => ({
-  id: r.id as string,
-  hostname: r.hostname as string,
-  pathPattern: r.path_pattern as string,
-  fingerprint: r.fingerprint as string,
-  namePosition: r.name_position,
-  type: r.type as string,
-  citySource: r.city_source ?? null,
-  confidence: r.confidence as number,
-  learnedAt: toIso(r.learned_at as Date)!,
-});
-
-export function layoutsRepo(sql: Sql) {
-  return {
-    async find(hostname: string, pathPattern: string, fingerprint: string): Promise<Layout | null> {
-      const [row] = await sql`
-        SELECT * FROM layouts WHERE hostname = ${hostname} AND path_pattern = ${pathPattern} AND fingerprint = ${fingerprint}`;
-      return row ? layoutFrom(row) : null;
-    },
-    async forHost(hostname: string): Promise<Layout[]> {
-      const rows = await sql`SELECT * FROM layouts WHERE hostname = ${hostname} ORDER BY learned_at DESC`;
-      return rows.map(layoutFrom);
-    },
-    /** Saves a learned layout; a re-learn replaces it only with equal or higher confidence. */
-    async save(l: Omit<Layout, "id" | "learnedAt">): Promise<Layout> {
-      const [row] = await sql`
-        INSERT INTO layouts (hostname, path_pattern, fingerprint, name_position, type, city_source, confidence)
-        VALUES (${l.hostname}, ${l.pathPattern}, ${l.fingerprint}, ${json(sql, l.namePosition)}, ${l.type},
-                ${l.citySource == null ? null : json(sql, l.citySource)}, ${l.confidence})
-        ON CONFLICT (hostname, path_pattern, fingerprint) DO UPDATE SET
-          name_position = EXCLUDED.name_position, type = EXCLUDED.type, city_source = EXCLUDED.city_source,
-          confidence = EXCLUDED.confidence, learned_at = now()
-        WHERE layouts.confidence <= EXCLUDED.confidence
-        RETURNING *`;
-      return row ? layoutFrom(row) : (await this.find(l.hostname, l.pathPattern, l.fingerprint))!;
+    /** Full replace in one transaction: drop what's not listed, upsert the rest. */
+    async replace(userId: string, sites: SiteSetting[]): Promise<void> {
+      await sql.begin(async (tx) => {
+        const keep = sites.map((s) => s.hostname.toLowerCase());
+        if (keep.length === 0) {
+          await tx`DELETE FROM site_settings WHERE user_id = ${userId}`;
+        } else {
+          await tx`DELETE FROM site_settings WHERE user_id = ${userId} AND NOT (hostname = ANY(${keep}))`;
+        }
+        for (const site of sites) {
+          await tx`
+            INSERT INTO site_settings (user_id, hostname, mode) VALUES (${userId}, ${site.hostname.toLowerCase()}, ${site.mode})
+            ON CONFLICT (user_id, hostname) DO UPDATE SET mode = EXCLUDED.mode, updated_at = now()`;
+        }
+      });
     },
   };
 }
+
 
 const resolutionFrom = (r: Row): Resolution => ({
   normalizedName: r.normalized_name as string,

@@ -18,7 +18,7 @@ export interface RenderGate {
  * time is applied before the list is shown. A late plan re-orders only if the
  * user has not scrolled or clicked in the list; otherwise a chip offers Apply.
  */
-export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
+export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOnly?: boolean } = {}): RenderGate {
   const doc = container.ownerDocument;
   const win = doc.defaultView;
   const prevVisibility = container.style.getPropertyValue("visibility");
@@ -75,7 +75,7 @@ export function createGate(container: HTMLElement, ms = GATE_MS): RenderGate {
         detach();
         return "before-reveal";
       }
-      if (!interacted) {
+      if (!interacted && !opts.offerOnly) {
         chip?.remove();
         apply();
         detach();

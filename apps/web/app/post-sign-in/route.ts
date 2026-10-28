@@ -13,7 +13,7 @@ export async function GET(): Promise<Response> {
   if (!user) redirect("/sign-in");
   const viewer = await currentViewer();
   const db = getDb();
-  if (viewer && db) {
+  if (viewer?.persisted && db) {
     const profile = await db.profile.load(viewer.userId);
     if (profile.entries.length === 0) redirect("/onboarding");
   }

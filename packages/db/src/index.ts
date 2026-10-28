@@ -1,6 +1,6 @@
 import { connect, type ConnectOptions, type Sql } from "./client";
 import { extensionSessionsRepo } from "./sessions";
-import { layoutsRepo, pageResultsRepo, profileRepo, resolutionsRepo, sitesRepo, usersRepo } from "./repos";
+import { pageResultsRepo, profileRepo, resolutionsRepo, sitesRepo, usersRepo } from "./repos";
 
 export * from "./types";
 export { connect, type Sql, type ConnectOptions } from "./client";
@@ -14,7 +14,6 @@ export function createDb(sql: Sql) {
     users: usersRepo(sql),
     profile: profileRepo(sql),
     sites: sitesRepo(sql),
-    layouts: layoutsRepo(sql),
     resolutions: resolutionsRepo(sql),
     pageResults: pageResultsRepo(sql),
     extensionSessions: extensionSessionsRepo(sql),

@@ -94,16 +94,6 @@ function FocalApp() {
     setError(null);
   }
 
-  function handleApplyAgent(result: {
-    ranked: RankedCandidate[];
-    plan: RenderPlan;
-    meta: RankMeta;
-  }) {
-    setResponse({ ranked: result.ranked, plan: result.plan, meta: result.meta });
-    setMode("focal");
-    setError(null);
-  }
-
   return (
     <div className="flex min-h-dvh flex-col">
       <TopBar
@@ -145,15 +135,7 @@ function FocalApp() {
         </div>
 
         {page !== null ? (
-          <RightRail
-            page={page}
-            response={response}
-            error={error}
-            busy={busy}
-            profile={profile}
-            onProfileChange={setProfile}
-            onApply={handleApplyAgent}
-          />
+          <RightRail page={page} response={response} error={error} busy={busy} />
         ) : (
           <aside className="flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-4 lg:sticky lg:top-[76px] lg:self-start">
             <h2 className="text-sm font-semibold text-ink">Inspector</h2>

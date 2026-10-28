@@ -28,6 +28,8 @@ export interface StoredEvent<E extends StoredEntry = StoredEntry> {
 
 export interface ActivityRecord<E extends StoredEntry = StoredEntry> extends StoredEvent<E> {
   undoneBy: string | null;
+  /** Total ordering key for pagination; identity column. */
+  seq: number;
 }
 
 export interface User {

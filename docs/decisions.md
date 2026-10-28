@@ -225,3 +225,27 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 **Alternatives considered.** Clerk (smaller free tier), Better Auth (self-hosted, never enables DCR), Supabase Auth (couples auth to Supabase; free projects pause), Stytch; Supabase or Vercel Postgres for the database. Evidence: [auth-and-db.md](./auth-and-db.md).
 
 **Consequences.** Production needs the WorkOS variables plus `WORKOS_AUTHKIT_DOMAIN` and `FOCAL_PUBLIC_URL`, and the dashboard steps in [deployment.md](./deployment.md) §4. V-04's last acceptance item, a ChatGPT or claude.ai connector completing OAuth, runs in M-03.
+
+---
+
+## D-17 · One ranking path for the web; the Studio agent and `/api/qloo/rank` are removed
+
+**Date:** 2026-10-28 · **Status:** Accepted (round-1 review)
+
+**Context.** `/try` carried a second ranking surface (`/api/qloo/rank` + `lib/server/pipeline.ts`) plus a Studio-era "Ask focal" agent tab (`/api/agent`) that duplicated what the lift-only rank already does.
+
+**Decision.** `/try` uses only the shared lift-only rank (`/api/try/rank`), with caller-supplied `clientId`s echoed back. `/api/qloo/rank`, `/api/agent`, the server agent plumbing and the AgentPanel are deleted. The stdio MCP server intentionally keeps the core v1 pipeline until it is ported to the shared v2 path; it is not a second web surface.
+
+**Consequences.** One plan semantics, one label vocabulary, one persistence seam. `scripts/smoke-prod.ts` smoke-checks `/api/try/rank` instead.
+
+---
+
+## D-18 · Learned layouts are extension-local; the server derives but never stores
+
+**Date:** 2026-10-28 · **Status:** Accepted (round-1 review)
+
+**Context.** Identified pages taught the server a `layouts` row that later identifies replayed — a self-sealing failure: a wrong learned layout poisoned every later visit, and shared rows leaked layout structure across users.
+
+**Decision.** `/api/page/identify` always identifies (Jev, or the mock in dev) and still derives and returns a layout, but never reads or writes the `layouts` table. The extension stores the returned layout in `chrome.storage.local` with a 14-day TTL, and discards an entry whose rank run resolved nothing. `deriveLayout` only produces a layout when every confident card agrees on type, and learns `citySource` only when every confident typed card's city maps to the same hint. Shared layouts stay in "Later" (§2) pending provenance; the `layouts` table is unused until a drop migration.
+
+**Consequences.** A bad layout only hurts the browser that cached it, and expires. The cost is a Jev call per browser per layout instead of per user.

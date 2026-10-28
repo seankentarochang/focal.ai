@@ -17,7 +17,7 @@ export async function currentViewer(): Promise<Viewer | null> {
     const { withAuth } = await import("@workos-inc/authkit-nextjs");
     const { user } = await withAuth();
     if (!user?.email) return null;
-    const account = await ensureUser(db, { id: user.id, email: user.email });
+    const account = await ensureUser(db, { id: user.id, email: user.email, emailVerified: user.emailVerified === true });
     return { userId: account.id, email: user.email, persisted: true };
   }
   if (devSessionsEnabled()) return { userId: "dev", email: "dev@localhost", persisted: false };
