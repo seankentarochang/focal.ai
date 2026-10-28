@@ -98,7 +98,7 @@ export function ProfileManager({ email }: { email: string }) {
         setError(data.error?.message ?? "That change is no longer available.");
         return;
       }
-      setState(data);
+      await load();
       setError(null);
     } catch {
       setError("Couldn't reach the server.");

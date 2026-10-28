@@ -24,7 +24,7 @@
 | `DATABASE_URL` | **Yes** | Accounts, saved profiles, feedback, settings and `/mcp` need it; without it `/mcp` and `/api/extension/session` return 503 and the account routes return 401 |
 | `DATABASE_URL_UNPOOLED` | For migrations | Neon direct connection |
 | `QLOO_API_KEY`, `QLOO_API_BASE` | **Yes** | Live taste data. `QLOO_MOCK` must **not** be set in production |
-| `TYPESAFE_API_KEY` | **Yes** | The Jev page identifier; without it identification falls back to the mock — unacceptable in prod |
+| `TYPESAFE_API_KEY` | **Yes** | The Jev page identifier; without it `/api/page/identify` returns 503 in production and pages are never identified (the mock only runs with dev sessions) |
 | `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD` (≥32 chars), `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | **Yes** | AuthKit sign-in |
 | `WORKOS_AUTHKIT_DOMAIN` | **Yes for MCP OAuth** | Issuer for `/mcp` access tokens; `fx_` extension tokens are REST-only — `/mcp` is OAuth-only (R7-7) |
 | `FOCAL_PUBLIC_URL` | **Yes** | Canonical origin — MCP protected-resource metadata + `/why` links |

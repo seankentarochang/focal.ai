@@ -152,8 +152,8 @@ async function userForWorkosId(db: Db, workosId: string): Promise<string | null>
 }
 
 /**
- * Resolves the MCP caller from an AuthKit access token, or from an extension
- * session token for clients that only support a static bearer header.
+ * Resolves the MCP caller from an OAuth/AuthKit access token only — extension
+ * `fx_` session tokens are rejected (R7-7).
  */
 export async function resolveMcpCaller(req: Request, db: Db): Promise<McpCaller | "missing" | "invalid"> {
   const token = bearer(req);

@@ -2,7 +2,7 @@ import type { BackgroundReply, ContentMessage, FeedbackResponse, IdentifiedItem,
 import { pathPattern } from "./api";
 import { applyPlan, type ApplyHandle } from "./apply/apply";
 import { createGate, GATE_MS } from "./apply/gate";
-import { isFocalTrusted } from "./apply/apply";
+import { focalTrusted } from "./apply/apply";
 import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
 import type { CardSnapshot, RenderOp, RenderPlan } from "./types";
@@ -287,7 +287,7 @@ async function runWithGate(
       else scheduleRetry(list.container); // failure, null type or empty items: retry budget (R4-14)
       return;
     }
-    dropRetry(list.container); // R8-3/R9-6: a usable identify disarms the retry
+
     pageType = identified.data.pageType;
     items = identified.data.items;
     if (identified.data.layout) void saveLayout(storageKey, identified.data.layout).catch(() => {});
@@ -297,6 +297,7 @@ async function runWithGate(
     type: "rank",
     body: { host, pageType, items },
   });
+  if (ranked.ok) dropRetry(list.container); // R10-minor: a usable rank ends the failure episode
   if (!ranked.ok || !ranked.data.plan) {
     gate.cancel();
     drainRecords();
@@ -359,7 +360,7 @@ async function runWithGate(
             "background:#18181b!important;border:1px solid #3f3f46!important";
           const id = eventId ?? "";
           undo.addEventListener("click", (ev) => {
-            if (!isFocalTrusted(ev)) return;
+            if (!focalTrusted(ev, label)) return; // host: the toast lives on the label (R10-2)
             ev.preventDefault();
             ev.stopPropagation();
             undo.disabled = true;
@@ -441,6 +442,9 @@ const hrefTimer = setInterval(() => {
   runTimes.length = 0; // R9-4/F9-1: per-page state — a new URL is a new page
   activeGate?.cancel(); // R8-6: retire the old page's chip
   activeGate = null;
+  clearTimeout(rerunTimer);
+  rerunTimer = undefined;
+  firstScheduledAt = 0; // R10-minor: a new page gets a fresh rerun window
   clearApplied();
   scheduleRerun();
 }, 1000);

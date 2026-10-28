@@ -19,14 +19,41 @@ export interface ApplyOptions {
   mode?: "css-order" | "move";
 }
 
-let trusted: (ev: Event) => boolean = (ev) => (ev as MouseEvent).isTrusted !== false;
+let trusted: (ev: Event, host: Element) => boolean = focalClickTrusted;
 /** Test seam: synthetic .click() is untrusted in jsdom — handlers bail (R9-8). */
-export function __setTrustCheckForTests(fn: ((ev: Event) => boolean) | undefined): void {
-  trusted = fn ?? ((ev) => (ev as MouseEvent).isTrusted !== false);
+export function __setTrustCheckForTests(fn: ((ev: Event, host: Element) => boolean) | undefined): void {
+  trusted = fn ?? focalClickTrusted;
 }
-/** Shared check — content.ts handlers use the same seam (R9-8). */
-export function isFocalTrusted(ev: Event): boolean {
-  return trusted(ev);
+
+/** A real click on a focal button, not a synthetic dispatch or a clickjacked one.
+ *  Keyboard activation (detail === 0) only needs isTrusted; pointer clicks also
+ *  require the button to be the topmost element at the point, unhidden by
+ *  ancestors, and inside its focal host's rect (±4 px) (R10-2). */
+/** The seam-backed check the other modules call (R10-2). */
+export function focalTrusted(ev: Event, host: Element): boolean {
+  return trusted(ev, host);
+}
+
+export function focalClickTrusted(ev: Event, host: Element): boolean {
+  const mev = ev as MouseEvent;
+  if (mev.isTrusted !== true) return false;
+  if (typeof mev.detail !== "number" || mev.detail === 0) return true; // keyboard
+  const btn = (ev.currentTarget ?? ev.target) as Element;
+  if (!(btn instanceof Element)) return false;
+  const doc = host.ownerDocument;
+  const top = doc.elementsFromPoint(mev.clientX, mev.clientY)[0];
+  if (top !== btn && !btn.contains(top ?? null)) return false; // occluded by an overlay
+  let opacity = 1;
+  for (let n: Element | null = btn; n && n.tagName !== "BODY"; n = n.parentElement) {
+    const cs = doc.defaultView?.getComputedStyle(n);
+    if (cs) {
+      if (cs.visibility === "hidden") return false;
+      opacity *= parseFloat(cs.opacity || "1");
+    }
+  }
+  if (opacity <= 0.1) return false;
+  const r = btn.getBoundingClientRect(), hr = host.getBoundingClientRect();
+  return r.left >= hr.left - 4 && r.top >= hr.top - 4 && r.right <= hr.right + 4 && r.bottom <= hr.bottom + 4;
 }
 
 export interface ApplyHandle {
@@ -265,7 +292,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
               "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
               "background:#18181b!important;border:1px solid #3f3f46!important";
             btn.addEventListener("click", (ev) => {
-              if (!trusted(ev)) return;
+              if (!trusted(ev, label)) return; // host: the label slot (R10-2)
               ev.preventDefault();
               ev.stopPropagation();
               opts.onFeedback?.(op.clientId, verdict, label);
@@ -304,13 +331,15 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
           const show = make(doc, "button", "show", "Show");
           show.setAttribute("type", "button");
           show.addEventListener("click", (ev) => {
-            if (!trusted(ev)) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (!trusted(ev, holder)) return; // host: the fold holder (R10-2)
             for (const el of els) {
               el.removeAttribute("data-focal-hidden");
-              // Restore the site's own display value, same as undo() (F9-5).
+              // Restore the whole style attribute the way undo() does (R10-3).
               const prior = savedStyles.get(el);
               if (prior === undefined || prior === null) el.style.removeProperty("display");
-              else el.style.setProperty("display", prior);
+              else el.setAttribute("style", prior);
             }
             holder.remove();
           });
@@ -334,7 +363,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
       const why = make(doc, "button", "why", "Why this order?");
       why.setAttribute("type", "button");
       why.addEventListener("click", (ev) => {
-        if (!trusted(ev)) return;
+        if (!trusted(ev, el)) return; // host: the strip (R10-2)
         opts.onWhy?.();
       });
       el.append(why);
@@ -342,7 +371,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
     const undo = make(doc, "button", "undo", "Undo");
     undo.setAttribute("type", "button");
     undo.addEventListener("click", (ev) => {
-      if (!trusted(ev)) return;
+      if (!trusted(ev, el)) return; // host: the strip (R10-2)
       handle.undo();
       opts.onUserUndo?.();
     });

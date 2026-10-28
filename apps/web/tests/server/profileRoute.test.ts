@@ -67,6 +67,21 @@ describe("profile route without a database", () => {
     expect(await res.json()).toEqual({ deleted: true });
   });
 
+  it("POST returns {entries} without activity — why ProfileManager act() reloads (R10-1)", async () => {
+    viewerUserId = "u1";
+    const { memoryProfileStore } = await import("@/lib/server/chat/store");
+    const { addEntry } = await import("@focal-ai/core");
+    const store = memoryProfileStore("u1");
+    const write = addEntry(await store.load(), { kind: "thing", qlooId: "Q-r10", name: "Rintaro", type: "urn:entity:place", strength: "like", source: "manual" }, "manual");
+    if (write.event) await store.commit(write.profile, write.event);
+    const entryId = write.profile.entries[0]!.id;
+    const res = await post({ action: "remove", entry_id: entryId });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty("entries");
+    expect(body).not.toHaveProperty("activity");
+  });
+
   it("set_strength and remove 404 without a matching entry", async () => {
     viewerUserId = "u1";
     expect((await post({ action: "set_strength", entry_id: "nope", strength: "love" })).status).toBe(404);

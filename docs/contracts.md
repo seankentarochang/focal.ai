@@ -168,6 +168,8 @@ POST /api/page/rank       bearer | { host, pageType, items:IdentifiedItem[] }
                          → { status, pageResultId:string|null, plan:RenderPlan|null, resolvedCount, resolutionLimited:boolean }
                            resolutionLimited = the caller's uncached-lookup budget left some items unresolved;
                            the extension must not treat such a result as a stale learned layout
+On these extension routes `pageType` and `items[].type` use the short wire names (`SHORT_TYPES` in
+apps/web/lib/server/page/schemas.ts: place, destination, movie, …); the server maps them to `urn:entity:*`.
 POST /api/feedback        bearer | { pageResultId, clientId, verdict:"more"|"less" }
                          → { saved:true, eventId:null } on no-op | { saved:true, entryId, eventId } on write
 GET  /api/me              cookie | → { signedIn:false } | { signedIn:true, email }

@@ -1,12 +1,8 @@
+import { focalTrusted } from "./apply";
 import { blockAnchor, decorate } from "./ui";
 
 export const GATE_MS = 300;
 
-let trusted: (ev: Event) => boolean = (ev) => (ev as MouseEvent).isTrusted !== false;
-/** Test seam — same contract as apply.ts's injected buttons (R9-8). */
-export function __setGateTrustCheckForTests(fn: ((ev: Event) => boolean) | undefined): void {
-  trusted = fn ?? ((ev) => (ev as MouseEvent).isTrusted !== false);
-}
 
 export type GateOutcome = "before-reveal" | "late-applied" | "late-offered" | "cancelled";
 
@@ -27,13 +23,13 @@ export interface RenderGate {
 export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOnly?: boolean } = {}): RenderGate {
   const doc = container.ownerDocument;
   const win = doc.defaultView;
-  const prevVisibility = container.style.getPropertyValue("visibility");
+  const prevVisibility = ms > 0 ? container.style.getPropertyValue("visibility") : undefined;
   let revealed = false;
   let interacted = false;
   let settled = false;
   let chip: HTMLElement | null = null;
 
-  container.style.setProperty("visibility", "hidden");
+  if (ms > 0) container.style.setProperty("visibility", "hidden");
 
   const onInteract = () => {
     if (revealed) interacted = true;
@@ -95,7 +91,7 @@ export function createGate(container: HTMLElement, ms = GATE_MS, opts: { offerOn
         button.setAttribute("data-focal", "apply");
         button.textContent = "Apply";
         button.addEventListener("click", (ev) => {
-          if (!trusted(ev)) return;
+          if (!focalTrusted(ev, chip as Element)) return; // host: the chip (R10-2)
           chip?.remove();
           apply();
         });

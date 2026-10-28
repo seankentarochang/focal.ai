@@ -40,7 +40,7 @@ Requires a free focal.ai account and a Chromium-based browser.
 - Data is never sold. Users can export and delete their profile and account at any time from Settings.
 
 ## Screenshots to capture
-1. A Yelp search page with focal's label strip ("focal lifted 3 for you") and labelled top cards.
+1. A Yelp search page with focal's label strip ("focal lifted 3 matches for your taste") and labelled top cards.
 2. The "Why this order?" inspector showing one item's affinity and the likes behind it.
 3. "More like this / Not for me" buttons under a lifted card.
 4. The website onboarding chat writing a profile entry.

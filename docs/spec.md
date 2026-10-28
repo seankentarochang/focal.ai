@@ -20,7 +20,7 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 3. Sites to skip: the built-in never-run list is shown; the user adds their own.
 4. Install the extension, or confirm it is connected. The website shows "Try it now" links matched to the profile (e.g. restaurant search in their city, a film list).
 
-**Every day.** The user browses normally. On any eligible page with a list of things Qloo knows about (restaurants, hotels, films, shows, artists, books, podcasts, games, brands, destinations, people), the clear matches move to the top with a label such as "Top pick for you · because you like Fugazi and Rintaro". A strip above the list says "focal lifted 3 for you · Undo". Each lifted card has **More like this** and **Not for me**.
+**Every day.** The user browses normally. On any eligible page with a list of things Qloo knows about (restaurants, hotels, films, shows, artists, books, podcasts, games, brands, destinations, people), the clear matches move to the top with a label such as "Top pick for you · because you like Fugazi and Rintaro". A strip above the list says "focal lifted 3 matches for your taste · Undo". Each lifted card has **More like this** and **Not for me**.
 
 **Teaching it more.** In the website chat ("I loved Kissaki last night, and I'm done with sports bars"), or from an outside assistant over MCP ("add the ramen place I just mentioned to my focal profile"). Every change lands in the activity feed with who made it and an undo.
 
@@ -196,6 +196,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 - **Chat text and a summary of your taste profile** are sent to the configured LLM providers (Groq → Cerebras → OpenRouter), some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.
 - **Agents cannot act quietly:** every write is attributed and undoable; hard rules need approval; MCP cannot change settings.
+- **On-page controls live in the page's DOM.** focal ignores synthetic clicks and, for pointer clicks, requires the control to be visible, on top and inside its focal container. A hostile page could still trick a user into a real click (e.g. a click-through decoy or stolen keyboard focus); any such write is attributed "page", shown in the activity feed and undoable.
 - **Export and delete** the profile and account at any time.
 - **Keys** (Qloo, TypeSafe, LLM providers) are server-only and never reach the extension or the browser.
 - **Render plans stay declarative** (reorder, collapse, annotate, emphasize, hide). Selectors exist only in learned layouts used by the extension's own code, never in plans sent from the server.

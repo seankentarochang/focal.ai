@@ -43,7 +43,8 @@ export function hasSensitiveField(root: ParentNode): boolean {
   for (const frame of root.querySelectorAll<HTMLIFrameElement>("iframe[src]")) {
     // Only a rendered, nonzero-box frame counts — a hidden <iframe src=...> is
     // not a payment field the user can see (R9-9).
-    if (rendered(frame) && frame.getBoundingClientRect().width > 0 && paymentFrame(frame.getAttribute("src") ?? "")) return true;
+    const r = frame.getBoundingClientRect();
+    if (rendered(frame) && r.width > 0 && r.height > 0 && paymentFrame(frame.getAttribute("src") ?? "")) return true;
   }
   return false;
 }

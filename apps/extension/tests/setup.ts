@@ -2,9 +2,7 @@
 // every test that .click()s. Restore the default trust check per test.
 import { beforeEach } from "vitest";
 import { __setTrustCheckForTests } from "../src/apply/apply";
-import { __setGateTrustCheckForTests } from "../src/apply/gate";
 
 beforeEach(() => {
   __setTrustCheckForTests(() => true);
-  __setGateTrustCheckForTests(() => true);
 });

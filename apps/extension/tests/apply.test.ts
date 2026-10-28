@@ -173,3 +173,61 @@ describe("applyPlan", () => {
     expect(list.container.outerHTML).toBe(html);
   });
 });
+
+describe("R10-2: focalClickTrusted", () => {
+  it("accepts trusted keyboard activation, rejects untrusted/occluded/out-of-host", async () => {
+    const { focalClickTrusted } = await import("../src/apply/apply");
+    const host = document.createElement("div");
+    const btn = document.createElement("button");
+    host.appendChild(btn);
+    document.body.appendChild(host);
+
+    const ev = (init: Partial<MouseEvent>) => init as MouseEvent;
+
+    // untrusted synthetic events never count
+    expect(focalClickTrusted(ev({ isTrusted: false, detail: 1, clientX: 1, clientY: 1, currentTarget: btn }), host)).toBe(false);
+    // keyboard activation (detail 0) only needs isTrusted
+    expect(focalClickTrusted(ev({ isTrusted: true, detail: 0, currentTarget: btn }), host)).toBe(true);
+
+    // pointer click: stub the point/geometry the production predicate reads
+    const r = { left: 10, top: 10, right: 50, bottom: 30, width: 40, height: 20, x: 10, y: 10, toJSON: () => ({}) } as DOMRect;
+    btn.getBoundingClientRect = () => r;
+    host.getBoundingClientRect = () => ({ left: 0, top: 0, right: 200, bottom: 100, width: 200, height: 100, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    document.elementsFromPoint = () => [btn];
+    const click = ev({ isTrusted: true, detail: 1, clientX: 20, clientY: 20, currentTarget: btn });
+    expect(focalClickTrusted(click, host)).toBe(true);
+
+    // occluded: another element is topmost at the point
+    const overlay = document.createElement("div");
+    document.elementsFromPoint = () => [overlay];
+    expect(focalClickTrusted(click, host)).toBe(false);
+    document.elementsFromPoint = () => [btn];
+
+    // invisible ancestor (opacity 0)
+    vi.spyOn(window, "getComputedStyle").mockImplementation((el: Element) => ({ visibility: "visible", opacity: el === host ? "0" : "1" }) as CSSStyleDeclaration);
+    expect(focalClickTrusted(click, host)).toBe(false);
+    vi.restoreAllMocks();
+
+    // button rect outside the host rect
+    host.getBoundingClientRect = () => ({ left: 500, top: 500, right: 600, bottom: 600, width: 100, height: 100, x: 500, y: 500, toJSON: () => ({}) }) as DOMRect;
+    expect(focalClickTrusted(click, host)).toBe(false);
+  });
+});
+
+describe("R10-3: fold Show restores the full style attribute", () => {
+  it("a folded card with inline style is visible after Show", async () => {
+    const { applyPlan, __setTrustCheckForTests } = await import("../src/apply/apply");
+    __setTrustCheckForTests(() => true);
+    document.body.innerHTML = "<main><div class='cards'><div class='card' style='color:red'>A</div><div class='card'>B</div></div></main>";
+    const cards = document.querySelectorAll<HTMLElement>(".card");
+    const container = document.querySelector<HTMLElement>(".cards")!;
+    const plan = { ops: [{ op: "collapse", clientIds: ["c0"], label: "2 hidden" }], pageId: "p", createdAt: "", summary: {} } as never;
+    const handle = applyPlan({ container, cards: new Map([["c0", cards[0]!]]) }, plan, {});
+    expect(cards[0]!.style.display).toBe("none");
+    const show = document.querySelector<HTMLButtonElement>("[data-focal='fold'] button")!;
+    show.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(cards[0]!.style.display).not.toBe("none");
+    expect(cards[0]!.style.color).toBe("red"); // the original inline style survives
+    __setTrustCheckForTests(() => true);
+  });
+});
