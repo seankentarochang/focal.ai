@@ -314,6 +314,7 @@ export function approveRule(
   const existing = profile.entries.find((e) => e.id === entryId);
   if (!existing) throw new ProfileError("NOT_FOUND", `No profile entry ${entryId}`);
   if (existing.kind !== "rule") throw new ProfileError("INVALID", "Only rules can be approved");
+  if (existing.status === "active") return { profile, event: null }; // already active: nothing to approve
   const at = now();
   const next: RuleEntry = { ...existing, status: "active" };
   return {

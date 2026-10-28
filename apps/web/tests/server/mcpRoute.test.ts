@@ -27,6 +27,21 @@ vi.mock("@/lib/server/qloo", () => ({
 
 const ISSUER = "https://focal-test.authkit.app";
 const RESOURCE = "http://localhost/mcp";
+let privateKey: CryptoKey;
+let jwk: JWK;
+const sign = (claims: Record<string, unknown>, issuer = ISSUER) =>
+  new SignJWT(claims).setProtectedHeader({ alg: "RS256", kid: "k1" }).setIssuer(issuer).setSubject("user_w1").setIssuedAt().setExpirationTime("5m").sign(privateKey);
+async function setupAuthEnv() {
+  process.env.WORKOS_AUTHKIT_DOMAIN = "focal-test.authkit.app";
+  process.env.WORKOS_CLIENT_ID = "client_test";
+  const pair = await generateKeyPair("RS256");
+  privateKey = pair.privateKey;
+  jwk = { ...(await exportJWK(pair.publicKey)), kid: "k1", alg: "RS256" };
+  const realFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input) === `${ISSUER}/oauth2/jwks` ? Response.json({ keys: [jwk] }) : realFetch(input, init),
+  );
+}
 
 function mcpRequest(token: string | null, body: unknown, headers: Record<string, string> = {}) {
   return new Request(RESOURCE, {
@@ -57,15 +72,7 @@ describe("MCP discovery and auth", () => {
   } as unknown as Db;
 
   beforeAll(async () => {
-    process.env.WORKOS_AUTHKIT_DOMAIN = "focal-test.authkit.app";
-    process.env.WORKOS_CLIENT_ID = "client_test";
-    const pair = await generateKeyPair("RS256");
-    privateKey = pair.privateKey;
-    jwk = { ...(await exportJWK(pair.publicKey)), kid: "k1", alg: "RS256" };
-    const realFetch = globalThis.fetch;
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input) === `${ISSUER}/oauth2/jwks` ? Response.json({ keys: [jwk] }) : realFetch(input, init),
-    );
+    await setupAuthEnv();
     __setDbForTests(fakeDb);
   });
   afterEach(() => {
@@ -77,9 +84,6 @@ describe("MCP discovery and auth", () => {
     __setDbForTests(undefined);
     delete process.env.WORKOS_AUTHKIT_DOMAIN;
   });
-
-  const sign = (claims: Record<string, unknown>, issuer = ISSUER) =>
-    new SignJWT(claims).setProtectedHeader({ alg: "RS256", kid: "k1" }).setIssuer(issuer).setSubject("user_w1").setIssuedAt().setExpirationTime("5m").sign(privateKey);
 
   it("publishes protected-resource metadata pointing at AuthKit", async () => {
     const res = await protectedResource(new Request("http://localhost/.well-known/oauth-protected-resource"));
@@ -126,9 +130,13 @@ describe.skipIf(!url)("MCP writes in Postgres", () => {
     await admin!.unsafe(`CREATE SCHEMA ${schema}`);
     db = createDb(connect(url!, { schema, max: 2 }));
     await migrate(db.sql);
+    await setupAuthEnv();
     __setDbForTests(db);
   });
   afterAll(async () => {
+    vi.unstubAllGlobals();
+    delete process.env.WORKOS_AUTHKIT_DOMAIN;
+    delete process.env.WORKOS_CLIENT_ID;
     __setDbForTests(undefined);
     await db.close();
     await admin!.unsafe(`DROP SCHEMA ${schema} CASCADE`);
@@ -136,8 +144,9 @@ describe.skipIf(!url)("MCP writes in Postgres", () => {
   });
 
   it("attributes a write to the assistant and leaves it undoable", async () => {
-    const user = await db.users.upsert(`mcp-${randomUUID()}@example.com`);
-    const { token } = await db.extensionSessions.issue(user.id);
+    // /mcp is OAuth-only (R7-7): the bearer is an AuthKit token (sub user_w1), not fx_.
+    const user = await db.users.upsert(`mcp-${randomUUID()}@example.com`, { workos: "user_w1" });
+    const token = await sign({ aud: RESOURCE });
     const res = await POST(mcpRequest(token, toolCall("add_thing", { name: "Rintaro", type: "place", strength: "love" }), { "user-agent": "Claude-User" }));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { result: { content: { text: string }[] } };

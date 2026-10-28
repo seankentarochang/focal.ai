@@ -119,7 +119,7 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
       expect(dump.profile.entries).toEqual([e]);
       expect(dump.activity).toHaveLength(1);
       expect(dump.sites).toEqual([{ hostname: "reddit.com", mode: "skip" }]);
-      expect(await db.users.delete(u.id)).toBe(true);
+      expect(await db.users.delete(u.id)).toEqual({ wid: null });
       expect(await db.extensionSessions.resolve(token)).toBeNull();
       const left = await db.sql`
         SELECT (SELECT count(*) FROM profile_entries WHERE user_id = ${u.id})::int

@@ -1,6 +1,6 @@
 const PAYMENT_AUTOCOMPLETE = /\bcc-(number|csc|exp|exp-month|exp-year|name|type)\b/;
-const PAYMENT_NAME = /(card.?number|cardnum|ccnum|cc-?num|cvc|cvv|security.?code|iban|routing.?number|account.?number)/i;
-const PAYMENT_FRAME = /(js\.stripe\.com|checkout\.stripe\.com|braintreegateway\.com|adyen\.com|checkout\.com|paypal\.com|squareup\.com|recurly\.com)/i;
+const PAYMENT_NAME = /(card.?(number|num|no\b)|(credit|debit).?card|ccnum|cc-?num|cvv|cvc|csc\b|expir(y|ation)|security.?code|iban|routing.?number|account.?number)/i;
+const PAYMENT_FRAME = /(js\.stripe\.com|checkout\.stripe\.com|braintreegateway\.com|adyen\.com|checkout\.com|paypal\.com|squareup\.com|recurly\.com|worldpay\.com|authorize\.net)/i;
 
 /** False for fields the user can't see, like a closed sign-in dialog. */
 function rendered(el: HTMLElement): boolean {
@@ -23,7 +23,7 @@ export function hasSensitiveField(root: ParentNode): boolean {
     const ac = input.getAttribute("autocomplete") ?? "";
     if (PAYMENT_AUTOCOMPLETE.test(ac)) return true;
     if ((ac.includes("current-password") || ac.includes("new-password")) && rendered(input)) return true;
-    const key = `${input.getAttribute("name") ?? ""} ${input.id} ${input.getAttribute("data-elements-stable-field-name") ?? ""}`;
+    const key = `${input.getAttribute("name") ?? ""} ${input.id} ${input.getAttribute("data-elements-stable-field-name") ?? ""} ${input.placeholder ?? ""} ${input.getAttribute("aria-label") ?? ""}`;
     if (PAYMENT_NAME.test(key)) return true;
   }
   for (const frame of root.querySelectorAll<HTMLIFrameElement>("iframe[src]")) {

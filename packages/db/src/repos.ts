@@ -46,9 +46,9 @@ export function usersRepo(sql: Sql) {
       return row ? userFrom(row) : null;
     },
     /** Deletes the account and everything owned by it (profile, activity, settings, page results). */
-    async delete(id: string): Promise<boolean> {
-      const rows = await sql`DELETE FROM users WHERE id = ${id} RETURNING id`;
-      return rows.length > 0;
+    async delete(id: string): Promise<{ wid: string | null } | null> {
+      const rows = await sql`DELETE FROM users WHERE id = ${id} RETURNING auth_ids->>'workos' AS wid`;
+      return rows.length > 0 ? { wid: (rows[0]!.wid as string | null) ?? null } : null;
     },
   };
 }

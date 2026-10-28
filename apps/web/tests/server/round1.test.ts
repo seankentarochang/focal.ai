@@ -219,3 +219,15 @@ describe("/api/try/rank clientIds and meta", () => {
     expect(body.meta.dataSource).toBe("mock");
   });
 });
+
+describe("R7-1 searchBodySchema", () => {
+  it("rejects an unknown entity type with no upstream call", async () => {
+    const { searchBodySchema } = await import("@/lib/server/schemas");
+    const bad = searchBodySchema.safeParse({ query: "pizza", types: ["not-a-urn"] });
+    expect(bad.success).toBe(false);
+    const ok = searchBodySchema.safeParse({ query: "pizza", types: ["urn:entity:place"], location: " Austin ".repeat(20) });
+    expect(ok.success).toBe(false); // location capped at 80
+    const ok2 = searchBodySchema.safeParse({ query: "pizza", types: ["urn:entity:place"], location: "Austin" });
+    expect(ok2.success).toBe(true);
+  });
+});

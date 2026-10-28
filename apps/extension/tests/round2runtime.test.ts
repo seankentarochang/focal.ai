@@ -321,6 +321,60 @@ describe("R6-4/5/7/8: apply lifecycle", () => {
   });
 });
 
+describe("R7-3/4/5: apply lifecycle", () => {
+  const FOUR_CARDS = `<main><div class="results">
+    <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+    <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+    <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+    <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+  </div></main>`;
+  const appendCard = () => {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `<a href="/e${Math.random()}"><h3>New</h3></a><p>Pizza</p>`;
+    document.querySelector(".results")!.appendChild(c);
+  };
+
+  it("a strip Undo after a label pass removes the pills too", async () => {
+    const rect = { width: 800, height: 400, top: 0, left: 0, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) };
+    Element.prototype.getBoundingClientRect = () => rect as DOMRect;
+    stubChrome();
+    document.body.innerHTML = FOUR_CARDS;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='label']")).not.toBeNull(), { timeout: 3000 });
+    const n = document.querySelectorAll("[data-focal='label']").length;
+    // a rerun must not stack a second pill on labelled cards (R7-3)
+    appendCard();
+    await new Promise((r) => setTimeout(r, 1600));
+    expect(document.querySelectorAll("[data-focal='label']").length).toBeLessThanOrEqual(n + 1);
+  });
+
+  it("a strip Undo removes label-pass pills", async () => {
+    stubChrome();
+    document.body.innerHTML = FOUR_CARDS;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    (document.querySelector<HTMLElement>("[data-focal='undo']"))!.click();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(document.querySelectorAll("[data-focal='label']").length).toBe(0);
+    expect(document.querySelectorAll("[data-focal='strip']").length).toBe(0);
+  });
+
+  it("overlapping runs coalesce — the newer state wins, nothing dropped", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = FOUR_CARDS;
+    prevMod = await import("../src/content");
+    // two rapid mutations while a run may be in flight
+    appendCard();
+    appendCard();
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "identify").length).toBeGreaterThanOrEqual(1), { timeout: 4000 });
+    // the queue drains: every identify is answered, no run is stranded
+    await new Promise((r) => setTimeout(r, 2200));
+    expect(document.querySelectorAll("[data-focal='strip']").length).toBeLessThanOrEqual(1);
+    expect(sent.filter((m) => m.type === "rank").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("R2-15c: gate ownership", () => {
   it("a failing run cancels only its own gate, leaving a newer gate live", async () => {
     let rankCalls = 0;

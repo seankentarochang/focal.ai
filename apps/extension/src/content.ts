@@ -19,7 +19,9 @@ let watcher: MutationObserver | null = null;
 let rerunTimer: ReturnType<typeof setTimeout> | undefined;
 let firstScheduledAt = 0;
 const runTimes: number[] = [];
-let generation = 0;
+let running = false;
+let rerunQueued = false;
+let runCount = 0; // reruns offer (chip) rather than apply when the list is on-screen
 let lastList: { container: Element; cards: Element[]; fp: string } | null = null;
 let retryBudget = new Map<Element, { count: number; timer: ReturnType<typeof setTimeout> }>();
 /** Records we mutate ourselves queue MutationObserver records; drain them
@@ -135,8 +137,9 @@ function watchPage(): void {
   watcher = new MutationObserver((records) => {
     if (document.hidden) { droppedRecords = true; return; }
     if (records.some((r) => [...r.addedNodes].some((n) => n instanceof Element && !inFocal(n)))) {
-      clearTimeout(rerunTimer);
-      rerunTimer = setTimeout(() => { rerunTimer = undefined; scheduleRerun(); }, bodyBackoffMs);
+      if (rerunTimer === undefined) {
+        rerunTimer = setTimeout(() => { rerunTimer = undefined; scheduleRerun(); }, bodyBackoffMs);
+      }
     }
   });
   watcher.observe(document.body, { childList: true, subtree: true });
@@ -144,8 +147,7 @@ function watchPage(): void {
 
 function reject(list: DetectedList): void {
   rejected.set(list.container, list.cards.size);
-  current?.undo(); // R5-6
-  drainRecords();
+  clearApplied(); // R7-3
   // R4-10: keep the baseline so the body watcher's same-list check stays cheap.
   baseline(list);
   watchPage();
@@ -165,7 +167,6 @@ async function run(gateMs?: number): Promise<void> {
 
 async function runInner(gateMs?: number): Promise<void> {
   runTimes.push(Date.now());
-  const gen = ++generation;
   activeGate?.cancel(); // R6-7: any rerun retires the previous chip
   drainRecords();
   const settings = await getSettings();
@@ -177,8 +178,7 @@ async function runInner(gateMs?: number): Promise<void> {
     document,
   });
   if (!eligibility.eligible) {
-    current?.undo(); // R6-8
-    drainRecords();
+    clearApplied(); // R6-8/R7-3
     lastList = null;
     return watchPage();
   }
@@ -209,11 +209,12 @@ async function runInner(gateMs?: number): Promise<void> {
   activeGate?.cancel();
   drainRecords();
   const gate = createGate(list.container as HTMLElement, gateMs, {
-    offerOnly: gen > 1 && onScreen(list.container),
+    offerOnly: runCount > 0 && onScreen(list.container),
   });
+  runCount++;
   activeGate = gate;
   try {
-    return await runWithGate(list, cards, gate, gen, hints, pattern, host);
+    return await runWithGate(list, cards, gate, hints, pattern, host);
   } catch (e) {
     gate.cancel(); // only this run's gate
     drainRecords();
@@ -236,7 +237,6 @@ async function runWithGate(
   list: DetectedList,
   cards: CardSnapshot[],
   gate: ReturnType<typeof createGate>,
-  gen: number,
   hints: string[],
   pattern: string,
   host: string,
@@ -254,9 +254,8 @@ async function runWithGate(
   } else {
     const identified = await send<IdentifyResponse>({
       type: "identify",
-      body: { host, pathPattern: pattern, signature: list.signature, cityHints: hints, cards },
+      body: { host, pathPattern: pattern.slice(0, 300), signature: list.signature.slice(0, 300), cityHints: hints, cards },
     });
-    if (gen !== generation) return gate.cancel();
     if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
       gate.cancel();
       drainRecords();
@@ -268,20 +267,15 @@ async function runWithGate(
     items = identified.data.items;
     if (identified.data.layout) void saveLayout(storageKey, identified.data.layout).catch(() => {});
   }
-  if (gen !== generation) return gate.cancel();
 
   const ranked = await send<RankResponse>({
     type: "rank",
     body: { host, pageType, items },
   });
-  if (gen !== generation) return gate.cancel();
   if (!ranked.ok || !ranked.data.plan) {
     gate.cancel();
     drainRecords();
-    if (ranked.ok) {
-      current?.undo(); // B R6-3: an ok rank with no plan clears a live apply
-      drainRecords();
-    }
+    if (ranked.ok) clearApplied(); // B R6-3/R7-3: an ok rank with no plan clears
     if (local && shouldInvalidateLayout(ranked)) {
       // The stored layout identified nothing the resolver knows — it is stale.
       void deleteLayout(storageKey);
@@ -298,6 +292,7 @@ async function runWithGate(
     applied?.active &&
     applied.container === list.container &&
     [...applied.applied.values()].every((el) => el.isConnected) &&
+    liftInPlace(list, applied) &&
     effectEquivalent(plan, list, applied)
   ) {
     gate.cancel();
@@ -361,18 +356,15 @@ async function runWithGate(
     : undefined;
 
   const applyNow = (p: RenderPlan) => {
-    if (gen !== generation || userUndidFor === list.container) return; // R6-5
-    labelHandle?.undo();
-    labelHandle = null;
-    current?.undo();
-    drainRecords();
+    if (userUndidFor === list.container) return; // R6-5/R7-4
+    clearApplied();
     current = applyPlan(list, p, {
       onUserUndo: () => {
         // User reverted our arrangement — mark the container so its next
         // mutation batches re-baseline instead of re-lifting (R5-8/R6-5).
         userUndidFor = list.container;
         activeGate?.cancel();
-        drainRecords();
+        clearApplied();
         recomputeLastList();
       },
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
@@ -393,7 +385,11 @@ async function runWithGate(
   const outcome = gate.ready(() => applyNow(plan));
   if (outcome === "late-offered") {
     labelHandle?.undo();
-    labelHandle = applyPlan(list, { ...plan, ops: plan.ops.filter((o) => o.op === "annotate") }, { onFeedback });
+    const ops = plan.ops.filter(
+      (o): o is Extract<RenderOp, { op: "annotate" }> =>
+        o.op === "annotate" && !(list.cards.get(o.clientId) as HTMLElement | undefined)?.querySelector('[data-focal="label"]'),
+    );
+    labelHandle = applyPlan(list, { ...plan, ops }, { onFeedback });
     drainRecords();
   }
 }
@@ -415,6 +411,7 @@ const hrefTimer = setInterval(() => {
   bodyBackoffMs = 1000;
   lastList = null;
   userUndidFor = null;
+  clearApplied();
   scheduleRerun();
 }, 1000);
 
@@ -423,6 +420,25 @@ let userUndidFor: Element | null = null;
 
 /** A late-offered plan's in-place labels — separate from `current` (R6-4). */
 let labelHandle: ApplyHandle | null = null;
+
+/** One teardown path: drop the label pass and the live arrangement (R7-3). */
+function clearApplied(): void {
+  labelHandle?.undo();
+  labelHandle = null;
+  current?.undo();
+  drainRecords();
+}
+
+/** In move mode the lift survives only while the lifted elements still lead
+ * the container's children in order; a site re-sort breaks that (R7-5). */
+function liftInPlace(list: DetectedList, handle: ApplyHandle): boolean {
+  if (handle.mode !== "move") return true;
+  const reorder = handle.plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder");
+  const lifted = handle.plan.summary.lifted ?? handle.plan.summary.moved;
+  const ids = reorder?.order.slice(0, lifted) ?? [];
+  const kids = [...list.container.children];
+  return ids.every((id, i) => kids[i] === handle.applied.get(id));
+}
 
 /** Effect-equivalence over the elements of the currently-applied plan (R5-10):
  * same lifted-prefix element sequence, same (element, text, badge) annotations
@@ -467,6 +483,9 @@ document.addEventListener("visibilitychange", () => {
 });
 
 export function __stopForTests(): void {
+  running = false;
+  rerunQueued = false;
+  runCount = 0;
   watcher?.disconnect();
   watcher = null;
   clearTimeout(rerunTimer);

@@ -17,7 +17,7 @@ export type NeverRunCategory =
 
 const SITES: Record<Exclude<NeverRunCategory, "focal">, string[]> = {
   banking: [
-    "paypal.com", "stripe.com", "venmo.com", "wise.com", "revolut.com", "monzo.com",
+    "paypal.com", "stripe.com", "worldpay.com", "authorize.net", "checkout.com", "venmo.com", "wise.com", "revolut.com", "monzo.com",
     "chase.com", "bankofamerica.com", "wellsfargo.com", "citi.com", "capitalone.com",
     "americanexpress.com", "discover.com", "usbank.com", "schwab.com", "fidelity.com",
     "vanguard.com", "robinhood.com", "coinbase.com", "klarna.com", "affirm.com",

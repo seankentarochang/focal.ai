@@ -23,6 +23,11 @@ export function dbProfileStore(db: Db, userId: string): ChatProfileStore {
 
 const memory = new Map<string, ProfileV2>();
 
+/** Dev delete: drop the in-memory profile for a user (C7-1). */
+export function clearMemoryProfile(userId: string): void {
+  memory.delete(userId);
+}
+
 /** Dev-only in-process store (FOCAL_DEV_SESSION without a database). */
 export function memoryProfileStore(userId: string): ChatProfileStore {
   return {

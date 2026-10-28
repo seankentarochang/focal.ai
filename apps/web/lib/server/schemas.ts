@@ -1,9 +1,15 @@
 import { z } from "zod";
 
+const QLOO_TYPES = [
+  "urn:entity:artist", "urn:entity:book", "urn:entity:brand",
+  "urn:entity:destination", "urn:entity:movie", "urn:entity:person",
+  "urn:entity:place", "urn:entity:podcast", "urn:entity:tv_show", "urn:entity:videogame",
+] as const;
+
 export const searchBodySchema = z.object({
   query: z.string().min(1).max(80),
-  types: z.array(z.string()).optional(),
-  location: z.string().optional(),
+  types: z.array(z.enum(QLOO_TYPES)).max(10).optional(),
+  location: z.string().trim().max(80).optional(),
 });
 
 export const candidateSchema = z

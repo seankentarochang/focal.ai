@@ -2,7 +2,7 @@ import { z } from "zod";
 import { approveRule, changeStrength, removeEntry, ProfileError } from "@focal-ai/core";
 import { DbError } from "@focal-ai/db";
 import { currentViewer } from "@/lib/server/auth/viewer";
-import { dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
+import { clearMemoryProfile, dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";
 import { workosGone } from "@/lib/server/auth/users";
@@ -118,17 +118,22 @@ export async function DELETE(req: Request): Promise<Response> {
     );
   }
   const db = getDb();
+  if (!viewer.persisted) {
+    // Dev sessions hold profile state in process memory — clear it too (C7-1).
+    clearMemoryProfile(viewer.userId);
+  }
   if (viewer.persisted && db) {
     // Single delete-with-return: local data goes first (its cascade is
     // atomic); the wid survives for the WorkOS call. No row -> nothing to
-    // delete (B R6-4). A later sign-in recreates an empty account the retry
-    // path can finish — never leave data behind with a live identity (R5-11).
-    const row = await db.sql`DELETE FROM users WHERE id = ${viewer.userId} RETURNING auth_ids->>'workos' AS wid`;
-    if (row.length === 0) return notFound('account not found');
-    if (process.env.WORKOS_API_KEY && row[0]?.wid) {
+    // delete (B R6-4 / C7-3). A later sign-in recreates an empty account the
+    // retry path can finish — never leave data behind with a live identity.
+    const deleted = await db.users.delete(viewer.userId);
+    if (!deleted) return notFound('account not found');
+    const wid = deleted.wid;
+    if (process.env.WORKOS_API_KEY && wid) {
       const { WorkOS } = await import("@workos-inc/node");
       try {
-        await new WorkOS(process.env.WORKOS_API_KEY).userManagement.deleteUser(row[0].wid as string);
+        await new WorkOS(process.env.WORKOS_API_KEY).userManagement.deleteUser(wid);
       } catch (e) {
         if (!workosGone(e)) {
           return Response.json(

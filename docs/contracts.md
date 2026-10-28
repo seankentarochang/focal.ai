@@ -81,7 +81,7 @@ Defaults and behavior (all overridable via `createQlooClient` opts):
 | --- | --- | --- |
 | `baseUrl` | `process.env.QLOO_API_BASE ?? "https://hackathon.api.qloo.com"` | Auth header `X-Api-Key`; hackathon keys work ONLY against this host. 401 confirmed without key. |
 | `mock` | `process.env.QLOO_MOCK === "1"` | Mock fixtures must be loudly labeled (`_fixture: "mock"`), derived from public Qloo doc examples, never presented as live data. |
-| `timeoutMs` | `8000` | On timeout: exactly 1 retry, then `QlooError` code `TIMEOUT`. |
+| `timeoutMs` | `8000` | One retry each for `TIMEOUT` (immediate), `UPSTREAM` (after 300 ms) and `RATE_LIMIT` (after `Retry-After`, default 1 s); then the `QlooError` surfaces. |
 | `cacheTtlMs` | `600000` (10 min) | In-process TTL cache keyed by full request URL (key excluded). |
 
 Endpoints used — and only these: `GET /search`, `GET /v2/insights`, `GET /v2/tags?filter.query=...`, `GET /entities`. `/recs` and `/recommendations` are unsupported legacy; never call them.

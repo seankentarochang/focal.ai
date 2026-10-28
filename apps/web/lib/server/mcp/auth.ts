@@ -139,10 +139,10 @@ export async function resolveMcpCaller(req: Request, db: Db): Promise<McpCaller 
   const token = bearer(req);
   if (!token) return "missing";
   const ua = req.headers.get("user-agent");
-  if (token.startsWith("fx_")) {
-    const session = await db.extensionSessions.resolve(token);
-    return session ? { userId: session.userId, client: clientLabel(null, ua), scopes: [] } : "invalid";
-  }
+  // MCP is OAuth-only: fx_ extension tokens carry full REST power (settings,
+  // feedback, undo) which MCP clients must not get via the documented bearer
+  // path (R7-7). Extension tokens still work on the REST routes.
+  if (token.startsWith("fx_")) return "invalid";
   const claims = await verifyAccessToken(req, token);
   if (!claims?.sub) return "invalid";
   const userId = await userForWorkosId(db, claims.sub);

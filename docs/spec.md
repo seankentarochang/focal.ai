@@ -65,7 +65,7 @@ Same site, same data, your ordering. focal lifts what you will care about to the
 
 - **Manifest V3**, one build for Chromium browsers. Host permission `<all_urls>` (Chrome shows "read and change all your data on all websites"; expect a slower, in-depth Web Store review).
 - **Session:** the website hands the extension a session token after sign-in (externally connectable messaging from the focal origin); the extension never shows its own login.
-- **Local state (`chrome.storage`):** session token, built-in never-run list version, the user's sites to skip, per-site on/off, learned layouts for sites visited, and the profile version. The profile itself stays on the server; the extension caches settings so eligibility checks never need the network.
+- **Local state (`chrome.storage`):** session token, built-in never-run list version, the user's sites to skip, per-site on/off, and learned layouts for sites visited. The profile itself stays on the server; the extension caches settings so eligibility checks never need the network.
 - **Pipeline per page:** guards (§5.1) → list detection (§5.2) → identification (§5.3) → rank request (§5.4) → apply (§5.6) → watch for changes (§5.7).
 - **Server calls go from the background service worker**, which is exempt from page CORS under its host permissions; content scripts never call the API directly.
 - **Toolbar menu:** on/off for this site, "Why this order?", open dashboard, signed-in status.

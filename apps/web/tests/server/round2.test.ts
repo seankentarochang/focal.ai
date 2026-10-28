@@ -125,6 +125,23 @@ describe.skipIf(!url)("round2 server fixes", () => {
     expect(consistent).toBe(true);
   });
 
+  it("resolveMcpCaller rejects fx_ tokens; fx_ still works on REST", async () => {
+    const { resolveMcpCaller } = await import("@/lib/server/mcp/auth");
+    const { resolveSession } = await import("@/lib/server/page/session");
+    const { token } = await db!.extensionSessions.issue(userId);
+    const bearer = new Request("http://x/mcp", { headers: { authorization: `Bearer ${token}` } });
+    expect(await resolveMcpCaller(bearer, db!)).toBe("invalid");
+    // same token resolves fine on the REST surface
+    expect((await resolveSession(bearer))?.userId).toBe(userId);
+  });
+
+  it("usersRepo.delete returns {wid} and null for a missing row", async () => {
+    const u = await db!.users.upsert(`r7del-${Date.now()}@focal.test`);
+    const r = await db!.users.delete(u.id);
+    expect(r).toEqual({ wid: null });
+    expect(await db!.users.delete(u.id)).toBeNull();
+  });
+
   it("DELETE /api/profile with no user row returns 404", async () => {
     const { DELETE } = await import("@/app/api/profile/route");
     const viewer = await import("@/lib/server/auth/viewer");
