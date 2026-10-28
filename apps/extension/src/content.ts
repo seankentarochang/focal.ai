@@ -22,8 +22,19 @@ const runTimes: number[] = [];
 let generation = 0;
 let lastList: { container: Element; cards: Element[] } | null = null;
 const retryTimers = new Set<ReturnType<typeof setTimeout>>();
-let suppress = false; // set around applyPlan/undo so our own mutations don't schedule reruns
-const retryBudget = new Map<Element, { count: number; until: number }>();
+let retryBudget = new WeakMap<Element, { count: number; timer: ReturnType<typeof setTimeout> }>();
+/** Records we mutate ourselves queue MutationObserver records; drain them
+ * synchronously after each self-mutation instead of suppressing delivery. */
+const drainRecords = () => { watcher?.takeRecords(); };
+/** Baseline post-apply: re-detect so our own moves/collapses don't look fresh.
+ * Limitation (R3-25): site changes that landed in the same batch are absorbed
+ * too — a site re-sort arriving mid-apply is treated as part of our write. */
+const recomputeLastList = () => {
+  const fresh = detectList(document);
+  if (!fresh) return;
+  lastList = { container: fresh.container, cards: [...fresh.cards.values()] };
+  watch(fresh.container, fresh.cards.values());
+};
 let bodyBackoffMs = 1000; // doubles after consecutive no-list/same-list outcomes, caps at 30 s
 let last: { key: string; hints: string[] } | null = null;
 /** Lists that weren't worth ranking, with their size then; a new card makes them worth another look. */
@@ -55,10 +66,8 @@ function scheduleRerun(): void {
     }
     if (rejected.get(list.container) === list.cards.size) return;
     bodyBackoffMs = 1000;
-    watcher?.disconnect();
-    watcher = null;
-    suppress = true;
-    try { current?.undo(); } finally { queueMicrotask(() => { suppress = false; }); }
+    current?.undo(); // our own edits; the watcher drops them via takeRecords
+    drainRecords();
     current = null;
     void run(0);
   }, RERUN_DELAY_MS);
@@ -81,16 +90,13 @@ function inFocal(n: Node): boolean {
 }
 
 function watch(container: Element, cards: Iterable<Element>): void {
-  const known = new Set(cards);
+  const known = [...cards];
   const knownOrDescendant = (n: Node) =>
-    n instanceof Element && ([...known].some((k) => k === n || k.contains(n) || n.contains(k)));
+    n instanceof Element && known.some((k) => k === n || k.contains(n) || n.contains(k));
   watcher?.disconnect();
   watcher = new MutationObserver((records) => {
-    if (suppress) return;
+    if (document.hidden) { droppedRecords = true; return; }
     const fresh = records.some((r) => {
-      if (r.type === "characterData") {
-        return knownOrDescendant(r.target) && !inFocal(r.target);
-      }
       if (r.type !== "childList") return false;
       if (inFocal(r.target)) return false;
       // Site re-sorts and removals of known cards are fresh; focal nodes never are.
@@ -99,7 +105,7 @@ function watch(container: Element, cards: Iterable<Element>): void {
     });
     if (fresh || !container.isConnected) scheduleRerun();
   });
-  watcher.observe(container, { childList: true, subtree: true, characterData: true });
+  watcher.observe(container, { childList: true, subtree: true });
 }
 
 /** A stored layout that resolves nothing is stale — drop it (G2). */
@@ -118,8 +124,8 @@ function onScreen(el: Element): boolean {
 function watchPage(): void {
   watcher?.disconnect();
   watcher = new MutationObserver((records) => {
-    if (suppress) return;
-    if (records.some((r) => [...r.addedNodes].some((n) => n instanceof Element && n.childElementCount > 0 && !inFocal(n)))) {
+    if (document.hidden) { droppedRecords = true; return; }
+    if (records.some((r) => [...r.addedNodes].some((n) => n instanceof Element && !inFocal(n)))) {
       clearTimeout(rerunTimer);
       rerunTimer = setTimeout(() => { rerunTimer = undefined; scheduleRerun(); }, bodyBackoffMs);
     }
@@ -173,13 +179,14 @@ async function runInner(gateMs?: number): Promise<void> {
   const gate = createGate(list.container as HTMLElement, gateMs, {
     offerOnly: gen > 1 && onScreen(list.container),
   });
-  suppress = true;
-  try { activeGate?.cancel(); } finally { queueMicrotask(() => { suppress = false; }); }
+  activeGate?.cancel();
+  drainRecords();
   activeGate = gate;
   try {
     return await runWithGate(list, cards, gate, gen, hints, pattern, host);
   } catch (e) {
     gate.cancel(); // only this run's gate
+    drainRecords();
     throw e;
   }
 }
@@ -187,17 +194,16 @@ async function runInner(gateMs?: number): Promise<void> {
 /** (f) A failed identify/rank gets up to 3 retries per container, 60 s apart.
  *  Permanent rejections (not-a-list) still go through reject(). */
 function scheduleRetry(container: Element): void {
-  const now = Date.now();
-  const entry = retryBudget.get(container) ?? { count: 0, until: 0 };
+  const entry = retryBudget.get(container) ?? { count: 0, timer: undefined as unknown as ReturnType<typeof setTimeout> };
   if (entry.count >= 3) return;
   entry.count += 1;
-  entry.until = now + 60000;
-  retryBudget.set(container, entry);
-  const t = setTimeout(() => {
-    retryTimers.delete(t);
+  clearTimeout(entry.timer); // a second failure while queued never double-books a run
+  entry.timer = setTimeout(() => {
+    retryTimers.delete(entry.timer);
     void run(0);
   }, 60000);
-  retryTimers.add(t);
+  retryBudget.set(container, entry);
+  retryTimers.add(entry.timer);
 }
 
 async function runWithGate(
@@ -226,8 +232,8 @@ async function runWithGate(
     });
     if (gen !== generation) return gate.cancel();
     if (!identified.ok || !identified.data.isList || !identified.data.pageType || identified.data.items.length === 0) {
-      suppress = true;
-      try { gate.cancel(); } finally { queueMicrotask(() => { suppress = false; }); }
+      gate.cancel();
+      drainRecords();
       if (identified.ok) reject(list); // identified and not a list: permanent for this container
       else scheduleRetry(list.container); // transport/API failure: retry budget
       return;
@@ -244,8 +250,8 @@ async function runWithGate(
   });
   if (gen !== generation) return gate.cancel();
   if (!ranked.ok || !ranked.data.plan) {
-    suppress = true;
-    try { gate.cancel(); } finally { queueMicrotask(() => { suppress = false; }); }
+    gate.cancel();
+    drainRecords();
     if (local && shouldInvalidateLayout(ranked)) {
       // The stored layout identified nothing the resolver knows — it is stale.
       void deleteLayout(storageKey);
@@ -256,10 +262,14 @@ async function runWithGate(
   const { plan, pageResultId } = ranked.data;
   gate.ready(() => {
     if (gen !== generation) return;
-    suppress = true;
-    try {
-      current?.undo();
-      current = applyPlan(list, plan, {
+    current?.undo();
+    current = applyPlan(list, plan, {
+      onUndo: () => {
+        // Strip Undo reverts our move/collapse — drain its records and take a
+        // fresh baseline so the revert itself never schedules a rerun (R3-4).
+        drainRecords();
+        recomputeLastList();
+      },
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
       onFeedback: pageResultId
         ? (clientId, verdict, label) => {
@@ -318,25 +328,38 @@ async function runWithGate(
         : undefined,
     });
     if (pageResultId) void send({ type: "page-result", pageResultId, lifted: current!.lifted });
-    } finally {
-      queueMicrotask(() => { suppress = false; });
-    }
-    // (b) Recompute lastList post-apply so move/collapse doesn't look like a
-    // site re-sort and trigger an endless rerun loop.
-    const fresh = detectList(document);
-    lastList = fresh ? { container: fresh.container, cards: [...fresh.cards.values()] } : lastList;
-    if (fresh) watch(fresh.container, fresh.cards.values());
+    // R3-5: recompute AFTER the gate has revealed — while the container is
+    // still hidden detectList's visibility check would skip it. The gate
+    // reveals synchronously before this microtask runs.
+    queueMicrotask(() => {
+      drainRecords();
+      recomputeLastList();
+    });
   });
 }
 
 let lastHref = location.href;
 const hrefTimer = setInterval(() => {
+  // Container swapped wholesale (SPA route change without a new URL): the old
+  // watcher's records stop arriving, so re-detect here (R3-7).
+  if (lastList && !lastList.container.isConnected) scheduleRerun();
   if (location.href === lastHref) return;
   lastHref = location.href;
   last = null; // E-1: hints came from the old URL's search box.
   rejected = new WeakMap();
+  retryBudget = new WeakMap(); // retry history is per page (R3-9)
+  bodyBackoffMs = 1000;
+  lastList = null;
   scheduleRerun();
 }, 1000);
+
+let droppedRecords = false;
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && droppedRecords) {
+    droppedRecords = false;
+    scheduleRerun();
+  }
+});
 
 export function __stopForTests(): void {
   watcher?.disconnect();

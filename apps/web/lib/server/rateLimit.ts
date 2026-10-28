@@ -15,7 +15,7 @@ export function checkRateLimit(
   if (hits.size > 10000) {
     // Evict keys whose newest hit is outside every window we use.
     const maxWindow = DEFAULT_WINDOW_MS * 60;
-    maxWindowSeen = Math.max(maxWindowSeen, windowMs);
+    if (windowMs > maxWindowSeen) maxWindowSeen = windowMs;
     for (const [k, ats] of hits) {
       if (ats.every((at) => now - at > maxWindow)) hits.delete(k);
     }
@@ -44,6 +44,7 @@ export function checkRateLimit(
 
 export function __resetRateLimitForTests(): void {
   hits.clear();
+  maxWindowSeen = 0;
 }
 
 export function clientKey(req: Request): string {

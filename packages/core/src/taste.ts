@@ -87,6 +87,14 @@ export interface ActivityEvent {
   at: string;
 }
 
+/** Order-independent deep equality — jsonb key order differs from JS object order. */
+const sortKeys = (v: unknown): unknown =>
+  Array.isArray(v) ? v.map(sortKeys)
+    : v !== null && typeof v === "object"
+      ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sortKeys((v as Record<string, unknown>)[k])]))
+      : v;
+const sameEntry = (a: unknown, b: unknown) => JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
+
 export interface ProfileWrite {
   profile: ProfileV2;
   /** Null when the write changed nothing — callers skip the commit. */
@@ -232,7 +240,7 @@ export function addEntry(
     throw new ProfileError("INVALID", `Invalid entry: ${checked.error.issues[0]?.message ?? "unknown"}`);
   }
 
-  if (existing && JSON.stringify(existing) === JSON.stringify(next)) {
+  if (existing && sameEntry(existing, next)) {
     return { profile, event: null };
   }
 

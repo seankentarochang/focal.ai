@@ -17,5 +17,14 @@ export async function ensureUser(db: Db, user: AuthUser) {
   if (byEmail && user.emailVerified !== true) {
     throw new DbError("CONFLICT", "ACCOUNT_CONFLICT: an account with this email already exists and is not verified");
   }
+  // Confirm the WorkOS user still exists before creating a row — otherwise a
+  // deleted identity resurrects a fresh account on its next sign-in.
+  if (process.env.WORKOS_API_KEY) {
+    const { WorkOS } = await import("@workos-inc/node");
+    const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(user.id).catch(() => null);
+    if (!remote) {
+      throw new DbError("CONFLICT", "ACCOUNT_CONFLICT: the WorkOS user no longer exists");
+    }
+  }
   return db.users.upsert(user.email, { workos: user.id });
 }

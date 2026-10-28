@@ -39,7 +39,6 @@ const identifyBody = (host: string) => ({
   cards: [...SF, "Absolutely Not A Real Venue"].map((name, i) => ({
     clientId: `c${i}`,
     snippets: [name, "Restaurant · $$"],
-    links: [],
   })),
 });
 

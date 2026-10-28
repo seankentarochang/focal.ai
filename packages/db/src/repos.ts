@@ -124,7 +124,7 @@ export function profileRepo(sql: Sql) {
         if (event.undoes) {
           const marked = await tx`
             UPDATE activity_events SET undone_by = ${event.id}
-            WHERE id = ${event.undoes} AND user_id = ${userId} AND undone_by IS NULL RETURNING id`;
+            WHERE id = ${event.undoes} AND user_id = ${userId} AND entry_id = ${event.entryId} AND undone_by IS NULL RETURNING id`;
           if (marked.length === 0) throw new DbError("CONFLICT", `event ${event.undoes} is not undoable`);
         }
         const [next] = await tx`
@@ -149,15 +149,6 @@ export function profileRepo(sql: Sql) {
       return row ? eventFrom<E>(row) : null;
     },
 
-    /** A later, not-undone write touched the same entry — undoing would resurrect a stale version. */
-    async hasLaterChange(userId: string, entryId: string, seq: number): Promise<boolean> {
-      const rows = await sql`
-        SELECT 1 FROM activity_events
-        WHERE user_id = ${userId} AND entry_id = ${entryId} AND seq > ${seq}
-          AND undone_by IS NULL AND action <> 'undo'
-        LIMIT 1`;
-      return rows.length > 0;
-    },
 
     /** Full export: account, profile entries, settings and activity. */
     async export(userId: string) {
@@ -297,6 +288,7 @@ export function pageResultsRepo(sql: Sql) {
       return row ? pageResultFrom(row) : null;
     },
     async purgeExpired(): Promise<number> {
+      await sql`DELETE FROM resolution_cache WHERE status = 'unresolved' AND updated_at < now() - interval '7 days'`;
       const rows = await sql`DELETE FROM page_results WHERE expires_at <= now() RETURNING id`;
       return rows.length;
     },

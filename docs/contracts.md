@@ -158,32 +158,35 @@ ranking surface is POST /api/try/rank (anonymous, lift-only) and POST /api/page/
 (authenticated extension traffic); stdio MCP keeps the v1 pipeline until ported.
 ```
 
-v2 route table (cookie session or `Authorization: Bearer <extension token>`; try/rank is anonymous):
+v2 route table. Auth: `bearer` = `Authorization: Bearer <extension token>`, `cookie` = website session, `anon` = no auth (IP rate-limited).
 
 ```text
-POST /api/page/identify   { host, pathPattern, signature, cityHints[], cards[{clientId,snippets[]}] }
-                         → { ok:true, isList, pageType?, items:IdentifiedItem[], layout?, meta }
-POST /api/page/rank       { host, pageType, items:IdentifiedItem[] }
-                         → { status, pageResultId, plan?, resolvedCount }
-POST /api/feedback        { pageResultId, clientId, verdict:"more"|"less" }
-                         → { saved, entryId, eventId|null }  (null = no-op, nothing written)
-GET  /api/activity?before → { events:ActivityRecord[], nextBefore?:number }  (seq cursor)
-POST /api/activity/[id]/undo  → { undone:true, eventId } | 404 | 409 later-change
-GET  /api/settings        → { sites:[{hostname,mode:"skip"|"off"}], settings }
-PUT  /api/settings        { sites:[{hostname,mode:"skip"|"off"}] } → { sites }
-POST /api/settings        { hostname, mode:"skip"|"off"|null } → { sites }   (null removes)
-GET  /api/profile         → { version, entries }
-POST /api/profile         { action:add|remove|set_strength|approve_rule, ... }
-DELETE /api/profile       → deletes the account + data, then POST /sign-out
-GET  /api/profile/export  → JSON export incl. page_results
-POST /api/extension/session → { token, email, expiresAt }  (cookie-auth only)
-DELETE /api/extension/session → 204 (revokes the bearer token)
-POST /api/chat            { messages:[...] } → chat tool calls over the profile
-POST /api/try/rank        { pageType, items[{clientId?,name,city?}], seeds[] }
-                         → { items (clientId echoed), plan, meta:{durationMs,unresolved,qlooRequest,dataSource} }
-GET  /api/health          → { ok:true, hasQlooKey, dataSource:"live"|"mock" }
-POST /api/qloo/search     { query, types?[], location? } → { entities, meta }
+POST /api/page/identify   bearer | { host, pathPattern, signature, cityHints[], cards[{clientId,snippets[]}] }
+                         → { isList:boolean, pageType:InsightType|null, items:IdentifiedItem[], layout? }
+POST /api/page/rank       bearer | { host, pageType, items:IdentifiedItem[] }
+                         → { status, pageResultId:string|null, plan:RenderPlan|null, resolvedCount }
+POST /api/feedback        bearer | { pageResultId, clientId, verdict:"more"|"less" }
+                         → { saved:true, eventId:null } on no-op | { saved:true, entryId, eventId } on write
+GET  /api/me              cookie | → { viewer } profile-status probe
+GET  /api/activity?before cookie | → { activity:ActivityRecord[] }  (?before=<seq> cursor; no nextBefore)
+POST /api/activity/[id]/undo  cookie|bearer | → { undone:true, eventId:string|null } | 404 | 409 later-change
+GET  /api/settings        cookie|bearer | → { sites:[{hostname,mode:"skip"|"off"}] }
+PUT  /api/settings        cookie|bearer | { sites:[{hostname,mode:"skip"|"off"}] } → { sites }
+POST /api/settings        cookie|bearer | { hostname, mode:"skip"|"off"|null } → { sites }   (null removes)
+GET  /api/profile         cookie | → { entries }
+POST /api/profile         cookie | { action:approve_rule|set_strength|remove, entry_id, strength? }
+DELETE /api/profile       cookie | { confirm:"delete" } → { deleted:true }
+GET  /api/profile/export  cookie | → JSON export incl. page_results
+POST /api/extension/session  cookie | → { token, email, expiresAt }
+DELETE /api/extension/session  cookie | → 204 (revokes the bearer token)
+POST /api/chat            cookie | { messages:[...] } → chat tool calls over the profile
+POST /api/try/rank        anon | { pageType, items[{clientId?,name,city?}], seeds[] }
+                         → { status, items (clientId echoed), plan, meta:{durationMs,unresolved,qlooRequest,dataSource} }
+GET  /api/health          anon | → { ok:true, hasQlooKey, dataSource:"live"|"mock" }
+POST /api/qloo/search     anon | { query, types?[], location? } → { entities, meta }
 POST /mcp                 hosted MCP (Streamable HTTP); 401 without auth
+GET  /api/oauth/authorization-server  anon | OAuth metadata (hosted MCP discovery)
+GET  /api/oauth/protected-resource    anon | OAuth metadata (hosted MCP discovery)
 ```
 
 Removed 2026-10-28 (round 2): `GET /api/page/result/[id]` — orphaned; `/why` reads the store directly.

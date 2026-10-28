@@ -3,7 +3,7 @@ const db = openDb(process.env.DATABASE_URL!);
 const user = await db.users.upsert("live-e2e@focal.test");
 const { token } = await db.extensionSessions.issue(user.id);
 const names = ["Rintaro","Lazy Bear","State Bird Provisions","Kokkari Estiatorio","House of Prime Rib","Zuni Café","Saison","Che Fico","Nopa","Foreign Cinema","Rich Table","Liholiho Yacht Club"];
-const body = { host:"www.yelp.com", pathPattern:"/search", pageType:"place", items: names.map((name,i)=>({clientId:`c${i}`,name,type:"place",city:"San Francisco"})) };
+const body = { host:"www.yelp.com", pageType:"place", items: names.map((name,i)=>({clientId:`c${i}`,name,type:"place",city:"San Francisco"})) };
 const before = (await db.sql`select count(*)::int n, max(updated_at) mx from resolution_cache`)[0];
 const res = await fetch("http://localhost:3300/api/page/rank", { method:"POST", headers:{ "content-type":"application/json", authorization:`Bearer ${token}` }, body: JSON.stringify(body) });
 const json = await res.json();

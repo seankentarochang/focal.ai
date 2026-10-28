@@ -1,6 +1,6 @@
 import { FOCAL_HOSTS, FOCAL_ORIGIN } from "../config";
 import { checkEligibility } from "../guards/eligibility";
-import { normalizeHost, toggleSite } from "../settings";
+import { normalizeHost } from "../settings";
 import { getSession, getSettings, getTabResult, setSettings } from "../storage";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -41,22 +41,18 @@ async function main(): Promise<void> {
     toggle.checked = !settings.siteOff.includes(host);
     toggle.addEventListener("change", async () => {
       const on = toggle.checked;
-      const revert = async (copy: string) => {
-        await setSettings(toggleSite(await getSettings(), host, !on));
+      // Server write first; its sites echo through applyWireSites is the
+      // authoritative cache update — no optimistic local write.
+      const revert = () => {
         toggle.checked = !on;
-        $("site-status").textContent = copy;
+        $("site-status").textContent = "Couldn't save — change reverted";
       };
-      await setSettings(toggleSite(await getSettings(), host, on));
       try {
         const res = (await chrome.runtime.sendMessage({ type: "set-site", hostname: host, on })) as { ok?: boolean } | undefined;
-        if (!res?.ok) {
-          // Server write failed: revert the local toggle so state stays honest.
-          await revert("Couldn't save — change reverted");
-          return;
-        }
+        if (!res?.ok) return revert();
         if (tab?.id !== undefined) await chrome.tabs.reload(tab.id);
       } catch {
-        await revert("Couldn't save — change reverted");
+        revert();
       }
     });
   }

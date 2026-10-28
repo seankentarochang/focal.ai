@@ -95,16 +95,16 @@ chrome.runtime.onMessage.addListener((msg: ContentMessage, sender, sendResponse)
   const tabId = sender.tab?.id;
   switch (msg.type) {
     case "identify":
-      void post("/api/page/identify", msg.body).then(sendResponse);
+      void post("/api/page/identify", msg.body).then(sendResponse, () => sendResponse({ ok: false }));
       return true;
     case "rank":
-      void post("/api/page/rank", msg.body).then(sendResponse);
+      void post("/api/page/rank", msg.body).then(sendResponse, () => sendResponse({ ok: false }));
       return true;
     case "feedback":
-      void post("/api/feedback", msg.body).then(sendResponse);
+      void post("/api/feedback", msg.body).then(sendResponse, () => sendResponse({ ok: false }));
       return true;
     case "undo-event":
-      void post(`/api/activity/${encodeURIComponent(msg.eventId)}/undo`, {}).then(sendResponse);
+      void post(`/api/activity/${encodeURIComponent(msg.eventId)}/undo`, {}).then(sendResponse, () => sendResponse({ ok: false }));
       return true;
     case "set-site":
       void setSiteOnServer(msg.hostname, msg.on).then((saved) => sendResponse({ ok: saved, data: undefined as never }));

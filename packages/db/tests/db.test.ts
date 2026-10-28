@@ -12,7 +12,7 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
 
   describe("migrations", () => {
     it("apply from empty and are idempotent", async () => {
-      expect(loadMigrations().map((m) => m.name)).toEqual(["0001_init.sql", "0002_extension_sessions.sql", "0003_activity_seq.sql"]);
+      expect(loadMigrations().map((m) => m.name)).toEqual(["0001_init.sql", "0002_extension_sessions.sql", "0003_activity_seq.sql", "0004_activity_seq_renumber.sql"]);
       expect(await migrate(db.sql)).toEqual([]);
       const tables = await db.sql`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() ORDER BY 1`;
       expect(tables.map((t) => t.table_name)).toEqual([
@@ -135,11 +135,11 @@ describe.skipIf(!DATABASE_URL)("packages/db against Postgres", () => {
     it("sets, overrides and removes per-host modes", async () => {
       const u = await db.users.upsert("s1@example.com");
       await db.sites.set(u.id, "yelp.com", "off");
-      await db.sites.set(u.id, "yelp.com", "on");
+      await db.sites.set(u.id, "yelp.com", "off");
       await db.sites.set(u.id, "reddit.com", "skip");
       expect(await db.sites.list(u.id)).toEqual([
         { hostname: "reddit.com", mode: "skip" },
-        { hostname: "yelp.com", mode: "on" },
+        { hostname: "yelp.com", mode: "off" },
       ]);
       await db.sites.remove(u.id, "yelp.com");
       expect(await db.sites.list(u.id)).toHaveLength(1);

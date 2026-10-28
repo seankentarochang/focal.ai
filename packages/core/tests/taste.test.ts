@@ -21,8 +21,8 @@ describe("profile v2 writes", () => {
     const { profile, event } = addEntry(createEmptyProfileV2(fixedClock), rintaro, "chat", fixedClock);
     expect(profile.entries).toHaveLength(1);
     expect(event).toMatchObject({ action: "add", actor: "chat", entryId: profile.entries[0]!.id });
-    expect(event.before).toBeUndefined();
-    expect(event.after).toEqual(profile.entries[0]);
+    expect(event!.before).toBeUndefined();
+    expect(event!.after).toEqual(profile.entries[0]);
   });
 
   it("re-adding the same qlooId changes the entry instead of duplicating", () => {
@@ -31,7 +31,7 @@ describe("profile v2 writes", () => {
     expect(second.profile.entries).toHaveLength(1);
     expect(second.profile.entries[0]).toMatchObject({ strength: "dislike", id: first.profile.entries[0]!.id });
     expect(second.event).toMatchObject({ action: "change", actor: "mcp:claude" });
-    expect(second.event.before).toMatchObject({ strength: "love" });
+    expect(second.event!.before).toMatchObject({ strength: "love" });
   });
 
   it("agent rules start pending; manual rules are active; approve activates", () => {
@@ -80,29 +80,29 @@ describe("profile v2 writes", () => {
 describe("undo", () => {
   it("undoes add, remove and change", () => {
     const added = addEntry(createEmptyProfileV2(), rintaro, "chat", fixedClock);
-    expect(undoEvent(added.profile, added.event, "manual", fixedClock).profile.entries).toHaveLength(0);
+    expect(undoEvent(added.profile, added.event!, "manual", fixedClock).profile.entries).toHaveLength(0);
 
     const removed = removeEntry(added.profile, added.profile.entries[0]!.id, "manual", fixedClock);
-    const restored = undoEvent(removed.profile, removed.event, "manual", fixedClock);
+    const restored = undoEvent(removed.profile, removed.event!, "manual", fixedClock);
     expect(restored.profile.entries).toEqual(added.profile.entries);
-    expect(restored.event).toMatchObject({ action: "undo", undoes: removed.event.id });
+    expect(restored.event).toMatchObject({ action: "undo", undoes: removed.event!.id });
 
     const changed = changeStrength(added.profile, added.profile.entries[0]!.id, "dislike", "page", fixedClock);
-    const reverted = undoEvent(changed.profile, changed.event, "manual", fixedClock);
+    const reverted = undoEvent(changed.profile, changed.event!, "manual", fixedClock);
     expect(reverted.profile.entries[0]).toMatchObject({ strength: "love" });
   });
 
   it("undoing an undo re-applies the change", () => {
     const added = addEntry(createEmptyProfileV2(), rintaro, "chat", fixedClock);
-    const undone = undoEvent(added.profile, added.event, "manual", fixedClock);
-    const redone = undoEvent(undone.profile, undone.event, "manual", fixedClock);
+    const undone = undoEvent(added.profile, added.event!, "manual", fixedClock);
+    const redone = undoEvent(undone.profile, undone.event!, "manual", fixedClock);
     expect(redone.profile.entries).toEqual(added.profile.entries);
   });
 
   it("keeps unrelated later writes", () => {
     const a = addEntry(createEmptyProfileV2(), rintaro, "chat", fixedClock);
     const b = addEntry(a.profile, { ...rintaro, qlooId: "FUGAZI", name: "Fugazi", type: "urn:entity:artist" }, "chat", fixedClock);
-    const undone = undoEvent(b.profile, a.event, "manual", fixedClock);
+    const undone = undoEvent(b.profile, a.event!, "manual", fixedClock);
     expect(undone.profile.entries.map((e) => e.name)).toEqual(["Fugazi"]);
   });
 
@@ -110,7 +110,7 @@ describe("undo", () => {
     const a = addEntry(createEmptyProfileV2(), rintaro, "chat", fixedClock);
     const removed = removeEntry(a.profile, a.profile.entries[0]!.id, "manual", fixedClock);
     const readded = addEntry(removed.profile, rintaro, "chat", fixedClock);
-    expect(() => undoEvent(readded.profile, removed.event, "manual")).toThrow(/added again/);
+    expect(() => undoEvent(readded.profile, removed.event!, "manual")).toThrow(/added again/);
   });
 });
 

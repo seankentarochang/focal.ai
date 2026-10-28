@@ -88,6 +88,28 @@ describe.skipIf(!url)("round2 server fixes", () => {
     expect(checkRateLimit("vip", { limit: 1, windowMs: 60000 }).ok).toBe(false);
   });
 
+  it("re-saving an identical thing through dbProfileStore writes no event and bumps no version", async () => {
+    const { dbProfileStore } = await import("@/lib/server/chat/store");
+    const store = dbProfileStore(db!, userId);
+    const profile = await store.load();
+    const w = addEntry({ version: 2, updatedAt: new Date().toISOString(), entries: profile.entries as never }, {
+      kind: "thing", qlooId: "E-ROUND", name: "Round", type: "urn:entity:place", strength: "love", source: "manual",
+    } as never, "manual");
+    if (w.event) await store.commit(w.profile as never, w.event as never);
+    const v1 = (await store.load()).version;
+    const events1 = await db!.profile.activity(userId, {});
+    // Re-save the identical entry — deep-equal must fire even though Postgres
+    // jsonb reordered the entry's keys.
+    const w2 = addEntry({ version: 2, updatedAt: new Date().toISOString(), entries: (await store.load()).entries as never }, {
+      kind: "thing", qlooId: "E-ROUND", name: "Round", type: "urn:entity:place", strength: "love", source: "manual",
+    } as never, "manual");
+    expect(w2.event).toBeNull();
+    if (w2.event) await store.commit(w2.profile as never, w2.event as never);
+    const events2 = await db!.profile.activity(userId, {});
+    expect(events2.length).toBe(events1.length);
+    expect((await store.load()).version).toBe(v1);
+  });
+
   it("concurrent sites.replace and sites.set stay consistent", async () => {
     const replace = db!.sites.replace(userId, [{ hostname: "a.com", mode: "skip" }]);
     const set = db!.sites.set(userId, "b.com", "off");

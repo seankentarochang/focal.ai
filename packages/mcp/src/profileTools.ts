@@ -176,12 +176,13 @@ export async function runProfileTool(ctx: ProfileToolContext, name: string, args
         name === "add_vibe"
           ? await save(ctx, { kind: "vibe", qlooId: tag.id, name: tag.name, strength: strength as (typeof STRENGTHS)[number], source: ctx.actor })
           : await save(ctx, { kind: "rule", qlooId: tag.id, name: tag.name, source: ctx.actor });
+      const entry = ctx.getProfile().entries.find((e) => e.qlooId === tag.id && e.kind === "rule");
       return name === "add_vibe"
         ? withProfilePage(ctx, { saved: true, vibe: tag.name, strength, event_id: event?.id ?? null })
         : withProfilePage(ctx, {
             saved: true,
             rule: tag.name,
-            status: "pending",
+            status: entry?.kind === "rule" ? entry.status : "pending",
             note: "The user must approve this rule on their focal profile page.",
             event_id: event?.id ?? null,
           });

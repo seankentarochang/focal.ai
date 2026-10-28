@@ -90,6 +90,7 @@ export async function POST(req: Request): Promise<Response> {
         { status: 409 },
       );
     }
+    if (e instanceof DbError) return errorResponse(e);
     if (e instanceof ProfileError) return notFound(e.message);
     throw e;
   }
@@ -116,6 +117,15 @@ export async function DELETE(req: Request): Promise<Response> {
     );
   }
   const db = getDb();
-  if (viewer.persisted && db) await db.users.delete(viewer.userId);
+  if (viewer.persisted && db) {
+    const row = await db.sql`SELECT auth_ids->>'workos' AS wid FROM users WHERE id = ${viewer.userId}`;
+    await db.users.delete(viewer.userId);
+    if (process.env.WORKOS_API_KEY && row[0]?.wid) {
+      const { WorkOS } = await import("@workos-inc/node");
+      await new WorkOS(process.env.WORKOS_API_KEY).userManagement.deleteUser(row[0].wid as string).catch((e) => {
+        console.warn("WorkOS user delete failed:", e instanceof Error ? e.message : String(e));
+      });
+    }
+  }
   return Response.json({ deleted: true });
 }

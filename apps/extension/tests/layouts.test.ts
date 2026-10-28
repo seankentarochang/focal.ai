@@ -7,7 +7,6 @@ import { RESTAURANT_GRID } from "./fixtures";
 const CARDS = ["Rintaro", "Ippudo", "Chuko", "Okonomi"].map((name, i) => ({
   clientId: `c${i}`,
   snippets: [name, "Ramen · $$"],
-  links: [],
 }));
 
 const LAYOUT: LearnedLayout = {

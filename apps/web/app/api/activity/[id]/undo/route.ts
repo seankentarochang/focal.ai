@@ -2,6 +2,7 @@ import { undoEvent, ProfileError, type ActivityEvent } from "@focal-ai/core";
 import { DbError } from "@focal-ai/db";
 import { caller } from "@/lib/server/auth/caller";
 import { dbProfileStore } from "@/lib/server/chat/store";
+import { errorResponse } from "@/lib/server/errors";
 import { getDb } from "@/lib/server/db";
 import { checkRateLimit } from "@/lib/server/rateLimit";
 
@@ -32,12 +33,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const record = await db.profile.event(who.userId, id);
   if (!record || record.undoneBy || record.action === "undo") return notFound("No undoable change with that id");
   if (who.via === "bearer" && record.actor !== "page") return notFound("No undoable change with that id");
-  if (await db.profile.hasLaterChange(who.userId, record.entryId, record.seq)) {
-    return Response.json(
-      { error: { code: "CONFLICT", message: "A later change to this entry exists; undo that first" } },
-      { status: 409 },
-    );
-  }
   const store = dbProfileStore(db, who.userId);
   try {
     const profile = await store.load();
@@ -52,6 +47,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         { status: 409 },
       );
     }
+    if (e instanceof DbError) return errorResponse(e);
     if (e instanceof ProfileError) return notFound(e.message);
     throw e;
   }

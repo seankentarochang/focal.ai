@@ -75,7 +75,7 @@ export function SettingsManager() {
         setError("Couldn't delete the account.");
         return;
       }
-      await fetch("/sign-out", { method: "POST" });
+      await fetch("/sign-out", { method: "POST" }).catch(() => {});
       location.href = "/";
     } finally {
       setBusy(false);

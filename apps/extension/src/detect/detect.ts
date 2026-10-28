@@ -176,7 +176,7 @@ export function detectList(root: Document | Element): DetectedList | null {
   return { container: found.container, cards, signature: found.key, score: found.score };
 }
 
-export function snapshotCards(list: DetectedList, base?: string): CardSnapshot[] {
+export function snapshotCards(list: DetectedList): CardSnapshot[] {
   return [...list.cards].slice(0, MAX_CARDS).map(([clientId, el]) => ({
     clientId,
     snippets: extractSnippets(el),

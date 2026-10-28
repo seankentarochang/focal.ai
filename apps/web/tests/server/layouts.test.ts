@@ -8,7 +8,7 @@ const body = (cards: { clientId: string; snippets: string[] }[], cityHints: stri
   pathPattern: "/search",
   signature: "DIV.card",
   cityHints,
-  cards: cards.map((c) => ({ clientId: c.clientId, snippets: c.snippets, links: [] })),
+  cards: cards.map((c) => ({ clientId: c.clientId, snippets: c.snippets })),
 });
 
 const answer = (

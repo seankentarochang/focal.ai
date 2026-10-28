@@ -49,8 +49,6 @@ type ToolResult = {
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
 };
-class RetryableConflict extends Error {}
-
 const asResult = (value: unknown): ToolResult => {
   const plain = value !== null && typeof value === "object" && !Array.isArray(value);
   return {
@@ -82,7 +80,6 @@ export function createHostedServer(deps: HostedDeps): McpServer {
           } catch (e) {
             if (e instanceof Error && "code" in e && (e as { code?: string }).code === "CONFLICT") {
               profile = null; // reload before the next write
-              throw new RetryableConflict();
             }
             throw e;
           }
@@ -92,7 +89,7 @@ export function createHostedServer(deps: HostedDeps): McpServer {
       name,
       args,
     ).catch((e: unknown) => {
-      if (e instanceof RetryableConflict) {
+      if (e instanceof Error && "code" in e && (e as { code?: string }).code === "CONFLICT") {
         return { content: [{ type: "text" as const, text: "Your profile changed concurrently — please retry" }], isError: true };
       }
       throw e;

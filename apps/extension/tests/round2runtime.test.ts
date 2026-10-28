@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { BackgroundReply, ContentMessage } from "../src/types";
+import type { BackgroundReply, ContentMessage } from "../src/api";
 import { RESTAURANT_GRID } from "./fixtures";
 
 /** Same harness as layouts.test.ts: chrome mock + configurable sendMessage. */
@@ -105,6 +105,27 @@ describe("R2-15f: retry budget for failed identify", () => {
   });
 });
 
+describe("R3-4: strip Undo does not schedule a rerun (move mode)", () => {
+  it("undoing a lifted plan leaves the card set alone", async () => {
+    const { sent } = stubChrome();
+    // Plain container (no flex/grid) -> applyPlan uses move mode; Undo re-appends.
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    const undo = document.querySelector<HTMLElement>("[data-focal='undo']");
+    expect(undo).not.toBeNull();
+    undo!.click();
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(sent.filter((m) => m.type === "rank").length).toBe(1);
+  });
+});
+
 describe("R2-15c: gate ownership", () => {
   it("a failing run cancels only its own gate, leaving a newer gate live", async () => {
     let rankCalls = 0;
@@ -121,7 +142,7 @@ describe("R2-15c: gate ownership", () => {
       if (msg.type === "rank") {
         rankCalls++;
         if (rankCalls === 1) throw new Error("rank failed"); // first run fails at rank
-        return new Promise((res) => { resolveSecond = res; }); // second run's rank hangs
+        return new Promise<BackgroundReply<never>>((res) => { resolveSecond = res as (v: unknown) => void; }); // second run's rank hangs
       }
       return { ok: true, data: {} } as never;
     });
