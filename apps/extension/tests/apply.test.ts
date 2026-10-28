@@ -231,3 +231,23 @@ describe("R10-3: fold Show restores the full style attribute", () => {
     __setTrustCheckForTests(() => true);
   });
 });
+
+describe("R13-RT-3: css-order assigns order to the lifted CARDS", () => {
+  it("a promo tile keeps no order; only the 3 lifted cards get negative orders", async () => {
+    const { applyPlan } = await import("../src/apply/apply");
+    document.body.innerHTML = "<main><div class='grid'><div class='promo'>AD</div><div class='card'>A</div><div class='card'>B</div><div class='card'>C</div><div class='card'>D</div></div></main>";
+    const container = document.querySelector<HTMLElement>(".grid")!;
+    const promo = container.children[0]!;
+    const cardEls = [...container.querySelectorAll<HTMLElement>(".card")];
+    const plan = {
+      ops: [{ op: "reorder", containerId: "c", order: ["c1", "c2", "c3", "c0"] }],
+      summary: { lifted: 3 },
+    } as never;
+    container.style.display = "grid"; // isFlexOrGrid -> css-order (jsdom needs the inline hint)
+    applyPlan({ container, cards: new Map([["c0", cardEls[0]!], ["c1", cardEls[1]!], ["c2", cardEls[2]!], ["c3", cardEls[3]!]]) }, plan, {});
+    expect((promo as HTMLElement).style.getPropertyValue("order")).toBe("");
+    const orders = cardEls.map((c) => c.style.getPropertyValue("order"));
+    // c1,c2,c3 lifted -> -3,-2,-1; c0 untouched; the promo tile gets nothing.
+    expect(orders).toEqual(["", "-3", "-2", "-1"]);
+  });
+});

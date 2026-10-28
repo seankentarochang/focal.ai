@@ -23,7 +23,7 @@ describe("render gate", () => {
   it("reveals after 300 ms with a ranking chip, then applies if untouched", () => {
     const gate = createFirstRunGate(container);
     vi.advanceTimersByTime(300);
-    expect(gate.revealed).toBe(true);
+    expect(container.style.getPropertyValue("visibility")).toBe(""); // revealed
     expect(document.querySelector('[data-focal="chip"]')!.textContent).toBe("focal is ranking…");
     const apply = vi.fn();
     expect(gate.ready(apply, false)).toBe("late-applied");
@@ -104,5 +104,24 @@ describe("R12-1: rerun gate contract", () => {
     expect(document.querySelector('[data-focal="chip"]')).toBeTruthy();
     gate2.cancel();
     expect(document.querySelector('[data-focal="chip"]')).toBeNull();
+  });
+});
+
+describe("R13-1: late-offered chip is retired by cancel()", () => {
+  it("a late-offered plan leaves zero [data-focal='chip'] after cancel", async () => {
+    const { createFirstRunGate } = await import("../src/apply/gate");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const gate = createFirstRunGate(container);
+    vi.advanceTimersByTime(300); // reveal + "ranking…" chip
+    container.dispatchEvent(new Event("pointerdown", { bubbles: true })); // interacted
+    const gate2 = createFirstRunGate(container);
+    vi.advanceTimersByTime(300);
+    // First gate: force the late-offered path via interacted + ready
+    expect(gate.ready(vi.fn(), true)).toBe("late-offered");
+    expect(document.querySelector('[data-focal="chip"]')).toBeTruthy();
+    gate.cancel();
+    gate2.cancel();
+    expect(document.querySelectorAll('[data-focal="chip"]').length).toBe(0);
   });
 });

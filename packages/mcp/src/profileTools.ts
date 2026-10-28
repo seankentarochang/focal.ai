@@ -104,7 +104,7 @@ async function recommend(ctx: ProfileToolContext, type: ShortType, city: string 
         entity_id: s.entity.entityId,
         name: s.entity.name,
         disambiguation: s.entity.disambiguation,
-        affinity: Math.round((s.affinity ?? 0) * 100) / 100,
+        ...(s.affinity === undefined ? {} : { affinity: Math.round(s.affinity * 100) / 100 }),
       })),
   };
 }

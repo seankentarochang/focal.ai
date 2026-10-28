@@ -252,7 +252,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         // Only the lifted prefix gets an order (-lifted..-1); every other
         // child keeps whatever order the site gave it, so site appends and
         // prepends keep their own position (R6-9). Undo restores savedStyles.
-        sequence.slice(0, lifted).forEach((el, i) => {
+        glow.forEach((el, i) => { // the lifted cards, not sequence's first-n (RT-3)
           const h = el as HTMLElement;
           saveStyle(h, savedStyles);
           h.style.setProperty("order", String(i - lifted));

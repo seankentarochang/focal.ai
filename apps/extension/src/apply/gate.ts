@@ -10,8 +10,6 @@ export interface RenderGate {
   ready(apply: () => void, offer: boolean): GateOutcome;
   /** No plan (no list, nothing to lift, error): reveal and clean up. */
   cancel(): void;
-  readonly revealed: boolean;
-  readonly interacted: boolean;
 }
 
 /** Mount the shared "focal found matches · Apply" chip; the click applies (R12-1). */
@@ -81,8 +79,6 @@ export function createFirstRunGate(container: HTMLElement): RenderGate {
   }, GATE_MS);
 
   return {
-    get revealed() { return revealed; },
-    get interacted() { return interacted; },
     ready(apply, _offer) {
       if (settled) return "cancelled";
       settled = true;
@@ -101,7 +97,7 @@ export function createFirstRunGate(container: HTMLElement): RenderGate {
       }
       detach();
       chip?.remove();
-      mountApplyChip(container, apply);
+      chip = mountApplyChip(container, apply); // R13-1: keep it so cancel() can retire it
       return "late-offered";
     },
     cancel() {
@@ -123,8 +119,6 @@ export function createRerunGate(container: HTMLElement): RenderGate {
   let settled = false;
   let chip: HTMLElement | null = null;
   return {
-    get revealed() { return true; },
-    get interacted() { return false; },
     ready(apply, offer) {
       if (settled) return "cancelled";
       settled = true;

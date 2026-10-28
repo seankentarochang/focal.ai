@@ -331,7 +331,9 @@ describe("R6-4/5/7/8: apply lifecycle", () => {
     // return; a dead gate chip must be canceled, not left on the page.
     document.querySelector(".results")!.appendChild(Object.assign(document.createElement("div"), { className: "card", innerHTML: "<a href='/e'><h3>E</h3></a><p>X</p>" }));
     await new Promise((r) => setTimeout(r, 1500));
-    expect(document.querySelectorAll("[data-focal='gate']").length).toBe(0);
+    // The rerun may mount a fresh Apply chip — the assertion is that no DEAD
+    // chip stacks (R13-1's real selector now counts them).
+    expect(document.querySelectorAll("[data-focal='chip']").length).toBeLessThanOrEqual(1);
   });
 });
 
@@ -468,7 +470,7 @@ describe("R8-1/5: run serialization and move-mode skip", () => {
     document.querySelector(".results")!.appendChild(c2);
     await vi.waitFor(() => expect(sent.filter((m) => m.type === "identify").length).toBeGreaterThanOrEqual(1), { timeout: 4000 });
     await new Promise((r) => setTimeout(r, 2200));
-    expect(document.querySelectorAll("[data-focal='gate']").length).toBeLessThanOrEqual(1);
+    expect(document.querySelectorAll("[data-focal='chip']").length).toBeLessThanOrEqual(1);
     expect(sent.filter((m) => m.type === "rank").length).toBeGreaterThanOrEqual(1);
   });
 
@@ -539,5 +541,31 @@ describe("R12-2/R12-3: planEffectOnScreen", () => {
     const b = document.createElement("div"); b.getBoundingClientRect = () => rect(5100);
     const plan = mkPlan(1, [{ op: "collapse", containerId: "c", clientIds: ["b"], label: "x" }]);
     expect(planEffectOnScreen(mkList([["a", a], ["b", b]]), plan, null)).toBe(false);
+  });
+});
+
+describe("R13-2/RT-1: planEffectOnScreen is additive", () => {
+  const rect = (top: number) => ({ top, bottom: top + 40, left: 0, right: 100, width: 100, height: 40, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  const mkList = (cards: [string, HTMLElement][]) => ({ container: document.body, cards: new Map(cards), signature: "", snippet: "" }) as never;
+
+  it("applied 2-lift + new 4-lift, only DOM slot 3 on screen -> true", async () => {
+    const { planEffectOnScreen } = await import("../src/content");
+    const mk = (top: number) => { const el = document.createElement("div"); el.getBoundingClientRect = () => rect(top); return el; };
+    // Slots 0-2 off screen, slot 3 on screen.
+    const cards = [mk(5000), mk(5100), mk(5200), mk(20), mk(5300)];
+    const list = mkList(cards.map((c, i) => [`c${i}`, c] as [string, HTMLElement]));
+    const applied = { active: true, container: document.body, plan: { ops: [{ op: "reorder", order: ["c0", "c1"] }], summary: { lifted: 2 } }, applied: new Map([["c0", cards[0]!], ["c1", cards[1]!]]), undo() {} } as never;
+    const newPlan = { ops: [{ op: "reorder", containerId: "c", order: ["c0", "c1", "c2", "c3"] }], summary: { lifted: 4 } } as never;
+    // DOM slot 3 (cards[3]) is on screen — the DOM-first n probe catches it.
+    expect(planEffectOnScreen(list, newPlan, applied)).toBe(true);
+  });
+  it("previous plan's lifted count as on-screen when applied.container matches", async () => {
+    const { planEffectOnScreen } = await import("../src/content");
+    const mk = (top: number) => { const el = document.createElement("div"); el.getBoundingClientRect = () => rect(top); return el; };
+    const cards = [mk(15), mk(5000), mk(5100)];
+    const list = mkList(cards.map((c, i) => [`c${i}`, c] as [string, HTMLElement]));
+    const applied = { active: true, container: document.body, plan: { ops: [{ op: "reorder", order: ["c0"] }], summary: { lifted: 1 } }, applied: new Map([["c0", cards[0]!]]), undo() {} } as never;
+    const newPlan = { ops: [{ op: "reorder", containerId: "c", order: ["c2"] }], summary: { lifted: 1 } } as never;
+    expect(planEffectOnScreen(list, newPlan, applied)).toBe(true); // c0 (applied's lift) on screen
   });
 });

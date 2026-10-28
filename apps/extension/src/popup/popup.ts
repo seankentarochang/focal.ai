@@ -6,6 +6,8 @@ import { getSession, getSettings, getTabResult, setSettings } from "../storage";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const REASON_TEXT: Record<string, string> = {
+  "sensitive-field": "focal doesn't run where password or payment fields are shown.",
+  "site-off": "focal is off for this site.",
   scheme: "focal doesn't run on this page.",
   "never-run": "focal never runs on this kind of site.",
   skipped: "You skip this site in settings.",

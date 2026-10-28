@@ -64,9 +64,8 @@ function scheduleRerun(): void {
     if (runTimes.length >= MAX_RUNS_PER_MINUTE) return scheduleRerun();
     const list = detectList(document);
     if (!list) {
-      activeGate?.cancel(); // R12-4: the armed chip dies with its list
-      activeGate = null;
-      clearApplied(); // R8-2: the list is gone — stand down too
+      standDown(); // R13-4: the list is gone — stand down too (incl. RT-4)
+      lastList = null;
       bodyBackoffMs = Math.min(bodyBackoffMs * 2, 30000);
       return watchPage();
     }
@@ -135,14 +134,18 @@ export function shouldInvalidateLayout(ranked: { ok: boolean; data?: { resolvedC
  *  lifted elements, and every collapse/hide target. */
 export function planEffectOnScreen(list: DetectedList, plan: RenderPlan, applied?: ApplyHandle | null): boolean {
   const kids = [...list.cards.values()];
+  const lifted = plan.summary.lifted ?? plan.summary.moved ?? 0;
   const order = plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder")?.order ?? [];
-  const lifted = plan.summary.lifted;
-  const els: Element[] = [...order.slice(0, lifted).map((id) => list.cards.get(id)).filter((el): el is Element => !!el)];
-  if (applied?.active) { // css-order shows the PREVIOUS lift in those slots
+  const els: Element[] = [
+    // The slots the lift would occupy — always the DOM-first n (R13-2: additive).
+    ...kids.slice(0, lifted),
+    // The new plan's lifted elements.
+    ...order.slice(0, lifted).map((id) => list.cards.get(id)).filter((el): el is Element => !!el),
+  ];
+  if (applied?.active && applied.container === list.container) {
+    const curLifted = applied.plan.summary.lifted ?? applied.plan.summary.moved ?? 0;
     const curOrder = applied.plan.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder")?.order ?? [];
-    els.push(...curOrder.slice(0, applied.plan.summary.lifted).map((id) => applied.applied.get(id)).filter((el): el is Element => !!el));
-  } else {
-    els.push(...kids.slice(0, lifted));
+    els.push(...curOrder.slice(0, curLifted).map((id) => applied.applied.get(id)).filter((el): el is Element => !!el));
   }
   for (const op of plan.ops) {
     if (op.op === "collapse" || op.op === "hide") els.push(...op.clientIds.map((id) => list.cards.get(id)).filter((el): el is Element => !!el));
@@ -172,7 +175,7 @@ function watchPage(): void {
 function reject(list: DetectedList): void {
   rejected.set(list.container, list.cards.size);
   dropRetry(list.container); // R9-3: a permanent no kills a queued retry
-  clearApplied(); // R7-3
+  standDown(); // R13-4
   // R4-10: keep the baseline so the body watcher's same-list check stays cheap.
   baseline(list);
   watchPage();
@@ -214,7 +217,7 @@ async function runInner(): Promise<void> {
     document,
   });
   if (!eligibility.eligible) {
-    clearApplied(); // R6-8/R7-3
+    standDown(); // R13-4
     lastList = null;
     return watchPage();
   }
@@ -222,7 +225,7 @@ async function runInner(): Promise<void> {
   const list = detectList(document);
   if (!list) {
     lastList = null;
-    clearApplied(); // R8-2: no focal UI outliving its list
+    standDown(); // R13-4
     return watchPage();
   }
   if (userUndidFor === list.container) {
@@ -281,7 +284,7 @@ function scheduleRetry(container: Element): void {
 async function runWithGate(
   list: DetectedList,
   cards: CardSnapshot[],
-  gate: ReturnType<typeof createFirstRunGate>,
+  gate: import("./apply/gate").RenderGate,
   hints: string[],
   pattern: string,
   host: string,
@@ -414,7 +417,7 @@ async function runWithGate(
         // mutation batches re-baseline instead of re-lifting (R5-8/R6-5).
         userUndidFor = list.container;
         activeGate?.cancel();
-        clearApplied();
+        standDown(); // R13-4
         recomputeLastList();
       },
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
@@ -463,13 +466,11 @@ const hrefTimer = setInterval(() => {
   userUndidFor = null;
   hasGated = false;
   runTimes.length = 0; // R9-4/F9-1: per-page state — a new URL is a new page
-  activeGate?.cancel(); // R8-6: retire the old page's chip
-  activeGate = null;
   clearTimeout(rerunTimer);
   rerunTimer = undefined;
   firstScheduledAt = 0; // R10-minor: a new page gets a fresh rerun window
   void send({ type: "page-result", pageResultId: null, lifted: 0 }).catch(() => {}); // R12-B2: the old page's result is gone
-  clearApplied();
+  standDown(); // R13-4 (was activeGate?.cancel + clearApplied)
   scheduleRerun();
 }, 1000);
 
@@ -480,9 +481,16 @@ let userUndidFor: Element | null = null;
 let labelHandle: ApplyHandle | null = null;
 
 /** One teardown path: drop the label pass and the live arrangement (R7-3). */
+function standDown(): void { // R13-4: one teardown path for gate + applied UI
+  activeGate?.cancel();
+  activeGate = null;
+  clearApplied();
+}
+
 function clearApplied(): void {
   const labels = labelHandle;
   const live = current;
+  if (live) void send({ type: "page-result", pageResultId: null, lifted: 0 }).catch(() => {}); // RT-5: the tab's result is torn down; applyNow re-sends right after
   labelHandle = null;
   current = null; // null out first: undo() mutates the DOM and can re-enter (R8-2)
   labels?.undo();
@@ -558,3 +566,15 @@ export function __stopForTests(): void {
 }
 
 void run();
+
+// R13-3: a fresh session resumes the signed_out stand-down — clear the reject
+// history and re-detect so identify/rank runs again with the new bearer.
+if (typeof chrome !== "undefined" && chrome.storage?.onChanged) chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !("session" in changes)) return;
+  const s = (changes as { session?: { newValue?: { token?: string } } }).session;
+  if (s?.newValue && typeof s.newValue.token === "string") {
+    rejected = new WeakMap();
+    lastList = null;
+    scheduleRerun();
+  }
+});
