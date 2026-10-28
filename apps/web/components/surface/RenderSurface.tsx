@@ -67,6 +67,11 @@ export function RenderSurface({ page, response, mode, busy }: RenderSurfaceProps
               Demo directory
             </span>
           ) : null}
+          {response?.meta.mock ? (
+            <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-medium text-muted">
+              Mock mode
+            </span>
+          ) : null}
         </div>
         <p className="mt-0.5 text-xs text-muted">{page.kind}</p>
       </header>

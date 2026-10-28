@@ -10,7 +10,7 @@ export interface PageSession {
  * Dev-only demo profile until accounts land (P-02): loves Fugazi (artist) and
  * likes Rintaro, so place pages get a cross-domain signal plus a page-type one.
  */
-const DEV_PROFILE: ProfileV2 = {
+export const DEV_PROFILE: ProfileV2 = {
   version: 2,
   updatedAt: "2026-10-20T00:00:00.000Z",
   entries: [

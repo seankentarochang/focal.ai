@@ -86,15 +86,17 @@ export function Inspector({ page, response, error, busy }: InspectorProps) {
         </p>
       ) : (
         <>
-          <div className="flex flex-col gap-2">
-            <SectionHeading>Qloo request</SectionHeading>
-            <dl className="flex flex-col gap-1.5">
-              <KeyValueRow label="path" value={response.meta.qlooRequest.path} />
-              {Object.entries(response.meta.qlooRequest.params).map(([key, value]) => (
-                <KeyValueRow key={key} label={key} value={value} />
-              ))}
-            </dl>
-          </div>
+          {response.meta.qlooRequest ? (
+            <div className="flex flex-col gap-2">
+              <SectionHeading>Qloo request</SectionHeading>
+              <dl className="flex flex-col gap-1.5">
+                <KeyValueRow label="path" value={response.meta.qlooRequest.path} />
+                {Object.entries(response.meta.qlooRequest.params).map(([key, value]) => (
+                  <KeyValueRow key={key} label={key} value={value} />
+                ))}
+              </dl>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <SectionHeading>Result</SectionHeading>

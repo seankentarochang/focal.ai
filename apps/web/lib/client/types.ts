@@ -20,10 +20,11 @@ export interface DemoPage {
 }
 
 export interface RankMeta {
-  dataSource: DataSource;
+  dataSource?: DataSource;
   durationMs: number;
   unresolved: number;
-  qlooRequest: { path: string; params: Record<string, string> };
+  qlooRequest?: { path: string; params: Record<string, string> };
+  mock?: boolean;
 }
 
 export interface RankResponse {

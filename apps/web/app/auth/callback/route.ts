@@ -8,7 +8,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (!authEnabled()) return authDisabledResponse();
   const { handleAuth } = await import("@workos-inc/authkit-nextjs");
   return handleAuth({
-    returnPathname: "/connect",
+    returnPathname: "/post-sign-in",
     onSuccess: async ({ user }) => {
       const db = getDb();
       if (db && user.email) await ensureUser(db, { id: user.id, email: user.email });

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AccountMenu } from "./AccountMenu";
 
 const LINKS = [
-  { href: "/", label: "Studio" },
+  { href: "/try", label: "Playground" },
   { href: "/chat", label: "Chat" },
   { href: "/connect", label: "Extension" },
   { href: "/profile", label: "Profile" },

@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { PageResultItem } from "@focal-ai/core";
+import type { PageResultItem, ProfileEntry, ProfileV2 } from "@focal-ai/core";
 import { safeReturnTo } from "@/lib/server/auth/returnTo";
 import { __setDbForTests } from "@/lib/server/db";
 import {
@@ -9,6 +9,7 @@ import {
   type StoredPageResult,
 } from "@/lib/server/page/store";
 import { __resetRateLimitForTests } from "@/lib/server/rateLimit";
+import { tryNowLinks } from "@/lib/onboarding";
 import { buildWhyView } from "@/lib/why";
 
 process.env.QLOO_MOCK = "1";
@@ -142,5 +143,90 @@ describe("GET /api/me", () => {
     } finally {
       process.env.FOCAL_DEV_SESSION = "1";
     }
+  });
+});
+
+describe("POST /api/try/rank (W-04)", () => {
+  const post = (url: string, body: unknown, auth = true) =>
+    new Request(`http://localhost${url}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(auth ? { authorization: "Bearer dev-token" } : {}) },
+      body: JSON.stringify(body),
+    });
+
+  const rankBody = {
+    host: "yelp.com",
+    pathPattern: "/search",
+    pageType: "place",
+    items: [
+      { clientId: "c0", name: "Rintaro", type: "place", city: "San Francisco" },
+      { clientId: "c1", name: "Kissaki", type: "place", city: "San Francisco" },
+      { clientId: "c2", name: "Zuni Cafe", type: "place", city: "San Francisco" },
+    ],
+  };
+
+  const devSeeds = (profile: ProfileV2) =>
+    profile.entries
+      .filter((e) => e.kind === "thing" && "qlooId" in e)
+      .map((e) => ({
+        entityId: (e as { qlooId: string }).qlooId,
+        name: e.name,
+        subtype: (e as { type: string }).type,
+        strength: (e as { strength: "love" | "like" | "dislike" }).strength,
+      }));
+
+  it("produces the same plan as /api/page/rank for equivalent input", async () => {
+    const { POST: pageRank } = await import("@/app/api/page/rank/route");
+    const { POST: tryRank } = await import("@/app/api/try/rank/route");
+    const { DEV_PROFILE } = await import("@/lib/server/page/session");
+
+    const pageRes = await pageRank(post("/api/page/rank", rankBody));
+    expect(pageRes.status).toBe(200);
+    const page = (await pageRes.json()) as { status: string; plan: { ops: unknown; summary: unknown } };
+
+    const tryRes = await tryRank(
+      post("/api/try/rank", {
+        pageType: "urn:entity:place",
+        items: rankBody.items.map((i) => ({ name: i.name, city: i.city })),
+        seeds: devSeeds(DEV_PROFILE),
+      }),
+    );
+    expect(tryRes.status).toBe(200);
+    const tryBody = (await tryRes.json()) as { status: string; plan: { ops: unknown; summary: unknown }; mock: boolean };
+
+    expect(tryBody.status).toBe(page.status);
+    expect(tryBody.plan?.ops).toEqual(page.plan?.ops);
+    expect(tryBody.plan?.summary).toEqual(page.plan?.summary);
+    expect(tryBody.mock).toBe(true);
+  });
+
+  it("needs no session but validates the body", async () => {
+    const { POST: tryRank } = await import("@/app/api/try/rank/route");
+    const bad = await tryRank(post("/api/try/rank", { pageType: "place", items: [] }, false));
+    expect(bad.status).toBe(400);
+    const unknown = await tryRank(post("/api/try/rank", { pageType: "alien", items: [{ name: "X" }] }, false));
+    expect(unknown.status).toBe(400);
+  });
+});
+
+describe("tryNowLinks (W-01)", () => {
+  const entry = (type: string, name: string, strength: "love" | "like" | "dislike" = "like"): ProfileEntry =>
+    ({ id: `e-${name}`, kind: "thing", qlooId: `q-${name}`, name, type, strength, source: "manual", createdAt: "t" }) as unknown as ProfileEntry;
+
+  it("builds per-type links, using a liked place name as the city", () => {
+    const links = tryNowLinks([
+      entry("urn:entity:place", "San Francisco"),
+      entry("urn:entity:movie", "Parasite"),
+    ]);
+    expect(links).toEqual([
+      { label: "Restaurants on Yelp in San Francisco", url: "https://www.yelp.com/search?find_desc=restaurants&find_loc=San%20Francisco" },
+      { label: "Popular films on Letterboxd", url: "https://letterboxd.com/films/popular/" },
+    ]);
+  });
+
+  it("returns nothing for an empty profile and dedupes types", () => {
+    expect(tryNowLinks([])).toEqual([]);
+    const links = tryNowLinks([entry("urn:entity:book", "A"), entry("urn:entity:book", "B")]);
+    expect(links).toHaveLength(1);
   });
 });

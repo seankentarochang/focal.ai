@@ -1,4 +1,4 @@
-import type { TasteProfile } from "@focal-ai/core";
+import type { RankedCandidate, RenderPlan, TasteProfile } from "@focal-ai/core";
 import type { DemoPage, HealthResponse, RankResponse, SearchResponse } from "./types";
 
 async function readErrorMessage(res: Response): Promise<string | undefined> {
@@ -31,24 +31,62 @@ export async function rankPage(input: {
   page: DemoPage;
   profile: TasteProfile;
 }): Promise<RankResponse> {
-  const res = await fetch("/api/qloo/rank", {
+  const res = await fetch("/api/try/rank", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      pageId: input.page.id,
       pageType: input.page.type,
-      locationQuery: input.page.locationQuery,
-      containerId: input.page.containerId,
-      candidates: input.page.candidates,
-      profile: input.profile,
+      items: input.page.candidates.map((c) => ({
+        name: c.name,
+        ...(c.locationText ? { city: c.locationText } : {}),
+      })),
+      seeds: input.profile.seeds.map((s) => ({
+        entityId: s.entityId,
+        name: s.name,
+        subtype: s.subtype,
+        polarity: s.polarity,
+      })),
     }),
   });
   if (!res.ok) {
     const message = await readErrorMessage(res);
     throw new Error(message ?? "rank failed");
   }
-  return (await res.json()) as RankResponse;
+  const data = (await res.json()) as TryRankWire;
+  // Lift-only order: the plan's reorder op lists lifted clientIds first; the
+  // rest stay in original order. Fall back to input order without a plan.
+  const order =
+    data.plan?.ops.find((op): op is Extract<RenderPlan["ops"][number], { op: "reorder" }> => op.op === "reorder")?.order ??
+    data.items.map((item) => item.clientId);
+  const positionOf = new Map(order.map((clientId, i) => [clientId, i] as const));
+  return {
+    ranked: data.items.map(
+      (item) => ({ ...item, position: positionOf.get(item.clientId) ?? Number.MAX_SAFE_INTEGER }) as unknown as RankedCandidate,
+    ),
+    plan: data.plan ?? EMPTY_PLAN,
+    meta: {
+      durationMs: data.meta.durationMs,
+      unresolved: data.items.filter((i) => (i as { outcome?: string }).outcome === "unresolved").length,
+      mock: data.mock,
+    },
+  };
 }
+
+interface TryRankWire {
+  status: string;
+  items: { clientId: string; name: string }[];
+  plan: RenderPlan | null;
+  mock: boolean;
+  meta: { durationMs: number };
+}
+
+const EMPTY_PLAN: RenderPlan = {
+  id: "try",
+  pageId: "try",
+  createdAt: "",
+  ops: [],
+  summary: { moved: 0, collapsed: 0, unresolved: 0, avgMovement: 0 },
+};
 
 export async function getHealth(): Promise<HealthResponse> {
   const res = await fetch("/api/health");
