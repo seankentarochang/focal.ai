@@ -71,6 +71,10 @@ export function SettingsManager() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ confirm: "delete" }),
       });
+      if (res.status === 502) {
+        setError("Your data was deleted, but removing your sign-in failed. Try again.");
+        return;
+      }
       if (!res.ok) {
         setError("Couldn't delete the account.");
         return;

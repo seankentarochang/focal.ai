@@ -128,7 +128,7 @@ export declare function rankCandidates(args: { candidates: ResolvedCandidate[]; 
 export type RenderOp =
   | { op: "reorder"; containerId: string; order: string[] }
   | { op: "collapse"; containerId: string; clientIds: string[]; label: string }
-  | { op: "annotate"; containerId: string; clientId: string; text: string; badge?: "top-pick" | "good-match" | "because" }
+  | { op: "annotate"; containerId: string; clientId: string; text: string; badge?: "top-pick" | "good-match" }
   | { op: "emphasize"; containerId: string; clientId: string; level: "high" }
   | { op: "hide"; containerId: string; clientIds: string[]; label: string };
 export interface RenderPlan { id: string; pageId: string; createdAt: string; ops: RenderOp[]; summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number; lifted: number }; }
@@ -193,8 +193,7 @@ Removed 2026-10-28 (round 2): `GET /api/page/result/[id]` — orphaned; `/why` r
 
 Data-flow rules (non-negotiable):
 
-- Only these leave the browser: entity name strings, city strings, Qloo entity IDs, and the taste profile. The server never receives page HTML, DOM dumps, or form values.
-- The profile is server-side and persisted (D-15); requests carry identified items, never page HTML, DOM dumps, or form values.
+- Only these leave the browser: card text snippets (≤6 × 80 chars, ≤60 cards), the structure-only page signature, hostname and path pattern, city hints, identified items (name, type, city) and, for `/try`, the visitor's seeds. The profile lives on the server (D-15) and never travels from the browser. The server never receives page HTML, DOM dumps, form values or screenshots.
 - `dataSource: "mock"` is reachable ONLY when `QLOO_MOCK=1`, and the UI must badge mock data loudly anywhere it appears.
 - `meta.qlooRequest` records the upstream path + query params (key excluded) so the inspector can show exactly what was asked of Qloo.
 - Invalid bodies are rejected with zod (400) before any upstream call.

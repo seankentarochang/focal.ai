@@ -80,7 +80,7 @@ describe("applyPlan", () => {
     const list = detectList(d)!;
     const container = list.container;
     const originalHtml = container.outerHTML;
-    const onUndo = vi.fn();
+    const onUserUndo = vi.fn();
     const handle = applyPlan(
       list,
       plan([
@@ -89,12 +89,12 @@ describe("applyPlan", () => {
         { op: "emphasize", containerId: "x", clientId: "c3", level: "high" },
         { op: "collapse", containerId: "x", clientIds: ["c4"], label: "1 hidden by your rules (chain)" },
       ]),
-      { onUndo },
+      { onUserUndo },
     );
     expect(d.querySelector('[data-focal="strip"]')).not.toBeNull();
     d.querySelector<HTMLButtonElement>('[data-focal="undo"]')!.click();
     expect(handle.active).toBe(false);
-    expect(onUndo).toHaveBeenCalledOnce();
+    expect(onUserUndo).toHaveBeenCalledOnce();
     expect(container.outerHTML).toBe(originalHtml);
     expect(d.querySelector("[data-focal]")).toBeNull();
   });

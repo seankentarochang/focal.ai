@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import type { Db } from "@focal-ai/db";
 import { DbError } from "@focal-ai/db";
-import { ensureUser } from "../auth/users";
+import { ensureUser, workosGone } from "../auth/users";
 
 /** OAuth access tokens are JWTs, longer than the extension's session tokens. */
 function bearer(req: Request): string | null {
@@ -116,7 +116,7 @@ async function userForWorkosId(db: Db, workosId: string): Promise<string | null>
     const { WorkOS } = await import("@workos-inc/node");
     // Only a 404 proves the WorkOS user is gone; any other error must surface.
     const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(workosId).catch((e: unknown) => {
-      if ((e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found") return null;
+      if (workosGone(e)) return null;
       throw e;
     });
     if (remote?.email) {

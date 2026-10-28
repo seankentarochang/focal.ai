@@ -133,7 +133,7 @@ export function profileRepo(sql: Sql) {
       });
       } catch (e) {
         const pg = e as { code?: string };
-        if (pg.code === "23505" || pg.code === "40001") {
+        if (pg.code === "23505" || pg.code === "23503" || pg.code === "40001") {
           throw new DbError("CONFLICT", "profile write raced another commit; retry");
         }
         throw e;

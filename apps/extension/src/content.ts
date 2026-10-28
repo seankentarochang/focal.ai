@@ -4,7 +4,7 @@ import { applyPlan, type ApplyHandle } from "./apply/apply";
 import { createGate } from "./apply/gate";
 import { FOCAL_HOSTS } from "./config";
 import { cityHints, detectList, snapshotCards, type DetectedList } from "./detect/detect";
-import type { CardSnapshot, RenderPlan } from "./types";
+import type { CardSnapshot, RenderOp, RenderPlan } from "./types";
 import { checkEligibility } from "./guards/eligibility";
 import { applyLayout } from "./layouts/apply";
 import { deleteLayout, getLayout, layoutKey, saveLayout } from "./layouts/store";
@@ -61,7 +61,8 @@ function scheduleRerun(): void {
       bodyBackoffMs = Math.min(bodyBackoffMs * 2, 30000);
       return watchPage();
     }
-    if (sameList(list)) {
+    if (sameList(list) || userUndidFor === list.container) {
+      lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
       bodyBackoffMs = Math.min(bodyBackoffMs * 2, 30000);
       return;
     }
@@ -140,6 +141,8 @@ function watchPage(): void {
 
 function reject(list: DetectedList): void {
   rejected.set(list.container, list.cards.size);
+  current?.undo(); // R5-6
+  drainRecords();
   // R4-10: keep the baseline so the body watcher's same-list check stays cheap.
   lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
   watchPage();
@@ -172,23 +175,20 @@ async function runInner(gateMs?: number): Promise<void> {
 
   const list = detectList(document);
   if (!list) {
-    lastList = null; // R4-10: stale baselines must not pin the next detection
+    lastList = null;
+    current?.undo(); // R5-6: no focal UI outliving its list
+    drainRecords();
     return watchPage();
+  }
+  if (userUndidFor === list.container) {
+    // The user reverted this container — re-baseline and stand down (R5-8).
+    lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
+    return;
   }
   lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
   watch(list.container, list.cards.values());
 
-  let cards = snapshotCards(list);
-  if (current?.active && current.mode === "move") {
-    // Rank against the page's own order, not our applied arrangement; new
-    // cards the site added since the apply go last in DOM order (R4-11).
-    const byEl = new Map([...list.cards.entries()].map(([id, el], i) => [el, cards[i]!]));
-    const orig = new Set(current.originalOrder);
-    cards = [
-      ...current.originalOrder.map((el) => byEl.get(el)).filter((c): c is CardSnapshot => !!c),
-      ...[...byEl.entries()].filter(([el]) => !orig.has(el)).map(([, c]) => c),
-    ];
-  }
+  const cards = snapshotCards(list);
   // Apps can change the URL (and its search box) before swapping the list; cards keep the context they came with.
   const key = cards.map((c) => c.snippets[0] ?? "").sort().join("\n");
   const hints = last?.key === key ? last.hints : cityHints(document);
@@ -256,7 +256,7 @@ async function runWithGate(
     }
     pageType = identified.data.pageType;
     items = identified.data.items;
-    if (identified.data.layout) void saveLayout(storageKey, identified.data.layout);
+    if (identified.data.layout) void saveLayout(storageKey, identified.data.layout).catch(() => {});
   }
   if (gen !== generation) return gate.cancel();
 
@@ -276,21 +276,30 @@ async function runWithGate(
     return;
   }
   const { plan, pageResultId } = ranked.data;
-  // R4-11: an element-equivalent plan against the already-applied one skips the
-  // gate entirely — a rerun that would lift the same items must not flicker.
-  if (current?.active && appliedPlan && planEquivalent(plan, appliedPlan)) {
+  // R5-6/R5-10: skip only when the applied plan still covers this container:
+  // every detected card is in it, every applied card is still connected, and
+  // the new plan's effect on those elements is identical.
+  const applied = current;
+  if (
+    applied?.active &&
+    applied.container === list.container &&
+    [...list.cards.values()].every((el) => [...applied.applied.values()].includes(el)) &&
+    [...applied.applied.values()].every((el) => el.isConnected) &&
+    effectEquivalent(plan, list, applied)
+  ) {
     gate.cancel();
     drainRecords();
     return;
   }
-  gate.ready(() => {
+  const applyNow = (p: RenderPlan) => {
     if (gen !== generation) return;
     current?.undo();
     drainRecords();
-    current = applyPlan(list, plan, {
-      onUndo: () => {
-        // Strip Undo reverts our move/collapse — drain its records and take a
-        // fresh baseline so the revert itself never schedules a rerun (R3-4).
+    current = applyPlan(list, p, {
+      onUserUndo: () => {
+        // User reverted our arrangement — mark the container so its next
+        // mutation batches re-baseline instead of re-lifting (R5-8).
+        userUndidFor = list.container;
         drainRecords();
         recomputeLastList();
       },
@@ -351,8 +360,7 @@ async function runWithGate(
           }
         : undefined,
     });
-    appliedPlan = plan;
-    if (pageResultId) void send({ type: "page-result", pageResultId, lifted: current!.lifted });
+    if (pageResultId) void send({ type: "page-result", pageResultId, lifted: current!.lifted }).catch(() => {});
     // R4-9: drain synchronously — the observer callback runs before our
     // microtask would, so records from our own writes must go now. The
     // microtask recompute still waits for the gate's synchronous reveal.
@@ -360,33 +368,63 @@ async function runWithGate(
     queueMicrotask(() => {
       recomputeLastList();
     });
-  });
+  };
+  // R5-9: a late-offered plan still labels in place immediately (spec §5.7
+  // "clear matches are labelled where they appear"); the chip's deferred apply
+  // undoes this label-only handle and applies the full reorder.
+  const outcome = gate.ready(() => applyNow(plan));
+  if (outcome === "late-offered") {
+    applyNow({ ...plan, ops: plan.ops.filter((o) => o.op === "annotate") });
+  }
 }
 
 let lastHref = location.href;
 const hrefTimer = setInterval(() => {
   // Container swapped wholesale (SPA route change without a new URL): the old
   // watcher's records stop arriving, so re-detect here (R3-7).
-  if (lastList && !lastList.container.isConnected) scheduleRerun();
+  if (lastList && !lastList.container.isConnected) {
+    if (userUndidFor === lastList.container) userUndidFor = null;
+    scheduleRerun();
+  }
   if (location.href === lastHref) return;
   lastHref = location.href;
   last = null; // E-1: hints came from the old URL's search box.
   rejected = new WeakMap();
+  for (const e of retryBudget.values()) clearTimeout(e.timer);
   retryBudget.clear(); // retry history is per page (R3-9)
   bodyBackoffMs = 1000;
   lastList = null;
+  userUndidFor = null;
   scheduleRerun();
 }, 1000);
 
-let appliedPlan: RenderPlan | null = null;
-/** Same clientId -> same ops/labels: re-applying would move nothing (R4-11). */
-function planEquivalent(a: RenderPlan, b: RenderPlan): boolean {
-  const key = (p: RenderPlan) => JSON.stringify(
-    [...p.ops]
-      .map((o) => ({ ...o, containerId: undefined }))
-      .sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y))),
-  );
-  return key(a) === key(b);
+/** Container whose strip Undo the user clicked — reruns re-baseline it (R5-8). */
+let userUndidFor: Element | null = null;
+
+/** Effect-equivalence over the elements of the currently-applied plan (R5-10):
+ * same lifted-prefix element sequence, same (element, text, badge) annotations
+ * and same collapse/hide sets. Appended non-lifted cards don't break it. */
+function effectEquivalent(plan: RenderPlan, list: DetectedList, handle: ApplyHandle): boolean {
+  const ops = (p: RenderPlan, byId: Map<string, Element>) => {
+    const reorder = p.ops.find((o): o is Extract<RenderOp, { op: "reorder" }> => o.op === "reorder");
+    const lifted = p.summary.lifted ?? p.summary.moved;
+    const seq = (reorder?.order.slice(0, lifted) ?? []).map((id) => byId.get(id));
+    const ann: [Element, string, string][] = [];
+    const gone = new Set<Element>();
+    for (const o of p.ops) {
+      if (o.op === "annotate") { const el = byId.get(o.clientId); if (el) ann.push([el, o.text, o.badge ?? ""]); }
+      else if (o.op === "collapse" || o.op === "hide") {
+        for (const id of o.clientIds) { const el = byId.get(id); if (el) gone.add(el); }
+      }
+    }
+    return { seq, ann, gone };
+  };
+  const a = ops(plan, new Map<string, Element>([...list.cards.entries()].map(([id, el]) => [id, el as Element])));
+  const b = ops(handle.plan, handle.applied);
+  const sameSeq = a.seq.length === b.seq.length && a.seq.every((el: Element | undefined, i: number) => el === b.seq[i]);
+  const sameAnn = a.ann.length === b.ann.length && a.ann.every(([el, tx, bd]) => b.ann.some(([e2, t2, b2]) => e2 === el && t2 === tx && b2 === bd));
+  const sameGone = a.gone.size === b.gone.size && [...a.gone].every((el) => b.gone.has(el));
+  return sameSeq && sameAnn && sameGone;
 }
 
 let droppedRecords = false;

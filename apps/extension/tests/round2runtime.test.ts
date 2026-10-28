@@ -151,6 +151,111 @@ describe("R4-11: no eager undo on rerun", () => {
   });
 });
 
+describe("R5-6/R5-10: rerun lifecycle", () => {
+  it("a swapped container with identical items is re-applied and orphans no strip", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    // Whole-sale swap: same items, brand-new container.
+    const main = document.querySelector("main")!;
+    main.innerHTML = `<div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div>`;
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(2), { timeout: 5000 });
+    await vi.waitFor(() => expect(document.querySelectorAll("[data-focal='strip']").length).toBe(1), { timeout: 3000 });
+  });
+
+  it("a >60-card move-mode list survives a rerun without crashing", async () => {
+    const { sent } = stubChrome();
+    const cards = Array.from({ length: 65 }, (_, i) =>
+      `<div class="card"><a href="/c${i}"><h3>Card ${i}</h3></a><p>Type ${i}</p></div>`).join("");
+    document.body.innerHTML = `<main><div class="results">${cards}</div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 5000 });
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/c65'><h3>Card 65</h3></a><p>Type 65</p>";
+    document.querySelector(".results")!.appendChild(extra);
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(2), { timeout: 5000 });
+  });
+
+  it("an appended card in css-order mode stays last", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results" style="display:grid">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    const container = document.querySelector(".results")!;
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/e'><h3>Epsilon</h3></a><p>Pizza</p>";
+    container.appendChild(extra);
+    // Negative orders: every applied card sorts before the un-ordered newcomer.
+    const lifted = document.querySelectorAll<HTMLElement>(".card[style*='order']");
+    expect([...lifted].every((el) => parseInt(el.style.getPropertyValue("order"), 10) < 0)).toBe(true);
+    expect((extra as HTMLElement).style.getPropertyValue("order")).toBe("");
+  });
+
+  it("a strip Undo survives a later mutation (no re-lift)", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='undo']")).not.toBeNull(), { timeout: 3000 });
+    (document.querySelector<HTMLElement>("[data-focal='undo']"))!.click();
+    const container = document.querySelector(".results")!;
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/e'><h3>Epsilon</h3></a><p>Pizza</p>";
+    container.appendChild(extra);
+    await new Promise((r) => setTimeout(r, 1800));
+    // userUndidFor: the appended card re-baselines instead of re-lifting.
+    expect(sent.filter((m) => m.type === "rank").length).toBe(1);
+    expect(document.querySelector("[data-focal='strip']")).toBeNull();
+  });
+
+  it("a late-offered plan labels in place while the reorder waits for the chip", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    // jsdom rects are zero — pretend the container is visible so gen>1 plans
+    // become late-offered.
+    const rect = { width: 800, height: 400, top: 0, left: 0, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) };
+    Element.prototype.getBoundingClientRect = () => rect as DOMRect;
+    const container = document.querySelector(".results")!;
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/e'><h3>Epsilon</h3></a><p>Pizza</p>";
+    container.appendChild(extra);
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(2), { timeout: 5000 });
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='label']")).not.toBeNull(), { timeout: 3000 });
+  });
+});
+
 describe("R2-15c: gate ownership", () => {
   it("a failing run cancels only its own gate, leaving a newer gate live", async () => {
     let rankCalls = 0;

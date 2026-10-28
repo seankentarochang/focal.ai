@@ -10,7 +10,9 @@ export interface ApplyTarget {
 
 export interface ApplyOptions {
   onWhy?: () => void;
-  onUndo?: () => void;
+  /** Strip Undo clicked by the user — content marks the container so later
+   * mutations re-baseline instead of re-lifting (R5-8). */
+  onUserUndo?: () => void;
   /** Tap on a lifted card's More like this / Not for me button (X-08). */
   onFeedback?: (clientId: string, verdict: "more" | "less", label: HTMLElement) => void;
   /** Force a mode; by default flex / grid containers use CSS order. */
@@ -22,8 +24,10 @@ export interface ApplyHandle {
   lifted: number;
   undo(): void;
   readonly active: boolean;
-  /** Card elements in their pre-apply DOM order (R4-11). */
-  readonly originalOrder: Element[];
+  /** The plan this handle applied, its container and the cards it touched (R5-6). */
+  readonly plan: RenderPlan;
+  readonly container: Element;
+  readonly applied: Map<string, Element>;
 }
 
 function isFlexOrGrid(el: Element): boolean {
@@ -177,10 +181,9 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
     get active() {
       return active;
     },
-    get originalOrder() {
-      const cardSet = new Set(cards.values());
-      return originalChildren.filter((el) => cardSet.has(el));
-    },
+    plan,
+    container,
+    applied: cards,
     undo() {
       if (!active) return;
       active = false;
@@ -199,7 +202,8 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
           for (const node of originalNodes) if (node.parentNode === container) container.insertBefore(node, anchor);
         }
       });
-      opts.onUndo?.();
+      // onUserUndo fires from the strip button only — programmatic undos
+      // (rerun, re-apply, undo-event) must never mark the container (R5-8).
     },
   };
 
@@ -211,7 +215,9 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         sequence.forEach((el, i) => {
           const h = el as HTMLElement;
           saveStyle(h, savedStyles);
-          h.style.setProperty("order", String(i));
+          // Negative orders sort before the default 0 — site-appended items
+          // keep their place at the end (R5-7).
+          h.style.setProperty("order", String(i - sequence.length));
         });
       } else {
         // Re-append only nodes whose position actually changes — touching every
@@ -286,7 +292,7 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
           const show = make(doc, "button", "show", "Show");
           show.setAttribute("type", "button");
           show.addEventListener("click", () => {
-            for (const el of els) el.style.removeProperty("display");
+            for (const el of els) { el.removeAttribute("data-focal-hidden"); el.style.removeProperty("display"); }
             holder.remove();
           });
           fold.append(show);
@@ -313,7 +319,10 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
     }
     const undo = make(doc, "button", "undo", "Undo");
     undo.setAttribute("type", "button");
-    undo.addEventListener("click", () => handle.undo());
+    undo.addEventListener("click", () => {
+      handle.undo();
+      opts.onUserUndo?.();
+    });
     el.append(undo);
     inserted.push(el);
     return el;

@@ -6,6 +6,11 @@ export interface AuthUser {
   emailVerified?: boolean;
 }
 
+/** Only a 404 (or the SDK's entity_not_found) proves a WorkOS user is gone. */
+export function workosGone(e: unknown): boolean {
+  return (e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found";
+}
+
 /** Maps a WorkOS user onto our users table (one row per email). */
 export async function ensureUser(db: Db, user: AuthUser, opts?: { workosVerified?: boolean }) {
   const byAuth = await db.users.byAuthId("workos", user.id);
@@ -23,7 +28,7 @@ export async function ensureUser(db: Db, user: AuthUser, opts?: { workosVerified
     const { WorkOS } = await import("@workos-inc/node");
     // Only a 404 proves the WorkOS user is gone; any other error must surface.
     const remote = await new WorkOS(process.env.WORKOS_API_KEY).userManagement.getUser(user.id).catch((e: unknown) => {
-      if ((e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found") return null;
+      if (workosGone(e)) return null;
       throw e;
     });
     if (!remote) {

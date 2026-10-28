@@ -5,6 +5,7 @@ import { currentViewer } from "@/lib/server/auth/viewer";
 import { dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/errors";
+import { workosGone } from "@/lib/server/auth/users";
 import { checkRateLimit } from "@/lib/server/rateLimit";
 
 const ACTIVITY_LIMIT = 50;
@@ -119,21 +120,23 @@ export async function DELETE(req: Request): Promise<Response> {
   const db = getDb();
   if (viewer.persisted && db) {
     const row = await db.sql`SELECT auth_ids->>'workos' AS wid FROM users WHERE id = ${viewer.userId}`;
+    // Local data first: its cascade is atomic, and a later sign-in creates an
+    // empty account the retry path can finish — never leave data behind with
+    // a live identity the user believes is gone (R5-11).
+    await db.users.delete(viewer.userId);
     if (process.env.WORKOS_API_KEY && row[0]?.wid) {
       const { WorkOS } = await import("@workos-inc/node");
-      // Delete the identity first so a partial failure can't orphan the local
-      // account. 404 means the WorkOS user is already gone.
       try {
         await new WorkOS(process.env.WORKOS_API_KEY).userManagement.deleteUser(row[0].wid as string);
       } catch (e) {
-        if ((e as { status?: number }).status === 404 || (e as { code?: string }).code === "entity_not_found") {
-          // already deleted upstream
-        } else {
-          return Response.json({ error: { code: "UPSTREAM", message: "identity deletion failed; try again" } }, { status: 502 });
+        if (!workosGone(e)) {
+          return Response.json(
+            { error: { code: "IDENTITY_DELETE_FAILED", message: "Your data was deleted, but removing your sign-in failed. Try again." } },
+            { status: 502 },
+          );
         }
       }
     }
-    await db.users.delete(viewer.userId);
   }
   return Response.json({ deleted: true });
 }

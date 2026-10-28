@@ -187,7 +187,7 @@ Read and write with the same rules as the chat: read profile, search entities an
 
 ## 6. Privacy and security
 
-- **What leaves the browser:** on a new site layout, the text snippets of list cards plus the structure-only page signature (never full pages, form fields or screenshots) go to the focal server and to TypeSafe (Jev). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and settings. Item names go to Qloo. Card links are not sent (they return with X-05).
+- **What leaves the browser:** on a new site layout, the text snippets of list cards, the hostname, path pattern and city hints go to the focal server and to TypeSafe (Jev); the structure-only page signature goes only to the focal server (never full pages, form fields or screenshots). On known layouts, only item names, type and city go to the focal server — but every rank request carries the page's hostname so the server can record it (24 h) for "Why this order?" and settings. Item names and the page's city go to Qloo. Card links are not sent (they return with X-05).
 - **Stored on the server:** account, profile, activity, settings, the shared resolution cache, and page results for 24 h. Learned layouts stay in the extension (structure only, D-18). No browsing history.
 - **Chat text and a summary of your taste profile** are sent to the configured LLM providers (Groq → Cerebras → OpenRouter), some of which log prompts; the privacy policy names them.
 - **Never:** pages on the never-run list or the user's skip list, pages with password or payment fields, incognito by default, selling data.
