@@ -65,6 +65,12 @@ describe("profile route without a database", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ deleted: true });
   });
+
+  it("set_strength and remove 404 without a matching entry", async () => {
+    viewerUserId = "u1";
+    expect((await post({ action: "set_strength", entry_id: "nope", strength: "love" })).status).toBe(404);
+    expect((await post({ action: "remove", entry_id: "nope" })).status).toBe(404);
+  });
 });
 
 const url = process.env.DATABASE_URL;
@@ -137,6 +143,30 @@ describe.skipIf(!url)("profile route in Postgres", () => {
     expect(body.profile.entries.some((e) => e.name === "Exportable")).toBe(true);
     expect(body.activity.length).toBeGreaterThan(0);
     expect(body.sites).toEqual([{ hostname: "reddit.com", mode: "skip" }]);
+  });
+
+  it("set_strength and remove edit entries as manual, undoable", async () => {
+    const add = addEntry(empty, { kind: "thing", qlooId: "Q-edit", name: "Editable", type: "urn:entity:place", strength: "like", source: "manual" }, "manual");
+    const version = (await db.profile.load(userId)).version;
+    await db.profile.commit(userId, add.event as never, version);
+
+    const changed = await post({ action: "set_strength", entry_id: add.event.entryId, strength: "love" });
+    expect(changed.status).toBe(200);
+    let body = (await changed.json()) as { entries: { id: string; strength?: string }[]; activity: { id: string; actor: string; action: string }[] };
+    expect(body.entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
+    expect(body.activity[0]).toMatchObject({ actor: "manual", action: "change" });
+
+    const removed = await post({ action: "remove", entry_id: add.event.entryId });
+    expect(removed.status).toBe(200);
+    body = (await removed.json()) as typeof body;
+    expect(body.entries.some((e) => e.id === add.event.entryId)).toBe(false);
+    expect(body.activity[0]).toMatchObject({ actor: "manual", action: "remove" });
+
+    expect((await post({ action: "set_strength", entry_id: add.event.entryId, strength: "like" })).status).toBe(404);
+    const undo = await post({ action: "undo", event_id: body.activity[0]!.id });
+    expect(undo.status).toBe(200);
+    const after = (await undo.json()) as typeof body;
+    expect(after.entries.find((e) => e.id === add.event.entryId)?.strength).toBe("love");
   });
 
   it("delete removes the account and its rows", async () => {

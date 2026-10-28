@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { approveRule, undoEvent, ProfileError, type ActivityEvent } from "@focal-ai/core";
+import { approveRule, changeStrength, removeEntry, undoEvent, ProfileError, type ActivityEvent } from "@focal-ai/core";
 import { DbError } from "@focal-ai/db";
 import { currentViewer } from "@/lib/server/auth/viewer";
 import { dbProfileStore, memoryProfileStore } from "@/lib/server/chat/store";
@@ -11,6 +11,8 @@ const ACTIVITY_LIMIT = 50;
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approve_rule"), entry_id: z.string().min(1) }),
   z.object({ action: z.literal("undo"), event_id: z.string().min(1) }),
+  z.object({ action: z.literal("set_strength"), entry_id: z.string().min(1), strength: z.enum(["love", "like", "dislike"]) }),
+  z.object({ action: z.literal("remove"), entry_id: z.string().min(1) }),
 ]);
 
 const deleteSchema = z.object({ confirm: z.literal("delete") });
@@ -57,6 +59,20 @@ export async function POST(req: Request): Promise<Response> {
         return notFound("No pending rule with that id");
       }
       const write = approveRule(profile, target.id);
+      await store.commit(write.profile, write.event);
+    } else if (parsed.data.action === "set_strength") {
+      const { entry_id, strength } = parsed.data;
+      const profile = await store.load();
+      const target = profile.entries.find((e) => e.id === entry_id);
+      if (!target || target.kind === "rule") return notFound("No editable entry with that id");
+      const write = changeStrength(profile, target.id, strength, "manual");
+      await store.commit(write.profile, write.event);
+    } else if (parsed.data.action === "remove") {
+      const { entry_id } = parsed.data;
+      const profile = await store.load();
+      const target = profile.entries.find((e) => e.id === entry_id);
+      if (!target) return notFound("No entry with that id");
+      const write = removeEntry(profile, target.id, "manual");
       await store.commit(write.profile, write.event);
     } else {
       if (!(viewer.persisted && db)) return notFound("No change with that id");

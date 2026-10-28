@@ -175,6 +175,34 @@ export function ProfileManager({ email }: { email: string }) {
                             ) : null}
                           </span>
                           <Badge variant="outline">{strengthOf(e)}</Badge>
+                          {e.kind !== "rule" && (
+                            <span className="flex items-center gap-1">
+                              {(["love", "like", "dislike"] as const).map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  disabled={busy !== null}
+                                  title={`Mark as ${s}`}
+                                  className={`rounded-md border px-1.5 py-0.5 text-[11px] disabled:opacity-40 ${
+                                    e.strength === s
+                                      ? "border-accent bg-accent-soft text-ink"
+                                      : "border-line text-muted-foreground hover:text-ink"
+                                  }`}
+                                  onClick={() => void act(e.id, { action: "set_strength", entry_id: e.id, strength: s })}
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                disabled={busy !== null}
+                                className="rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-ink disabled:opacity-40"
+                                onClick={() => void act(e.id, { action: "remove", entry_id: e.id })}
+                              >
+                                Remove
+                              </button>
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>

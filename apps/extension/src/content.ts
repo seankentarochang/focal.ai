@@ -1,4 +1,4 @@
-import type { BackgroundReply, ContentMessage, IdentifiedItem, IdentifyResponse, InsightType, RankResponse } from "./api";
+import type { BackgroundReply, ContentMessage, FeedbackResponse, IdentifiedItem, IdentifyResponse, InsightType, RankResponse } from "./api";
 import { pathPattern } from "./api";
 import { applyPlan, type ApplyHandle } from "./apply/apply";
 import { createGate } from "./apply/gate";
@@ -151,6 +151,31 @@ async function run(gateMs?: number): Promise<void> {
     current?.undo();
     current = applyPlan(list, plan, {
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
+      onFeedback: pageResultId
+        ? (clientId, verdict, label) => {
+            void send<FeedbackResponse>({ type: "feedback", body: { pageResultId, clientId, verdict } }).then((res) => {
+              if (!res.ok || !res.data.saved) return;
+              const { eventId } = res.data;
+              label.querySelectorAll("button[data-focal-action]").forEach((b) => b.remove());
+              const saved = document.createElement("span");
+              saved.textContent = "Saved · ";
+              const undo = document.createElement("button");
+              undo.setAttribute("type", "button");
+              undo.textContent = "Undo";
+              undo.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                void send<FeedbackResponse>({ type: "feedback", body: { action: "undo", eventId } }).then((u) => {
+                  if (u.ok && u.data.saved) {
+                    saved.remove();
+                    undo.remove();
+                  }
+                });
+              });
+              label.append(saved, undo);
+            });
+          }
+        : undefined,
     });
     if (pageResultId) void send({ type: "page-result", pageResultId, lifted: current.lifted });
   });

@@ -55,11 +55,24 @@ export interface RankResponse {
   plan: RenderPlan | null;
 }
 
+/** More like this / Not for me taps (X-08); undo posts the action body. */
+export type FeedbackRequest =
+  | { pageResultId: string; clientId: string; verdict: "more" | "less" }
+  | { action: "undo"; eventId: string };
+
+export interface FeedbackResponse {
+  saved: boolean;
+  entryId: string;
+  eventId: string;
+}
+
 export type ContentMessage =
   | { type: "identify"; body: IdentifyRequest }
   | { type: "rank"; body: RankRequest }
+  | { type: "feedback"; body: FeedbackRequest }
   | { type: "page-result"; pageResultId: string; lifted: number }
-  | { type: "open-why"; pageResultId: string };
+  | { type: "open-why"; pageResultId: string }
+  | { type: "set-site"; hostname: string; on: boolean };
 
 export type BackgroundReply<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 

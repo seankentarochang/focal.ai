@@ -9,7 +9,7 @@ const LINKS = [
   { href: "/profile", label: "Profile" },
 ] as const;
 
-export function SiteHeader({ active }: { active?: (typeof LINKS)[number]["href"] }) {
+export function SiteHeader({ active }: { active?: (typeof LINKS)[number]["href"] | "/activity" | "/settings" }) {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-4 py-2">

@@ -40,6 +40,7 @@ async function main(): Promise<void> {
     toggle.checked = !settings.siteOff.includes(host);
     toggle.addEventListener("change", async () => {
       await setSettings(toggleSite(await getSettings(), host, toggle.checked));
+      void chrome.runtime.sendMessage({ type: "set-site", hostname: host, on: toggle.checked });
       if (tab?.id !== undefined) await chrome.tabs.reload(tab.id);
     });
   }

@@ -11,6 +11,8 @@ export interface ApplyTarget {
 export interface ApplyOptions {
   onWhy?: () => void;
   onUndo?: () => void;
+  /** Tap on a lifted card's More like this / Not for me button (X-08). */
+  onFeedback?: (clientId: string, verdict: "more" | "less", label: HTMLElement) => void;
   /** Force a mode; by default flex / grid containers use CSS order. */
   mode?: "css-order" | "move";
 }
@@ -206,6 +208,22 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
         const label = labelElement(doc, op.text, op.badge, width > 0 && width < 160);
         slot.prepend(label);
         inserted.push(label);
+        if (opts.onFeedback) {
+          for (const [verdict, text] of [
+            ["more", "More like this"],
+            ["less", "Not for me"],
+          ] as const) {
+            const btn = make(doc, "button", `fb-${verdict}`, text);
+            btn.setAttribute("type", "button");
+            btn.setAttribute("data-focal-action", verdict);
+            btn.addEventListener("click", (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              opts.onFeedback?.(op.clientId, verdict, label);
+            });
+            label.append(btn);
+          }
+        }
       } else if (op.op === "emphasize") {
         const card = cards.get(op.clientId) as HTMLElement | undefined;
         if (!card) continue;
