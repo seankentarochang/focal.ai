@@ -256,6 +256,71 @@ describe("R5-6/R5-10: rerun lifecycle", () => {
   });
 });
 
+describe("R6-4/5/7/8: apply lifecycle", () => {
+  it("a user Undo during an in-flight rank sticks (applyNow stands down)", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='undo']")).not.toBeNull(), { timeout: 3000 });
+    // Undo, then immediately trigger a rerun — the new apply must not re-lift.
+    (document.querySelector<HTMLElement>("[data-focal='undo']"))!.click();
+    const container = document.querySelector(".results")!;
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/e'><h3>Epsilon</h3></a><p>Pizza</p>";
+    container.appendChild(extra);
+    await new Promise((r) => setTimeout(r, 1800));
+    expect(document.querySelector("[data-focal='strip']")).toBeNull();
+    expect(sent.filter((m) => m.type === "rank").length).toBeLessThanOrEqual(2);
+  });
+
+  it("a late-offered label pass leaves the live arrangement untouched", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results" style="display:grid">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='strip']")).not.toBeNull(), { timeout: 3000 });
+    const rect = { width: 800, height: 400, top: 0, left: 0, right: 800, bottom: 400, x: 0, y: 0, toJSON: () => ({}) };
+    Element.prototype.getBoundingClientRect = () => rect as DOMRect;
+    const container = document.querySelector(".results")!;
+    const orderBefore = [...container.children].map((c) => (c as HTMLElement).style.getPropertyValue("order")).join(",");
+    const extra = document.createElement("div");
+    extra.className = "card";
+    extra.innerHTML = "<a href='/e'><h3>Epsilon</h3></a><p>Pizza</p>";
+    container.appendChild(extra);
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(2), { timeout: 5000 });
+    await vi.waitFor(() => expect(document.querySelector("[data-focal='label']")).not.toBeNull(), { timeout: 3000 });
+    const orderAfter = [...container.children].map((c) => (c as HTMLElement).style.getPropertyValue("order")).join(",");
+    expect(orderAfter.startsWith(orderBefore)).toBe(true); // arrangement untouched
+  });
+
+  it("a dead chip is retired on an early-return rerun", async () => {
+    const { sent } = stubChrome();
+    document.body.innerHTML = `<main><div class="results">
+      <div class="card"><a href="/a"><h3>Alpha</h3></a><p>Thai</p></div>
+      <div class="card"><a href="/b"><h3>Beta</h3></a><p>Japanese</p></div>
+      <div class="card"><a href="/c"><h3>Gamma</h3></a><p>Ramen</p></div>
+      <div class="card"><a href="/d"><h3>Delta</h3></a><p>Sushi</p></div>
+    </div></main>`;
+    prevMod = await import("../src/content");
+    await vi.waitFor(() => expect(sent.filter((m) => m.type === "rank").length).toBe(1), { timeout: 3000 });
+    // A second rerun fires but the site reverts to the same list -> early
+    // return; a dead gate chip must be canceled, not left on the page.
+    document.querySelector(".results")!.appendChild(Object.assign(document.createElement("div"), { className: "card", innerHTML: "<a href='/e'><h3>E</h3></a><p>X</p>" }));
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(document.querySelectorAll("[data-focal='gate']").length).toBe(0);
+  });
+});
+
 describe("R2-15c: gate ownership", () => {
   it("a failing run cancels only its own gate, leaving a newer gate live", async () => {
     let rankCalls = 0;

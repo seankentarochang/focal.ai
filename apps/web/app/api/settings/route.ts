@@ -33,7 +33,7 @@ export async function GET(req: Request): Promise<Response> {
   return Response.json({ sites: await read(who.userId, who.persisted) });
 }
 
-/** Replaces the full site list (§4.2): skip / off / on per hostname. */
+/** Replaces the full site list (§4.2): skip / off per hostname. */
 const postSchema = z.object({
   hostname: host,
   mode: z.enum(["skip", "off"]).nullable(),

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { applyPlan } from "../src/apply/apply";
-import { detectList, extractSnippets } from "../src/detect/detect";
+import { cityHints, detectList, extractSnippets } from "../src/detect/detect";
 import type { RenderPlan, RenderOp } from "../src/types";
 import { BOOK_LIST } from "./fixtures";
 

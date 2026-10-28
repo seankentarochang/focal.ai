@@ -25,7 +25,7 @@ export default function PrivacyPage() {
               per card, 80 characters each, and at most 60 cards) plus the site's hostname, path pattern and up to 5
               city hints to TypeSafe (Jev) for list identification. Every rank request also carries the page's hostname,
               which the server keeps for 24 hours with the stored page result. The structure-only page signature
-              goes only to the focal server. Never full pages, form fields, or screenshots.
+              goes only to the focal server. Never full pages, screenshots, or form field contents — except a city taken from a location box or an {"in <city>"} phrase in a search box.
             </li>
             <li>
               On a <strong>known layout</strong>, only item names, the entity type, and the city go to the focal server.
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
         <Section title="Where focal never runs">
           <p className="text-muted-foreground">
             Built-in categories: {NEVER_RUN.join(", ")}. Plus anywhere you add to your skip list, pages with password or
-            payment fields, and incognito windows unless you explicitly enable it.
+            payment fields, and incognito windows.
           </p>
         </Section>
 

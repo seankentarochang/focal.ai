@@ -206,7 +206,7 @@ ADR-style record of the decisions that shaped this build. Follows [contracts.md]
 
 **Context.** The hosted Studio demonstrates the ranking engine on in-repo demo pages, but the product promise is re-ordering the real websites people already use. The team decided to build that product for the hackathon rather than after it.
 
-**Decision.** Build the browser extension described in [spec.md](./spec.md): automatic list detection on any site, Jev-assisted identification with learned layouts, lift-only ranking with labels, a profile of things, vibes and hard rules written by a website chat agent and by outside assistants over a hosted MCP endpoint, and accounts with the profile stored on the server. The spec's §10 lists the 26 decisions behind this.
+**Decision.** Build the browser extension described in [spec.md](./spec.md): automatic list detection on any site, Jev-assisted identification with learned layouts, lift-only ranking with labels, a profile of things, vibes and hard rules written by a website chat agent and by outside assistants over a hosted MCP endpoint, and accounts with the profile stored on the server. The spec's §10 lists the 28 decisions behind this.
 
 **Alternatives considered.** Submitting the Studio and building the extension afterwards; hand-written per-site adapters; a browser-local profile with a local-only MCP bridge.
 

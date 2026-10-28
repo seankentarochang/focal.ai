@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GET } from "../app/api/oauth/authorization-server/route";
 
-// R5-4: only a parsed object from an ok response is cached; non-ok and
-// rejections return 502 and must never stick in the cache.
+// R5-4/R6-5: only a parsed non-null object from an ok response is cached;
+// non-ok and rejections return 502 and must never stick. The cache is a
+// module-level `let` — resetModules gives each case a fresh instance.
 describe("/api/oauth/authorization-server memoize", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -11,6 +11,8 @@ describe("/api/oauth/authorization-server memoize", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response("nope", { status: 500 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ issuer: "x" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
+    vi.resetModules();
+    const { GET } = await import("../app/api/oauth/authorization-server/route");
     const r1 = await GET();
     expect(r1.status).toBe(502);
     const r2 = await GET();
@@ -24,6 +26,8 @@ describe("/api/oauth/authorization-server memoize", () => {
     const fetchMock = vi.fn().mockRejectedValueOnce(new Error("abort"))
       .mockResolvedValueOnce(new Response(JSON.stringify({ issuer: "x" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
+    vi.resetModules();
+    const { GET } = await import("../app/api/oauth/authorization-server/route");
     const r1 = await GET();
     expect(r1.status).toBe(502);
     const r2 = await GET();

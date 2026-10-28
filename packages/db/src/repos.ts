@@ -163,7 +163,7 @@ export function profileRepo(sql: Sql) {
       if (!user) throw new DbError("NOT_FOUND", `user ${userId} not found`);
       const entries = await sql`SELECT data FROM profile_entries WHERE user_id = ${userId} ORDER BY created_at, id`;
       const events = await sql`SELECT * FROM activity_events WHERE user_id = ${userId} ORDER BY seq`;
-      const pageResults = await sql`SELECT * FROM page_results WHERE user_id = ${userId}`;
+      const pageResults = (await sql`SELECT * FROM page_results WHERE user_id = ${userId}`).map(pageResultFrom);
       const sites = await sql`SELECT hostname, mode FROM site_settings WHERE user_id = ${userId} ORDER BY hostname`;
       return {
         user: userFrom(user),

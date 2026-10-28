@@ -32,6 +32,7 @@ export interface SearchResult { entities: QlooEntity[]; durationMs: number; raw:
 export interface InsightsParams {
   resultType: QlooEntityType;
   signalEntityIds: string[];
+  signalTagIds?: string[];
   resultEntityIds?: string[];
   locationQuery?: string;
   explainability?: boolean;
@@ -85,7 +86,7 @@ Defaults and behavior (all overridable via `createQlooClient` opts):
 
 Endpoints used — and only these: `GET /search`, `GET /v2/insights`, `GET /v2/tags?filter.query=...`, `GET /entities`. `/recs` and `/recommendations` are unsupported legacy; never call them.
 
-Insights parameter mapping: `resultType` → `filter.type` (required, e.g. `urn:entity:place` / `brand` / `destination` / `artist` / `movie`); `signalEntityIds` → `signal.interests.entities` (comma-separated taste seed IDs, cross-domain explicitly supported); `resultEntityIds` → `filter.results.entities` (comma-separated candidate IDs to score/rank — this is the scoring primitive); `locationQuery` → `filter.location.query` (city); `explainability` → `feature.explainability=true`; `take` max 50, default 20; `page` for pagination.
+Insights parameter mapping: `resultType` → `filter.type` (required, e.g. `urn:entity:place` / `brand` / `destination` / `artist` / `movie`); `signalEntityIds` → `signal.interests.entities` (comma-separated taste seed IDs, cross-domain explicitly supported); `signalTagIds` → `signal.interests.tags` (comma-separated tag IDs from vibes, verified 2026-10-20, spec §5.5); `resultEntityIds` → `filter.results.entities` (comma-separated candidate IDs to score/rank — this is the scoring primitive); `locationQuery` → `filter.location.query` (city); `explainability` → `feature.explainability=true`; `take` max 50, default 20; `page` for pagination.
 
 Affinity extraction must be defensive: try `entity.query.affinity`, then `entity.query.measurements.affinity`, and record which path succeeded in `affinityFoundAt`. Unknown shapes must never throw — return the entity with `affinity: undefined`. The exact path/scale is verified in ticket T-01 and recorded in [qloo-contract.md](./qloo-contract.md).
 
@@ -131,7 +132,7 @@ export type RenderOp =
   | { op: "annotate"; containerId: string; clientId: string; text: string; badge?: "top-pick" | "good-match" }
   | { op: "emphasize"; containerId: string; clientId: string; level: "high" }
   | { op: "hide"; containerId: string; clientIds: string[]; label: string };
-export interface RenderPlan { id: string; pageId: string; createdAt: string; ops: RenderOp[]; summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number; lifted: number }; }
+export interface RenderPlan { id: string; pageId: string; createdAt: string; ops: RenderOp[]; summary: { moved: number; collapsed: number; unresolved: number; avgMovement: number; lifted?: number }; }
 export declare function planRender(args: { pageId: string; ranked: RankedCandidate[]; options?: { annotate?: boolean; emphasizeThreshold?: number; collapseSponsored?: boolean; containerId?: string } }): RenderPlan;
 export declare function validatePlan(plan: RenderPlan): { ok: true } | { ok: false; errors: string[] };
 export declare function buildReason(ranked: RankedCandidate, profile: TasteProfile): RankedCandidate["reason"];
@@ -175,7 +176,7 @@ PUT  /api/settings        cookie|bearer | { sites:[{hostname,mode:"skip"|"off"}]
 POST /api/settings        cookie|bearer | { hostname, mode:"skip"|"off"|null } → { sites }   (null removes)
 GET  /api/profile         cookie | → { entries }
 POST /api/profile         cookie | { action:approve_rule|set_strength|remove, entry_id, strength? }
-DELETE /api/profile       cookie | { confirm:"delete" } → { deleted:true }
+DELETE /api/profile       cookie | { confirm:"delete" } → { deleted:true } | 502 { error.code:"IDENTITY_DELETE_FAILED" } (data deleted, sign-in removal failed — retry)
 GET  /api/profile/export  cookie | → JSON export incl. page_results
 POST /api/extension/session  cookie | → { token, email, expiresAt }
 DELETE /api/extension/session  bearer | → 204 (revokes the presented token)
@@ -193,7 +194,7 @@ Removed 2026-10-28 (round 2): `GET /api/page/result/[id]` — orphaned; `/why` r
 
 Data-flow rules (non-negotiable):
 
-- Only these leave the browser: card text snippets (≤6 × 80 chars, ≤60 cards), the structure-only page signature, hostname and path pattern, city hints, identified items (name, type, city) and, for `/try`, the visitor's seeds. The profile lives on the server (D-15) and never travels from the browser. The server never receives page HTML, DOM dumps, form values or screenshots.
+- Only these leave the browser: card text snippets (≤6 × 80 chars, ≤60 cards), the structure-only page signature, hostname and path pattern, city hints, identified items (name, type, city) and, for `/try`, the visitor's seeds. The profile lives on the server (D-15) and never travels from the browser. The server never receives page HTML, DOM dumps, screenshots, or form field contents — except a city taken from a location box or an "in <city>" phrase in a search box.
 - `dataSource: "mock"` is reachable ONLY when `QLOO_MOCK=1`, and the UI must badge mock data loudly anywhere it appears.
 - `meta.qlooRequest` records the upstream path + query params (key excluded) so the inspector can show exactly what was asked of Qloo.
 - Invalid bodies are rejected with zod (400) before any upstream call.

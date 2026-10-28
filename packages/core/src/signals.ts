@@ -6,9 +6,9 @@
  * - Liked vibes that apply to the page's type: sent as Qloo tag signals for
  *   types listed in `tagSignalTypes`, otherwise kept as local boosts.
  *
- * Whether Qloo honours tag signals and per-signal weights is UNVERIFIED
- * (spec §8), so both are configuration: strength is returned on every signal
- * and the Qloo adapter decides how (or whether) to encode it.
+ * Qloo honours tag signals but rejects per-signal weights (verified
+ * 2026-10-20, spec §5.5), so strength is returned on every signal and the
+ * Qloo adapter decides how (or whether) to encode it.
  */
 import { favouriteThings, type InsightType, type ProfileV2, type VibeEntry } from "./taste";
 

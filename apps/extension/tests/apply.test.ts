@@ -26,7 +26,25 @@ describe("applyPlan", () => {
     expect(handle.mode).toBe("css-order");
     expect([...list.container.children]).toEqual(before);
     const byOrder = before.slice().sort((a, b) => Number((a as HTMLElement).style.order) - Number((b as HTMLElement).style.order));
-    expect(titles(byOrder)).toEqual(["Chuko", "Rintaro", "ad-slot", "Ippudo", "Okonomi"]);
+    // R6-9: only the lifted prefix gets an order — everything else keeps DOM order.
+    expect(titles(byOrder)).toEqual(["Chuko", "Rintaro", "Ippudo", "ad-slot", "Okonomi"]);
+  });
+
+  it("css-order keeps a site's own order on non-lifted children; a prepend stays first among the rest", () => {
+    const d = page(RESTAURANT_GRID);
+    const list = detectList(d)!;
+    // The site gave a card its own order — R6-9 leaves it untouched.
+    const third = list.container.children[2] as HTMLElement;
+    third.style.setProperty("order", "5");
+    applyPlan(list, plan([{ op: "reorder", containerId: "x", order: ["c2", "c0", "c1", "c3"] }], 1));
+    expect(third.style.getPropertyValue("order")).toBe("5");
+    // A site-prepended card (no order) sorts after the lifted prefix.
+    const extra = document.createElement("div");
+    extra.className = "card";
+    list.container.prepend(extra);
+    const ordered = [...list.container.children].sort((a, b) => (Number((a as HTMLElement).style.order) || 0) - (Number((b as HTMLElement).style.order) || 0));
+    expect(titles(ordered)[0]).toBe("Chuko");
+    expect(ordered.indexOf(extra)).toBeGreaterThan(0);
   });
 
   it("moves nodes for block lists and keeps non-card siblings in their slots", () => {

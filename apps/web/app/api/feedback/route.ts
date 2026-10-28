@@ -105,6 +105,7 @@ export async function POST(req: Request): Promise<Response> {
         );
       }
       if (e instanceof ProfileError) return notFound(e.message);
+      if (e instanceof DbError) return errorResponse(e);
       throw e;
     }
   }

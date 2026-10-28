@@ -124,4 +124,13 @@ describe.skipIf(!url)("round2 server fixes", () => {
         ]);
     expect(consistent).toBe(true);
   });
+
+  it("DELETE /api/profile with no user row returns 404", async () => {
+    const { DELETE } = await import("@/app/api/profile/route");
+    const viewer = await import("@/lib/server/auth/viewer");
+    vi.spyOn(viewer, "currentViewer").mockResolvedValue({ userId: "00000000-0000-0000-0000-000000000000", email: "x@y.z", persisted: true } as never);
+    const res = await DELETE(new Request("http://x/api/profile", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "delete" }) }));
+    expect(res.status).toBe(404);
+    vi.restoreAllMocks();
+  });
 });

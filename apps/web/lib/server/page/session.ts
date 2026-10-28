@@ -1,4 +1,5 @@
 import type { ProfileV2 } from "@focal-ai/core";
+import { DbError } from "@focal-ai/db";
 import { getDb } from "../db";
 
 export interface PageSession {
@@ -57,7 +58,14 @@ export async function resolveSession(req: Request): Promise<PageSession | null> 
   if (db) {
     const session = await db.extensionSessions.resolve(token);
     if (!session) return null;
-    const { entries } = await db.profile.load(session.userId);
+    let entries;
+    try {
+      ({ entries } = await db.profile.load(session.userId));
+    } catch (e) {
+      // The user row is gone (account deleted): the token resolves to nothing.
+      if (e instanceof DbError && e.code === "NOT_FOUND") return null;
+      throw e;
+    }
     const profile: ProfileV2 = { version: 2, updatedAt: new Date().toISOString(), entries: entries as unknown as ProfileV2["entries"] };
     return { userId: session.userId, profile };
   }

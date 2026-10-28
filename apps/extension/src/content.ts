@@ -30,10 +30,13 @@ const drainRecords = () => { watcher?.takeRecords(); };
  * too — a site re-sort arriving mid-apply is treated as part of our write. */
 const fingerprint = (list: DetectedList) =>
   snapshotCards(list).map((c) => c.snippets[0] ?? "").join("\n");
+const baseline = (list: DetectedList) => {
+  lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
+};
 const recomputeLastList = () => {
   const fresh = detectList(document);
   if (!fresh) return;
-  lastList = { container: fresh.container, cards: [...fresh.cards.values()], fp: fingerprint(fresh) };
+  baseline(fresh);
   watch(fresh.container, fresh.cards.values());
 };
 let bodyBackoffMs = 1000; // doubles after consecutive no-list/same-list outcomes, caps at 30 s
@@ -62,7 +65,7 @@ function scheduleRerun(): void {
       return watchPage();
     }
     if (sameList(list) || userUndidFor === list.container) {
-      lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
+      baseline(list);
       bodyBackoffMs = Math.min(bodyBackoffMs * 2, 30000);
       return;
     }
@@ -144,7 +147,7 @@ function reject(list: DetectedList): void {
   current?.undo(); // R5-6
   drainRecords();
   // R4-10: keep the baseline so the body watcher's same-list check stays cheap.
-  lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
+  baseline(list);
   watchPage();
 }
 
@@ -163,6 +166,8 @@ async function run(gateMs?: number): Promise<void> {
 async function runInner(gateMs?: number): Promise<void> {
   runTimes.push(Date.now());
   const gen = ++generation;
+  activeGate?.cancel(); // R6-7: any rerun retires the previous chip
+  drainRecords();
   const settings = await getSettings();
   const eligibility = checkEligibility({
     url: location.href,
@@ -171,7 +176,12 @@ async function runInner(gateMs?: number): Promise<void> {
     focalHosts: FOCAL_HOSTS,
     document,
   });
-  if (!eligibility.eligible) return;
+  if (!eligibility.eligible) {
+    current?.undo(); // R6-8
+    drainRecords();
+    lastList = null;
+    return watchPage();
+  }
 
   const list = detectList(document);
   if (!list) {
@@ -182,10 +192,10 @@ async function runInner(gateMs?: number): Promise<void> {
   }
   if (userUndidFor === list.container) {
     // The user reverted this container — re-baseline and stand down (R5-8).
-    lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
+    baseline(list);
     return;
   }
-  lastList = { container: list.container, cards: [...list.cards.values()], fp: fingerprint(list) };
+  baseline(list);
   watch(list.container, list.cards.values());
 
   const cards = snapshotCards(list);
@@ -268,6 +278,10 @@ async function runWithGate(
   if (!ranked.ok || !ranked.data.plan) {
     gate.cancel();
     drainRecords();
+    if (ranked.ok) {
+      current?.undo(); // B R6-3: an ok rank with no plan clears a live apply
+      drainRecords();
+    }
     if (local && shouldInvalidateLayout(ranked)) {
       // The stored layout identified nothing the resolver knows — it is stale.
       void deleteLayout(storageKey);
@@ -283,7 +297,6 @@ async function runWithGate(
   if (
     applied?.active &&
     applied.container === list.container &&
-    [...list.cards.values()].every((el) => [...applied.applied.values()].includes(el)) &&
     [...applied.applied.values()].every((el) => el.isConnected) &&
     effectEquivalent(plan, list, applied)
   ) {
@@ -291,74 +304,79 @@ async function runWithGate(
     drainRecords();
     return;
   }
+  const onFeedback = pageResultId
+    ? (clientId: string, verdict: "more" | "less", label: HTMLElement) => {
+        const buttons = [...label.querySelectorAll<HTMLButtonElement>("button[data-focal-action]")];
+        for (const b of buttons) b.disabled = true;
+        const showSaveFailed = () => {
+          for (const b of buttons) b.disabled = false;
+          const failed = document.createElement("span");
+          failed.setAttribute("data-focal", "fb-error");
+          failed.textContent = "Couldn't save";
+          failed.style.cssText =
+            "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#f87171!important;align-self:center";
+          label.append(failed);
+          setTimeout(() => failed.remove(), 4000);
+        };
+        void send<FeedbackResponse>({ type: "feedback", body: { pageResultId, clientId, verdict } }).catch(showSaveFailed).then((res) => {
+          if (res === undefined) return; // catch already handled
+          if (!res?.ok || !res.data?.saved) {
+            showSaveFailed();
+            return;
+          }
+          const { eventId } = res.data;
+          buttons.forEach((b) => b.remove());
+          const saved = document.createElement("span");
+          saved.textContent = eventId === null ? "Saved" : "Saved · ";
+          saved.style.cssText =
+            "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#52525b!important;align-self:center";
+          const undo = document.createElement("button");
+          undo.setAttribute("type", "button");
+          undo.textContent = "Undo";
+          undo.style.cssText =
+            "display:inline-flex!important;align-items:center;height:20px!important;padding:0 8px!important;border-radius:999px;cursor:pointer;" +
+            "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
+            "background:#18181b!important;border:1px solid #3f3f46!important";
+          const id = eventId ?? "";
+          undo.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            undo.disabled = true;
+            void send<FeedbackResponse>({ type: "undo-event", eventId: id }).then((u) => {
+              if (u?.ok) {
+                saved.remove();
+                undo.remove();
+              } else {
+                undo.disabled = false;
+              }
+            }).catch(() => {
+              undo.disabled = false;
+              saved.textContent = "Couldn't save";
+            });
+          });
+          label.append(saved);
+          if (eventId !== null) label.append(undo);
+        });
+      }
+    : undefined;
+
   const applyNow = (p: RenderPlan) => {
-    if (gen !== generation) return;
+    if (gen !== generation || userUndidFor === list.container) return; // R6-5
+    labelHandle?.undo();
+    labelHandle = null;
     current?.undo();
     drainRecords();
     current = applyPlan(list, p, {
       onUserUndo: () => {
         // User reverted our arrangement — mark the container so its next
-        // mutation batches re-baseline instead of re-lifting (R5-8).
+        // mutation batches re-baseline instead of re-lifting (R5-8/R6-5).
         userUndidFor = list.container;
+        activeGate?.cancel();
         drainRecords();
         recomputeLastList();
       },
       onWhy: pageResultId ? () => void send({ type: "open-why", pageResultId }) : undefined,
-      onFeedback: pageResultId
-        ? (clientId, verdict, label) => {
-            const buttons = [...label.querySelectorAll<HTMLButtonElement>("button[data-focal-action]")];
-            for (const b of buttons) b.disabled = true;
-            const showSaveFailed = () => {
-              for (const b of buttons) b.disabled = false;
-              const failed = document.createElement("span");
-              failed.setAttribute("data-focal", "fb-error");
-              failed.textContent = "Couldn't save";
-              failed.style.cssText =
-                "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#f87171!important;align-self:center";
-              label.append(failed);
-              setTimeout(() => failed.remove(), 4000);
-            };
-            void send<FeedbackResponse>({ type: "feedback", body: { pageResultId, clientId, verdict } }).catch(showSaveFailed).then((res) => {
-              if (res === undefined) return; // catch already handled
-              if (!res?.ok || !res.data?.saved) {
-                showSaveFailed();
-                return;
-              }
-              const { eventId } = res.data;
-              buttons.forEach((b) => b.remove());
-              const saved = document.createElement("span");
-              saved.textContent = eventId === null ? "Saved" : "Saved · ";
-              saved.style.cssText =
-                "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#52525b!important;align-self:center";
-              const undo = document.createElement("button");
-              undo.setAttribute("type", "button");
-              undo.textContent = "Undo";
-              undo.style.cssText =
-                "display:inline-flex!important;align-items:center;height:20px!important;padding:0 8px!important;border-radius:999px;cursor:pointer;" +
-                "font:500 11px/1 ui-sans-serif,system-ui,sans-serif!important;white-space:nowrap!important;color:#fafafa!important;" +
-                "background:#18181b!important;border:1px solid #3f3f46!important";
-              const id = eventId ?? "";
-              undo.addEventListener("click", (ev) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                undo.disabled = true;
-                void send<FeedbackResponse>({ type: "undo-event", eventId: id }).then((u) => {
-                  if (u?.ok) {
-                    saved.remove();
-                    undo.remove();
-                  } else {
-                    undo.disabled = false;
-                  }
-                }).catch(() => {
-                  undo.disabled = false;
-                  saved.textContent = "Couldn't save";
-                });
-              });
-              label.append(saved);
-              if (eventId !== null) label.append(undo);
-            });
-          }
-        : undefined,
+      onFeedback,
     });
     if (pageResultId) void send({ type: "page-result", pageResultId, lifted: current!.lifted }).catch(() => {});
     // R4-9: drain synchronously — the observer callback runs before our
@@ -369,12 +387,14 @@ async function runWithGate(
       recomputeLastList();
     });
   };
-  // R5-9: a late-offered plan still labels in place immediately (spec §5.7
-  // "clear matches are labelled where they appear"); the chip's deferred apply
-  // undoes this label-only handle and applies the full reorder.
+  // R6-4: a late-offered plan still labels in place immediately (spec §5.7);
+  // the pass is idempotent, never touches `current`, and sends no page-result.
+  // The chip's deferred apply does the full reorder.
   const outcome = gate.ready(() => applyNow(plan));
   if (outcome === "late-offered") {
-    applyNow({ ...plan, ops: plan.ops.filter((o) => o.op === "annotate") });
+    labelHandle?.undo();
+    labelHandle = applyPlan(list, { ...plan, ops: plan.ops.filter((o) => o.op === "annotate") }, { onFeedback });
+    drainRecords();
   }
 }
 
@@ -401,6 +421,9 @@ const hrefTimer = setInterval(() => {
 /** Container whose strip Undo the user clicked — reruns re-baseline it (R5-8). */
 let userUndidFor: Element | null = null;
 
+/** A late-offered plan's in-place labels — separate from `current` (R6-4). */
+let labelHandle: ApplyHandle | null = null;
+
 /** Effect-equivalence over the elements of the currently-applied plan (R5-10):
  * same lifted-prefix element sequence, same (element, text, badge) annotations
  * and same collapse/hide sets. Appended non-lifted cards don't break it. */
@@ -410,21 +433,29 @@ function effectEquivalent(plan: RenderPlan, list: DetectedList, handle: ApplyHan
     const lifted = p.summary.lifted ?? p.summary.moved;
     const seq = (reorder?.order.slice(0, lifted) ?? []).map((id) => byId.get(id));
     const ann: [Element, string, string][] = [];
-    const gone = new Set<Element>();
+    const emph = new Set<Element>();
+    const folds = new Map<string, Set<Element>>(); // (op,label) -> element set (B R6-6)
     for (const o of p.ops) {
       if (o.op === "annotate") { const el = byId.get(o.clientId); if (el) ann.push([el, o.text, o.badge ?? ""]); }
+      else if (o.op === "emphasize") { const el = byId.get(o.clientId); if (el) emph.add(el); }
       else if (o.op === "collapse" || o.op === "hide") {
-        for (const id of o.clientIds) { const el = byId.get(id); if (el) gone.add(el); }
+        const key = `${o.op}|${o.label}`;
+        const set = folds.get(key) ?? new Set<Element>();
+        for (const id of o.clientIds) { const el = byId.get(id); if (el) set.add(el); }
+        folds.set(key, set);
       }
     }
-    return { seq, ann, gone };
+    return { seq, ann, emph, folds };
   };
   const a = ops(plan, new Map<string, Element>([...list.cards.entries()].map(([id, el]) => [id, el as Element])));
   const b = ops(handle.plan, handle.applied);
   const sameSeq = a.seq.length === b.seq.length && a.seq.every((el: Element | undefined, i: number) => el === b.seq[i]);
   const sameAnn = a.ann.length === b.ann.length && a.ann.every(([el, tx, bd]) => b.ann.some(([e2, t2, b2]) => e2 === el && t2 === tx && b2 === bd));
-  const sameGone = a.gone.size === b.gone.size && [...a.gone].every((el) => b.gone.has(el));
-  return sameSeq && sameAnn && sameGone;
+  const sameEmph = a.emph.size === b.emph.size && [...a.emph].every((el) => b.emph.has(el));
+  const sameFolds =
+    a.folds.size === b.folds.size &&
+    [...a.folds].every(([k, s]) => s.size === b.folds.get(k)?.size && [...s].every((el) => b.folds.get(k)!.has(el)));
+  return sameSeq && sameAnn && sameEmph && sameFolds;
 }
 
 let droppedRecords = false;

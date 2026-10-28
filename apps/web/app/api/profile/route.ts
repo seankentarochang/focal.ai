@@ -119,11 +119,12 @@ export async function DELETE(req: Request): Promise<Response> {
   }
   const db = getDb();
   if (viewer.persisted && db) {
-    const row = await db.sql`SELECT auth_ids->>'workos' AS wid FROM users WHERE id = ${viewer.userId}`;
-    // Local data first: its cascade is atomic, and a later sign-in creates an
-    // empty account the retry path can finish — never leave data behind with
-    // a live identity the user believes is gone (R5-11).
-    await db.users.delete(viewer.userId);
+    // Single delete-with-return: local data goes first (its cascade is
+    // atomic); the wid survives for the WorkOS call. No row -> nothing to
+    // delete (B R6-4). A later sign-in recreates an empty account the retry
+    // path can finish — never leave data behind with a live identity (R5-11).
+    const row = await db.sql`DELETE FROM users WHERE id = ${viewer.userId} RETURNING auth_ids->>'workos' AS wid`;
+    if (row.length === 0) return notFound('account not found');
     if (process.env.WORKOS_API_KEY && row[0]?.wid) {
       const { WorkOS } = await import("@workos-inc/node");
       try {

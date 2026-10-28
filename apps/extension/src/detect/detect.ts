@@ -205,7 +205,10 @@ function searchPathQuery(pathname: string): string | null {
   }
 }
 
-const CITY_INPUT = 'input[type="search" i], input[name="location" i], input[name="city" i], input[name="near" i], input[name="where" i], input[name="find_loc" i], input[name="destination" i], input[aria-label*="location" i], input[placeholder*="city" i], input[placeholder*="location" i]';
+const LOCATION_INPUT = 'input[name="location" i], input[name="city" i], input[name="near" i], input[name="where" i], input[name="find_loc" i], input[name="destination" i], input[aria-label*="location" i], input[placeholder*="city" i], input[placeholder*="location" i]';
+// Generic search boxes can hold anything — never ship the raw value, only an
+// "in <city>" phrase extracted from it (R6-10 / E SEC-6-1).
+const SEARCH_INPUT = 'input[type="search" i]';
 
 /**
  * City hints for places and destinations (§5.3): location-ish URL parameters,
@@ -226,11 +229,13 @@ export function cityHints(doc: Document, href?: string): string[] {
   } catch {
     // No usable URL.
   }
-  for (const input of doc.querySelectorAll<HTMLInputElement>(CITY_INPUT)) {
+  for (const input of doc.querySelectorAll<HTMLInputElement>(LOCATION_INPUT)) {
     if (input.type === "password") continue;
-    const value = input.value || input.getAttribute("value");
-    add(locationPhrase(value));
-    add(value);
+    add(input.value || input.getAttribute("value"));
+  }
+  for (const input of doc.querySelectorAll<HTMLInputElement>(SEARCH_INPUT)) {
+    if (input.type === "password") continue;
+    add(locationPhrase(input.value || input.getAttribute("value")));
   }
   add(doc.querySelector("h1")?.textContent);
   return out.slice(0, 5);

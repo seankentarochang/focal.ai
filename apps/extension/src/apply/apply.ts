@@ -164,7 +164,7 @@ function labelElement(doc: Document, text: string, badge: string | undefined, co
 export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOptions = {}): ApplyHandle {
   const { container, cards } = target;
   const doc = container.ownerDocument;
-  const mode = opts.mode ?? (isFlexOrGrid(container) ? "css-order" : "move");
+  const mode = isFlexOrGrid(container) ? "css-order" : "move";
   const savedStyles = new Map<HTMLElement, string | null>();
   const inserted: Element[] = [];
   const originalChildren = [...container.children];
@@ -212,12 +212,13 @@ export function applyPlan(target: ApplyTarget, plan: RenderPlan, opts: ApplyOpti
   flip(cardEls, () => {
     if (reorder) {
       if (mode === "css-order") {
-        sequence.forEach((el, i) => {
+        // Only the lifted prefix gets an order (-lifted..-1); every other
+        // child keeps whatever order the site gave it, so site appends and
+        // prepends keep their own position (R6-9). Undo restores savedStyles.
+        sequence.slice(0, lifted).forEach((el, i) => {
           const h = el as HTMLElement;
           saveStyle(h, savedStyles);
-          // Negative orders sort before the default 0 — site-appended items
-          // keep their place at the end (R5-7).
-          h.style.setProperty("order", String(i - sequence.length));
+          h.style.setProperty("order", String(i - lifted));
         });
       } else {
         // Re-append only nodes whose position actually changes — touching every

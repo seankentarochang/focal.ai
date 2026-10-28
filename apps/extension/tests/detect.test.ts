@@ -84,7 +84,7 @@ describe("extraction", () => {
 
   it("collects city hints from params, inputs and the heading", () => {
     const d = page(RESTAURANT_GRID, "https://www.yelp.com/search?find_desc=ramen&find_loc=Brooklyn%2C+NY");
-    expect(cityHints(d)).toEqual(["Brooklyn, NY", "ramen", "Best ramen in Brooklyn"]);
+    expect(cityHints(d)).toEqual(["Brooklyn, NY", "Best ramen in Brooklyn"]); // generic search value suppressed (R6-10)
   });
 });
 
